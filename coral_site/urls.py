@@ -16,14 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic.base import RedirectView # 1. Importe o RedirectView
+from django.views.generic.base import RedirectView 
 
 urlpatterns = [
-    # 2. Adicione esta linha:
     # (Redireciona a rota raiz '' para '/api/especies/')
     path('', RedirectView.as_view(url='/api/especies/', permanent=False)), 
 
     path('admin/', admin.site.urls),
-    # Você provavelmente já tem uma linha parecida com esta:
-    path('api/especies/', include('aquaculture.urls')), # (ou o nome do seu app)
+    path('api/', include('aquaculture.urls')), 
 ]

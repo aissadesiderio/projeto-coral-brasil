@@ -1,6 +1,6 @@
 from rest_framework import generics
-from .models import Especie
-from .serializers import EspecieSerializer
+from .models import Especie, StatusPredicao 
+from .serializers import EspecieSerializer, StatusPredicaoSerializer
 
 # Esta view vai controlar a "lista" de todos os corais
 # Ex: /api/especies/
@@ -13,3 +13,8 @@ class EspecieList(generics.ListAPIView):
 class EspecieDetail(generics.RetrieveAPIView):
     queryset = Especie.objects.all()
     serializer_class = EspecieSerializer
+
+class StatusPredicaoList(generics.ListAPIView):
+    # Pega todos os alertas e ordena do mais recente para o mais antigo
+    queryset = StatusPredicao.objects.all().order_by('-data')
+    serializer_class = StatusPredicaoSerializer
