@@ -16,12 +16,20 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic.base import RedirectView 
+from django.views.generic.base import RedirectView
+#IMPORTAÇÕES NOVAS (deixa as fotos com acesso público(visível))
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
-    # (Redireciona a rota raiz '' para '/api/especies/')
-    path('', RedirectView.as_view(url='/api/especies/', permanent=False)), 
-
+    # Redireciona a raiz para a API
+    path('', RedirectView.as_view(url='/api/especies/', permanent=False)),
+    
     path('admin/', admin.site.urls),
-    path('api/', include('aquaculture.urls')), 
+    path('api/', include('aquaculture.urls')),
 ]
+
+#CONFIGURAÇÃO NOVA (ISSO FAZ A IMAGEM APARECER)
+#serve arquivos de mídia durante o desenvolvimento
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -14,9 +14,9 @@ class EspecieSerializer(serializers.ModelSerializer):
             'id', 
             'nome_cientifico', 
             'nome_comum', 
-            'tipo',          #novo campo
+            'tipo',
             'descricao', 
             'status_conservacao', 
-            'foto_url'
+            'foto',      
+            'fonte_url'   
         ]
-        fields = ['id', 'data', 'sst_atual', 'limite_termico', 'anomalia', 'dhw_calculado', 'nivel_alerta']

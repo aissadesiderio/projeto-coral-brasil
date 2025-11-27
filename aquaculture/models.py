@@ -1,4 +1,5 @@
 from django.db import models
+
 #MODELO DE FAUNA (Alterado)
 class Especie(models.Model):
     #opções para categorizar a fauna de Abrolhos
@@ -14,7 +15,7 @@ class Especie(models.Model):
     nome_comum = models.CharField(max_length=200, blank=True)
     tipo = models.CharField(max_length=20, choices=TIPO_FAUNA_CHOICES, default='CORAL')
     
-    #descrição ecológica (onde vive, o que come, etc.)
+    #descrição ecológica
     descricao = models.TextField(blank=True, verbose_name="Descrição Ecológica")
     
     status_conservacao = models.CharField(
@@ -23,12 +24,16 @@ class Especie(models.Model):
         help_text="Ex: Vulnerável, Ameaçada, Pouco Preocupante (IUCN)"
     )
     
-    foto_url = models.URLField(max_length=500, blank=True)
+    #MUDANÇA 1: Campo para Upload de Imagem (escolher do computador)
+    foto = models.ImageField(upload_to='especies/', blank=True, null=True)
+    
+    #MUDANÇA 2: Campo novo para o Link da Fonte
+    fonte_url = models.URLField(max_length=500, blank=True, verbose_name="Link da Fonte/Mais informações")
 
     def __str__(self):
         return f"{self.nome_comum} ({self.nome_cientifico})"
 
-#MODELO DE MONITORAMENTO (mantido)
+#MODELO DE MONITORAMENTO (mantido igual)
 class StatusPredicao(models.Model):
     data = models.DateField(unique=True, help_text="Data da medição")
     sst_atual = models.FloatField(help_text="Temperatura média da superfície (SST)")
