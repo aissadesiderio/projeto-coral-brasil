@@ -40,6 +40,16 @@ class StatusPredicao(models.Model):
     limite_termico = models.FloatField(help_text="Limite de branqueamento (MMM)")
     anomalia = models.FloatField(help_text="SST - Limite")
     dhw_calculado = models.FloatField(help_text="Graus-Semana de Aquecimento (DHW)")
+    vento_velocidade = models.FloatField(help_text="Velocidade do vento (m/s)", null=True, blank=True)
+    irradiancia = models.FloatField(help_text="Radiação Fotossintética (PAR)", null=True, blank=True)
+    turbidez = models.FloatField(help_text="Turbidez/Atenuação da luz (Kd490)", null=True, blank=True)
+    # Vamos manter o calculated DHW da NOAA, mas adicionar nosso Risco Integrado
+    risco_integrado = models.FloatField(help_text="Índice de Risco Calculado (0-100)", default=0.0)
+    #Precisamos guardar os novos dados para gerar gráficos históricos depois. 
+    #Motivo: Se não salvar no banco, você perde o histórico e não consegue ajustar os pesos (calibrar) o modelo no futuro.
+    
+    
+    
     
     NIVEL_ALERTA_CHOICES = [
         ('SEM_RISCO', 'Sem Risco'),
