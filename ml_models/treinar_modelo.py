@@ -7,115 +7,129 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 
-# ==============================================================================
-# CONFIGURAÇÃO DE CAMINHOS
-# ==============================================================================
-# O código procura a pasta 'dados' automaticamente na raiz do projeto
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_PATH = os.path.join(BASE_DIR, 'ml_models', 'modelo_coral_rf.pkl')
 
-# NOMES SIMPLIFICADOS (Como renomeamos, ficou fácil)
+# --- MAPEAMENTO DOS SEUS ARQUIVOS ---
+# Configurei exatamente com os cabeçalhos que li nos seus CSVs
 FILES = {
-    'sst': 'sst.csv', 
-    'irradiancia': 'par.csv',
-    'turbidez': 'FAKE_DATA_GENERATOR' # O código vai gerar isso sozinho
+    # NOAA (Luz Solar - Essencial)
+    'irradiancia': {'nome': 'par.csv', 'coluna': 'par', 'tipo': 'NOAA'},
+    
+    # COPERNICUS (Dados Novos)
+    'sst': {'nome': 'temperatura_copernicus.csv', 'coluna': 'thetao', 'tipo': 'COPERNICUS'},
+    'salinidade': {'nome': 'salinidade.csv', 'coluna': 'so', 'tipo': 'COPERNICUS'},
+    'clorofila': {'nome': 'clorofila.csv', 'coluna': 'chl', 'tipo': 'COPERNICUS'},
+    'ph': {'nome': 'ph.csv', 'coluna': 'ph', 'tipo': 'COPERNICUS'},
+    'nitrato': {'nome': 'nitrato.csv', 'coluna': 'no3', 'tipo': 'COPERNICUS'}
 }
 
-def carregar_dados(arquivo_nome, col_interesse, alias):
-    """
-    Busca o arquivo na pasta 'dados' e prepara para o treino.
-    Versão 2.0: Mais robusta contra erros de texto no CSV.
-    """
+def carregar_dados(info_arquivo, alias):
+    """Lê CSVs lidando com formatos diferentes (NOAA vs Copernicus)"""
+    arquivo_nome = info_arquivo['nome']
+    col_interesse = info_arquivo['coluna']
+    tipo_fonte = info_arquivo['tipo']
+    
     caminho = os.path.join(BASE_DIR, 'dados', arquivo_nome)
     
     if not os.path.exists(caminho):
-        print(f"[ERRO] Não achei o arquivo: {caminho}")
+        print(f"[AVISO] Arquivo '{arquivo_nome}' não encontrado em 'dados/'.")
         return None
 
     try:
-        # Lê o CSV. header=0 significa que a linha 0 é o cabeçalho.
-        # skiprows=[1] tenta pular a linha das unidades (ex: 'degrees_C')
-        df = pd.read_csv(caminho, skiprows=[1])
-        
-        # --- CORREÇÃO DO ERRO ---
-        # Força a coluna a ser numérica. Se tiver texto ("Celsius", "NaN"), vira vazio.
+        if tipo_fonte == 'NOAA':
+            # NOAA: Pula linha 1 (unidades)
+            df = pd.read_csv(caminho, skiprows=[1])
+        else:
+            # COPERNICUS: Ignora linhas de comentário (#)
+            df = pd.read_csv(caminho, comment='#')
+
+        # Força conversão para número (evita erros de texto "NaN")
         df[col_interesse] = pd.to_numeric(df[col_interesse], errors='coerce')
         
-        # Converte o tempo
-        df['time'] = pd.to_datetime(df['time'])
+        # Converte Data (Remove fuso horário para evitar erro de merge)
+        df['time'] = pd.to_datetime(df['time']).dt.tz_localize(None)
         
-        # Agrupa por MÊS para alinhar as datas
-        # dropna() garante que não tentaremos calcular média de valores vazios
+        # Agrupa por MÊS (Média) para alinhar dados diários e horários
         df_agrupado = df.dropna(subset=[col_interesse]) \
                         .groupby(pd.Grouper(key='time', freq='ME'))[col_interesse] \
                         .mean().reset_index()
         
         df_agrupado = df_agrupado.rename(columns={col_interesse: alias})
-        
-        print(f"   -> Carregado: {alias} ({len(df_agrupado)} registros)")
+        print(f"   -> Carregado: {alias} | Registros: {len(df_agrupado)}")
         return df_agrupado
         
     except Exception as e:
         print(f"[ERRO] Falha ao ler {arquivo_nome}: {e}")
-        # Dica para debug: mostra as primeiras linhas se der erro
-        try:
-            print("   Primeiras linhas do arquivo para conferência:")
-            print(pd.read_csv(caminho).head())
-        except:
-            pass
         return None
-def gerar_turbidez_fake(df_base):
-    """Gera dados simulados de turbidez para completar o dataset."""
-    print("   -> Gerando dados simulados de Turbidez...")
-    np.random.seed(42)
-    datas = df_base['time']
-    # Cria uma variação sazonal (mais turbidez no inverno)
-    turbidez = 0.3 + (0.2 * np.sin(2 * np.pi * datas.dt.month / 12)) + np.random.normal(0, 0.05, len(datas))
-    return pd.DataFrame({'time': datas, 'turbidez': np.clip(turbidez, 0.05, 1.0)})
 
-# ==============================================================================
-# EXECUÇÃO DO TREINO
-# ==============================================================================
-print("--- INICIANDO O TREINAMENTO DO MODELO ---")
+# --- 1. CARREGAMENTO ---
+print("--- INICIANDO TREINAMENTO COM DADOS REAIS ---")
+dfs = []
+for alias, info in FILES.items():
+    df = carregar_dados(info, alias)
+    if df is not None:
+        dfs.append(df)
 
-# 1. Carregar SST e PAR
-df_sst = carregar_dados(FILES['sst'], 'CRW_HOTSPOT', 'sst')
-df_par = carregar_dados(FILES['irradiancia'], 'par', 'irradiancia')
-
-if df_sst is None or df_par is None:
-    print("\nPARANDO: Faltam arquivos. Siga o Passo 1 da instrução.")
+if not dfs:
+    print("Nenhum dado carregado. Verifique os nomes dos arquivos na pasta 'dados'.")
     exit()
 
-# 2. Juntar os dados
-df_final = pd.merge(df_sst, df_par, on='time', how='inner')
+# Junta todas as tabelas pela data
+df_final = reduce(lambda left, right: pd.merge(left, right, on='time', how='inner'), dfs)
+print(f"\nDados consolidados! Meses completos encontrados: {len(df_final)}")
 
-# 3. Adicionar Turbidez Simulada
-df_turbidez = gerar_turbidez_fake(df_final)
-df_final = pd.merge(df_final, df_turbidez, on='time', how='inner')
+# --- 2. FEATURE ENGINEERING (Inteligência Biológica) ---
+# Aqui criamos as variáveis combinadas que os artigos sugerem
 
-# 4. Criar Regras (Target)
+# Estresse Térmico + Luz (O pior cenário)
 df_final['interacao_luz_calor'] = df_final['sst'] * df_final['irradiancia']
 
+# Índice de Eutrofização (Nitrato + Clorofila)
+# Se ambos sobem, é sinal de poluição/esgoto, não apenas turbidez natural
+df_final['poluicao'] = df_final['nitrato'] * df_final['clorofila']
+
+# --- 3. TARGET (Simulação de Risco Realista) ---
 def calcular_risco(row):
     score = 0
-    if row['sst'] > 1.0: score += row['sst'] * 20       # Calor pesa muito
-    if row['irradiancia'] > 45: score += (row['irradiancia'] - 45) * 2 # Luz agrava
-    if row['turbidez'] > 0.4: score -= 15               # Turbidez protege
+    # Calor: Acima de 27°C começa a estressar
+    if row['sst'] > 27.0: score += (row['sst'] - 27.0) * 20
+    
+    # Luz: Excesso de luz agrava o calor
+    if row['irradiancia'] > 45: score += (row['irradiancia'] - 45) * 1.5
+    
+    # pH: Acidificação (pH < 8.05) penaliza muito a calcificação
+    if row['ph'] < 8.05: score += (8.05 - row['ph']) * 100
+    
+    # Salinidade: Mudanças bruscas (chuva forte ou evaporação) estressam
+    # Média oceânica é ~36-37. Fora disso é estresse.
+    if row['salinidade'] < 35 or row['salinidade'] > 38:
+        score += 10
+    
+    # Turbidez/Poluição: 
+    # Clorofila sozinha pode sombrear (bom), mas com Nitrato é poluição (ruim)
+    if row['poluicao'] > 0.005: # Ajuste conforme dados reais
+        score += 15
+    elif row['clorofila'] > 0.3:
+        score -= 5 # Efeito protetor (sombreamento)
+        
     return max(0, min(score, 100))
 
 df_final['RISCO_TARGET'] = df_final.apply(calcular_risco, axis=1)
 
-# 5. Treinar
-X = df_final[['sst', 'irradiancia', 'turbidez', 'interacao_luz_calor']]
+# --- 4. TREINO E SALVAMENTO ---
+features = ['sst', 'irradiancia', 'salinidade', 'clorofila', 'ph', 'nitrato', 'interacao_luz_calor', 'poluicao']
+X = df_final[features]
 y = df_final['RISCO_TARGET']
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-modelo = RandomForestRegressor(n_estimators=100, random_state=42)
+modelo = RandomForestRegressor(n_estimators=200, random_state=42)
 modelo.fit(X_train, y_train)
 
-# 6. Salvar
+print(f"\nQualidade do Modelo (R²): {r2_score(y_test, modelo.predict(X_test)):.2f}")
+print("Variáveis usadas:", features)
+
 os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 joblib.dump(modelo, MODEL_PATH)
-
-print(f"\nSUCESSO! Modelo treinado com R²: {r2_score(y_test, modelo.predict(X_test)):.2f}")
-print(f"Arquivo salvo em: {MODEL_PATH}")
+print(f"Modelo salvo em: {MODEL_PATH}")
