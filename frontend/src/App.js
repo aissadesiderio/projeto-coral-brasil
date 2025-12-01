@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Info, Droplets, Fish, Anchor, Bug, Activity, ExternalLink } from 'lucide-react';
+import PainelRisco from './PainelRisco'; // <--- O NOVO COMPONENTE AQUI
 
 // COMPONENTE DO CARD (A miniatura na lista)
 const CardEspecie = ({ especie, onClick }) => {
@@ -116,10 +117,13 @@ export default function GaleriaSeresVivos() {
         <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-sand-light to-transparent opacity-10"></div>
       </header>
 
+      {/* --- AQUI ENTRA O NOVO PAINEL --- */}
+      <PainelRisco />
+
       <main className="container mx-auto px-6 max-w-6xl -mt-10 relative z-20">
 
-        {/* Barra de Filtros Flutuante */}
-        <div className="bg-white p-2 rounded-full shadow-xl mb-12 flex flex-wrap justify-center gap-2 max-w-4xl mx-auto border border-gray-100">
+        {/* Barra de Filtros Flutuante (Agora fica um pouco mais abaixo por causa do painel) */}
+        <div className="bg-white p-2 rounded-full shadow-xl mb-12 flex flex-wrap justify-center gap-2 max-w-4xl mx-auto border border-gray-100 mt-12">
           {filtros.map(f => (
             <button
               key={f.id}
@@ -234,7 +238,7 @@ export default function GaleriaSeresVivos() {
                     {especieSelecionada.descricao || "Nenhuma descrição detalhada disponível para esta espécie no momento."}
                   </p>
 
-                  {/*  BOTÃO DE FONTE (só aparece se tiver link)  */}
+                  {/* BOTÃO DE FONTE (só aparece se tiver link)  */}
                   {especieSelecionada.fonte_url && (
                     <a
                       href={especieSelecionada.fonte_url}

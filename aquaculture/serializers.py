@@ -1,22 +1,19 @@
-#atualização sem tecnica/manejo 
 from rest_framework import serializers
 from .models import Especie, StatusPredicao
 
 class StatusPredicaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = StatusPredicao
-        fields = ['id', 'data', 'sst_atual', 'limite_termico', 'anomalia', 'dhw_calculado', 'nivel_alerta']
+        #ADICIONADO: 'risco_integrado', 'turbidez', 'irradiancia'
+        fields = [
+            'id', 'data', 
+            'sst_atual', 'limite_termico', 'anomalia', 
+            'dhw_calculado', 
+            'nivel_alerta', 'risco_integrado',
+            'turbidez', 'irradiancia'
+        ]
 
 class EspecieSerializer(serializers.ModelSerializer):
     class Meta:
         model = Especie
-        fields = [
-            'id', 
-            'nome_cientifico', 
-            'nome_comum', 
-            'tipo',
-            'descricao', 
-            'status_conservacao', 
-            'foto',      
-            'fonte_url'   
-        ]
+        fields = '__all__' #'__all__' pega tudo automático e evita esquecer campos
