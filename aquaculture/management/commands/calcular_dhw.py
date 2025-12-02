@@ -18,11 +18,9 @@ LON_MIN, LON_MAX = -39.05, -38.33
 
 def obter_dados_noaa_csv(data_alvo):
     """
-    Baixa dados reais da NOAA (SST e DHW) via CSV.
+    Baixa dados reais da NOAA (SST e DHW).
     """
     time_str = data_alvo.strftime('%Y-%m-%dT12:00:00Z')
-    
-    # URLs dinâmicas para Abrolhos
     url_sst = f"https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily.csv?analysed_sst[({time_str})][({LAT_MIN}):({LAT_MAX})][({LON_MIN}):({LON_MAX})]"
     url_dhw = f"https://coastwatch.noaa.gov/erddap/griddap/noaacrwdhwDaily.csv?CRW_DHW[({time_str})][({LAT_MIN}):({LAT_MAX})][({LON_MIN}):({LON_MAX})]"
 
@@ -63,120 +61,120 @@ def obter_dados_noaa_csv(data_alvo):
         print("   [AVISO] NOAA inacessível. Usando dados simulados de emergência.")
         return {'sst': 27.5, 'dhw': 0.5, 'limite': 27.0, 'origem': 'Simulado'}
 
-def obter_dados_complementares_simulados():
+def obter_dados_complementares_estimados():
     """
-    Simula Vento e Turbidez (enquanto não conectamos com sensores reais).
+    Fornece os valores das novas variáveis que o modelo exige.
+    No futuro, substituiremos isso por uma chamada à API do Copernicus.
+    Por enquanto, usamos médias históricas seguras de Abrolhos.
     """
     return {
-        'vento': 6.5,     # Média histórica
-        'turbidez': 0.15  # Turbidez média
+        'vento': 6.5,       # M/s
+        'irradiancia': 48.0, # Einstein m-2 day-1 (Média de verão)
+        'salinidade': 36.5,  # PSU (Salinidade normal oceânica)
+        'clorofila': 0.25,   # mg/m3 (Água relativamente clara)
+        'ph': 8.1,           # pH normal
+        'nitrato': 0.004     # Baixo nutriente (sem poluição)
     }
 
 class Command(BaseCommand):
-    help = 'Calcula Risco de Branqueamento (IA + Fallback)'
+    help = 'Calcula Risco de Branqueamento (Modelo Científico Completo)'
 
     def handle(self, *args, **options):
-        self.stdout.write(">>> INICIANDO PREDIÇÃO DIÁRIA <<<")
+        self.stdout.write(">>> INICIANDO PREDIÇÃO (MODELO CIENTÍFICO) <<<")
         
-        # 1. Data alvo (2 dias atrás para garantir dados de satélite)
         data_final = (datetime.utcnow() - timedelta(days=2)).date()
         self.stdout.write(f"Data: {data_final}")
 
-        # 2. Obter Dados
+        # 1. OBTER DADOS (Reais + Estimados)
         dados_noaa = obter_dados_noaa_csv(data_final)
-        extras = obter_dados_complementares_simulados()
+        extras = obter_dados_complementares_estimados()
         
-        # Preparar variáveis
+        # Variáveis Principais
         sst = dados_noaa['sst']
         dhw = dados_noaa['dhw']
-        limite = dados_noaa['limite']
-        anomalia = sst - limite
-        turbidez = extras['turbidez']
-        vento = extras['vento']
+        anomalia = sst - dados_noaa['limite']
         
-        # VARIÁVEL DE LUZ (Importante!)
-        # Como não baixamos PAR em tempo real ainda, usamos uma média de verão (alta)
-        # para testar o alerta de perigo. No futuro, baixaremos igual ao SST.
-        irradiancia = 55.0 
+        # Variáveis Extras (Copiadas do dicionário extras)
+        irradiancia = extras['irradiancia']
+        salinidade = extras['salinidade']
+        clorofila = extras['clorofila']
+        ph = extras['ph']
+        nitrato = extras['nitrato']
+        vento = extras['vento']
 
         risco = 0.0
         metodo_usado = "Manual"
 
-        # 3. PREDIÇÃO COM IA
+        # 2. PREPARAÇÃO PARA A IA
         caminho_modelo = os.path.join(settings.BASE_DIR, 'ml_models', 'modelo_coral_rf.pkl')
         
         try:
             modelo = joblib.load(caminho_modelo)
             
-            # --- CORREÇÃO AQUI ---
-            # Criamos APENAS as colunas que o modelo aprendeu no treino
+            # --- FEATURE ENGINEERING (Igual ao treinar_modelo.py) ---
+            # O modelo exige estas variáveis combinadas:
             interacao = sst * irradiancia
+            poluicao = nitrato * clorofila
             
+            # Monta o DataFrame com TODAS as colunas que o modelo aprendeu
             dados_hoje = pd.DataFrame([{
                 'sst': sst,
                 'irradiancia': irradiancia,
-                'turbidez': turbidez,
-                'interacao_luz_calor': interacao
+                'salinidade': salinidade,
+                'clorofila': clorofila,
+                'ph': ph,
+                'nitrato': nitrato,
+                'interacao_luz_calor': interacao,
+                'poluicao': poluicao
             }])
             
             # Predição
             predicao_bruta = modelo.predict(dados_hoje)[0]
             
-            # Normaliza para 0-100% (Assumindo que o modelo previu Risco 0-100)
+            # Normaliza (Garante que fique entre 0 e 100)
             risco = min(max(predicao_bruta, 0), 100)
-            metodo_usado = "IA (Random Forest)"
+            metodo_usado = "IA (Random Forest Completo)"
             
         except Exception as e:
-            self.stdout.write(self.style.WARNING(f"IA indisponível ({e}). Usando cálculo manual."))
-            # Fallback para fórmula manual simplificada
-            risco = self.calcular_risco_manual(dhw, irradiancia, turbidez)
+            self.stdout.write(self.style.WARNING(f"IA falhou ({e}). Usando fallback manual."))
+            risco = self.calcular_risco_manual(dhw, irradiancia, clorofila)
             metodo_usado = "Manual (Fórmula)"
 
-        # 4. Classificação (Farol)
+        # 3. DEFINE ALERTA
         if risco < 30: nivel = 'SEM_RISCO'
         elif risco < 60: nivel = 'OBSERVACAO'
         elif risco < 85: nivel = 'ALERTA_1'
         else: nivel = 'ALERTA_2'
 
-        # 5. Salvar no Banco
+        # 4. SALVAR NO BANCO
+        # Nota: Estamos salvando 'clorofila' no campo 'turbidez' do banco
+        # para aproveitar a estrutura existente.
         StatusPredicao.objects.update_or_create(
             data=data_final,
             defaults={
                 'sst_atual': sst,
-                'limite_termico': limite,
+                'limite_termico': 27.0,
                 'anomalia': anomalia,
                 'dhw_calculado': dhw,
                 'vento_velocidade': vento,
-                'turbidez': turbidez,
+                'turbidez': clorofila, # Usando clorofila como proxy de turbidez
                 'irradiancia': irradiancia,
                 'risco_integrado': risco,
                 'nivel_alerta': nivel,
             }
         )
         
-        self.stdout.write(self.style.SUCCESS(f"CONCLUSÃO: Risco {risco:.1f}% | Método: {metodo_usado}"))
+        self.stdout.write(self.style.SUCCESS(f"RESULTADO: Risco {risco:.1f}% | Método: {metodo_usado}"))
+        self.stdout.write(f"   (Inputs: SST={sst:.1f}, Sal={salinidade}, pH={ph}, NO3={nitrato})")
 
-    def calcular_risco_manual(self, dhw, irradiancia, turbidez):
-        """
-        Fórmula Manual MVP (Foca nas 3 variáveis principais).
-        Usada se a IA falhar.
-        """
-        # Fator Calor (DHW) - Peso 60%
-        # Se DHW chegar a 8, risco de calor é máximo
+    def calcular_risco_manual(self, dhw, irradiancia, clorofila):
+        """Fórmula simplificada caso a IA falhe"""
         fator_calor = min(dhw / 8.0, 1.0) * 60
         
-        # Fator Luz (PAR) - Peso 30%
-        # Luz acima de 50 é estressante
         luz = 45.0 if pd.isna(irradiancia) else irradiancia
-        fator_luz = 0
-        if luz > 45.0:
-            fator_luz = min((luz - 45.0) / 15.0, 1.0) * 30
+        fator_luz = min((max(luz - 45.0, 0)) / 15.0, 1.0) * 30
             
-        # Fator Proteção (Turbidez) - Desconta até 15%
-        t = 0.0 if pd.isna(turbidez) else turbidez
         protecao = 0
-        if t > 0.3: # Se a água estiver meio turva, protege
-            protecao = 15
+        if clorofila > 0.3: protecao = 15
             
-        score = (fator_calor + fator_luz) - protecao
-        return max(0.0, min(score, 100.0))
+        return max(0.0, min((fator_calor + fator_luz) - protecao, 100.0))
