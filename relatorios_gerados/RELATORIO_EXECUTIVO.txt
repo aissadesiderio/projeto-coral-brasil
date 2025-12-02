@@ -1,0 +1,28 @@
+
+============================================================
+RELATÓRIO EXECUTIVO (2020 - 2025)
+PROJETO CORAL BRASIL - ABROLHOS
+============================================================
+Geração: 02/12/2025 17:51
+
+1. ESCOPO DO RELATÓRIO
+----------------------
+Este relatório foca na dinâmica recente do recife.
+Período: 01/01/2020 a 11/12/2025 (2172 dias)
+
+2. ANÁLISE DE EXTREMOS (Neste período)
+--------------------------------------
+Máxima Temperatura:    28.76°C (11/04/2024)
+Máximo Risco Previsto: 37.6%
+Dias Críticos (>60%):  0
+
+3. SITUAÇÃO ATUAL (11/12/2025)
+------------------------------------------------
+Temp. Superfície: 26.97°C
+DHW (Acumulado):  0.00
+Luz Bentônica:    0.0 (µmol/m²/s)
+Turbidez (Kd):    0.039
+------------------------------------------------
+RISCO HOJE:       12.9%
+ALERTA:           SEM_RISCO
+============================================================
