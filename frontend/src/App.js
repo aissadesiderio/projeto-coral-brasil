@@ -87,11 +87,11 @@ export default function GaleriaSeresVivos() {
     : especies.filter(e => e.tipo === filtro);
 
   const filtros = [
-    { id: 'TODOS', label: 'Todos', icon: <Search size={16} /> },
-    { id: 'CORAL', label: 'Corais', icon: <Anchor size={16} /> },
-    { id: 'PEIXE', label: 'Peixes', icon: <Fish size={16} /> },
-    { id: 'INVERTEBRADO', label: 'Invertebrados', icon: <Bug size={16} /> },
-    { id: 'MAMIFERO', label: 'Mamíferos', icon: <Droplets size={16} /> }
+    { id: 'TODOS', label: 'Todos'},
+    { id: 'CORAL', label: 'Corais'},
+    { id: 'PEIXE', label: 'Peixes' },
+    { id: 'INVERTEBRADO', label: 'Invertebrados'},
+    { id: 'MAMIFERO', label: 'Mamíferos'}
   ];
 
   return (
