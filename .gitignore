@@ -2,3 +2,9 @@
 dados/dhw_5km_e218_f17f_46a9.csv
 calcular_dhw.py
 aquaculture/management/calcular_dhw.py
+
+venv/
+staticfiles/
+db.sqlite3
+__pycache__/
+*.pyc

@@ -70,7 +70,7 @@ export default function GaleriaSeresVivos() {
   useEffect(() => {
     const fetchEspecies = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/especies/');
+        const response = await fetch('/api/especies/');
         const data = await response.json();
         setEspecies(data);
         setLoading(false);

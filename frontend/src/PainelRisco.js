@@ -22,7 +22,7 @@ export default function PainelRisco() {
   const [dados, setDados] = useState(null);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/monitoramento/')
+    fetch('/api/monitoramento/')
       .then(res => res.json())
       .then(lista => {
         if (lista.length > 0) setDados(lista[0]); 
