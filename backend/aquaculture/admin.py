@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from .models import Especie, StatusPredicao
 
 class EspecieAdmin(admin.ModelAdmin):
-    # Aqui definimos as colunas que aparecem na lista
+    #Aqui definimos as colunas que aparecem na lista
     list_display = ('nome_cientifico', 'mostrar_foto', 'nome_comum', 'tipo', 'status_conservacao')
     list_filter = ('tipo', 'status_conservacao')
     

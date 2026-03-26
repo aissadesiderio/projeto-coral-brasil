@@ -26,7 +26,7 @@ DEBUG = False
 
 ALLOWED_HOSTS = ['18.222.189.61', 'localhost', '127.0.0.1', 'projetocoralbrasil.com.br', 'www.projetocoralbrasil.com.br']
 
-# Application definition
+# pplication definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
