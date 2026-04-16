@@ -16,6 +16,17 @@ class Command(BaseCommand):
         base_dir = settings.BASE_DIR
         path_dados = os.path.join(base_dir, 'dados')
         path_modelo = os.path.join(base_dir, 'ml_models', 'modelo_coral_rf.pkl')
+        path_contrato = os.path.join(base_dir, 'docs', 'contrato_canonico_variaveis.md')
+
+        # Pré-requisito mandatário: nenhuma deduplicação pode rodar sem o contrato canônico.
+        if not os.path.exists(path_contrato):
+            self.stdout.write(
+                self.style.ERROR(
+                    f"Contrato canônico ausente em '{path_contrato}'. "
+                    "Interrompendo antes das rotinas de deduplicação."
+                )
+            )
+            return
         
         # Parâmetros Fixos
         PROFUNDIDADE_Z = 7.5

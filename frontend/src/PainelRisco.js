@@ -18,18 +18,23 @@ const ItemIndicador = ({ icon: Icon, label, valor, unidade, corIcone = "text-oce
   </div>
 );
 
-export default function PainelRisco() {
+export default function PainelRisco({ publicOffline = false }) {
   const [dados, setDados] = useState(null);
 
   useEffect(() => {
+    if (publicOffline) {
+      return;
+    }
+
     fetch('/api/monitoramento/')
       .then(res => res.json())
       .then(lista => {
-        if (lista.length > 0) setDados(lista[0]); 
+        if (lista.length > 0) setDados(lista[0]);
       })
       .catch(err => console.error("Erro no monitoramento:", err));
-  }, []);
+  }, [publicOffline]);
 
+  if (publicOffline) return null;
   if (!dados) return null;
 
   const config = {
