@@ -1,42 +1,76 @@
 from django.conf import settings
+from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.response import Response
-from .models import Especie, StatusPredicao 
-from .serializers import EspecieSerializer, StatusPredicaoSerializer
+
+from .models import Especie, LocalRecife, StatusPredicao
+from .serializers import (
+    EspecieSerializer,
+    LocalRecifeDetailSerializer,
+    LocalRecifeListSerializer,
+    StatusPredicaoSerializer,
+)
 
 
 class OfflineModeMixin:
-    """Bloqueia endpoints públicos quando o site está em manutenção/offline."""
+    """Bloqueia endpoints publicos quando o site esta em manutencao/offline."""
 
-    def list(self, request, *args, **kwargs):
-        if getattr(settings, 'OFFLINE_MODE', False):
+    def dispatch(self, request, *args, **kwargs):
+        if request.method.lower() == 'get' and getattr(settings, 'OFFLINE_MODE', False):
             return Response(
                 {
                     'detail': (
-                        'Site temporariamente offline para reestruturação de backend '
+                        'Site temporariamente offline para reestruturacao de backend '
                         'e banco de dados.'
                     )
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        return super().list(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
-# Esta view vai controlar a "lista" de todos os corais
-# Ex: /api/especies/
+
 class EspecieList(OfflineModeMixin, generics.ListAPIView):
-    queryset = Especie.objects.all() # Pega todos os objetos Especie
-    serializer_class = EspecieSerializer # Usa o tradutor que criamos
-
-# Esta view vai controlar um "item único"
-# Ex: /api/especies/1/
-class EspecieDetail(generics.RetrieveAPIView):
-    queryset = Especie.objects.all()
     serializer_class = EspecieSerializer
 
+    def get_queryset(self):
+        queryset = Especie.objects.all().prefetch_related('locais')
+        local_slug = self.request.query_params.get('local')
+        if local_slug:
+            queryset = queryset.filter(locais__slug=local_slug).distinct()
+        return queryset.order_by('nome_comum', 'nome_cientifico')
+
+
+class EspecieDetail(generics.RetrieveAPIView):
+    queryset = Especie.objects.all().prefetch_related('locais')
+    serializer_class = EspecieSerializer
+
+
+class LocalRecifeList(OfflineModeMixin, generics.ListAPIView):
+    serializer_class = LocalRecifeListSerializer
+
+    def get_queryset(self):
+        return LocalRecife.objects.filter(ativo=True).prefetch_related('especies', 'monitoramentos')
+
+
+class LocalRecifeDetail(OfflineModeMixin, generics.RetrieveAPIView):
+    serializer_class = LocalRecifeDetailSerializer
+    lookup_field = 'slug'
+
+    def get_queryset(self):
+        return LocalRecife.objects.filter(ativo=True).prefetch_related('especies', 'monitoramentos')
+
+
 class StatusPredicaoList(OfflineModeMixin, generics.ListAPIView):
-    # Pega todos os alertas e ordena do mais recente para o mais antigo
-    queryset = StatusPredicao.objects.all().order_by('-data')
     serializer_class = StatusPredicaoSerializer
+
+    def get_queryset(self):
+        queryset = StatusPredicao.objects.select_related('local_recife').order_by('-data')
+        local_slug = self.request.query_params.get('local')
+        if local_slug:
+            queryset = queryset.filter(
+                Q(local_recife__slug=local_slug) | Q(local_recife__isnull=True)
+            )
+        return queryset
 
 
 class ApiStatusView(generics.GenericAPIView):
@@ -50,9 +84,9 @@ class ApiStatusView(generics.GenericAPIView):
             {
                 'offline_mode': getattr(settings, 'OFFLINE_MODE', False),
                 'message': (
-                    'Site em manutenção para reestruturação de backend e banco de dados.'
+                    'Site em manutencao para reestruturacao de backend e banco de dados.'
                     if getattr(settings, 'OFFLINE_MODE', False)
-                    else 'Serviço online.'
+                    else 'Servico online.'
                 )
             }
         )

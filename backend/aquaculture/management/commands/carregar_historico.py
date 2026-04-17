@@ -5,7 +5,7 @@ import glob
 import joblib
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from aquaculture.models import StatusPredicao
+from aquaculture.models import LocalRecife, StatusPredicao
 
 class Command(BaseCommand):
     help = 'Carga Completa (Inclui Salinidade, pH, Oxigénio, Nutrientes, etc).'
@@ -31,6 +31,15 @@ class Command(BaseCommand):
         # Parâmetros Fixos
         PROFUNDIDADE_Z = 7.5
         LIMITE = 27.0
+        local_padrao, _ = LocalRecife.objects.get_or_create(
+            slug='abrolhos-ba',
+            defaults={
+                'nome': 'Parque Nacional Marinho de Abrolhos',
+                'estado': 'Bahia',
+                'cidade': 'Caravelas',
+                'descricao': 'Local de referencia para o carregamento historico inicial.',
+            },
+        )
 
         # --- 1. MAPEAMENTO DE ARQUIVOS ---
         mapa_arquivos = {
@@ -164,6 +173,7 @@ class Command(BaseCommand):
             else: n = 'ALERTA_2'
 
             objs.append(StatusPredicao(
+                local_recife=local_padrao,
                 data=row['time'].date(),
                 sst_atual=row['sst'],
                 limite_termico=LIMITE,

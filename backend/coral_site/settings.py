@@ -28,7 +28,7 @@ SECRET_KEY = os.environ.get(
     'django-insecure-(d_7#2p8#ut+9ig647u(@@2-*8y&j0(1j-hp#(0+v8d#v&2w3%',
 )
 
-DEBUG = env_bool('DJANGO_DEBUG', False)
+DEBUG = env_bool('DJANGO_DEBUG', True)
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -39,7 +39,7 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-OFFLINE_MODE = env_bool('OFFLINE_MODE', True)
+OFFLINE_MODE = env_bool('OFFLINE_MODE', False)
 
 # Integracoes externas desativadas por padrao durante a reestruturacao local.
 USE_S3_STORAGE = False

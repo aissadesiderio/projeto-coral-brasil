@@ -1,16 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
   AlertTriangle,
   CalendarRange,
   CheckCircle2,
   Database,
   Download,
+  ExternalLink,
   Filter,
+  Fish,
   ImageOff,
+  Info,
   MapPin,
   Search,
 } from 'lucide-react';
+
 import PainelRisco from './PainelRisco';
+import { FALLBACK_DETALHES, FALLBACK_RECIFES } from './recifeData';
 
 const DADOS_GERAIS = [
   {
@@ -71,45 +77,6 @@ const DADOS_GERAIS = [
   },
 ];
 
-const RECIFES = [
-  {
-    id: 'abrolhos_ba',
-    nome: 'Parque Nacional Marinho de Abrolhos',
-    estado: 'Bahia',
-    cidade: 'Caravelas',
-    imagem: '',
-    informacoesDisponiveis: 32,
-    variaveisMinimas: true,
-    ultimaAtualizacao: '2026-04-14',
-    descricao:
-      'Area com serie historica de monitoramento e disponibilidade de variaveis essenciais para o painel de risco.',
-  },
-  {
-    id: 'picaozinho_pb',
-    nome: 'Recife de Picaozinho',
-    estado: 'Paraiba',
-    cidade: 'Joao Pessoa',
-    imagem: '',
-    informacoesDisponiveis: 17,
-    variaveisMinimas: false,
-    ultimaAtualizacao: '2026-04-10',
-    descricao:
-      'Local com catalogo biologico relevante, mas ainda com lacunas nas variaveis usadas para predicao.',
-  },
-  {
-    id: 'porto_de_galinhas_pe',
-    nome: 'Piscinas Naturais de Porto de Galinhas',
-    estado: 'Pernambuco',
-    cidade: 'Ipojuca',
-    imagem: '',
-    informacoesDisponiveis: 26,
-    variaveisMinimas: true,
-    ultimaAtualizacao: '2026-04-15',
-    descricao:
-      'Zona recifal de interesse turistico com dados ambientais recentes e historico de monitoramento.',
-  },
-];
-
 const FONTES = ['Todas', ...new Set(DADOS_GERAIS.map((item) => item.fonte))];
 const ESTADOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.estado))];
 
@@ -143,6 +110,100 @@ function ImagemRecife({ nome, imagem }) {
       </div>
     </div>
   );
+}
+
+function possuiPainelCompleto(monitoramento) {
+  if (!monitoramento) {
+    return false;
+  }
+
+  const camposObrigatorios = [
+    'sst_atual',
+    'dhw_calculado',
+    'irradiancia',
+    'salinidade',
+    'ph',
+    'oxigenio',
+    'nitrato',
+    'clorofila',
+    'turbidez',
+  ];
+
+  return camposObrigatorios.every(
+    (campo) => monitoramento[campo] !== null && monitoramento[campo] !== undefined,
+  );
+}
+
+function combinarLocais(apiLocais = []) {
+  const mapa = new Map(FALLBACK_RECIFES.map((local) => [local.slug, { ...local }]));
+
+  apiLocais.forEach((local) => {
+    const anterior = mapa.get(local.slug) || {};
+    mapa.set(local.slug, {
+      ...anterior,
+      ...local,
+      imagem_url: local.imagem_url || anterior.imagem_url || '',
+      informacoes_disponiveis:
+        local.informacoes_disponiveis ?? anterior.informacoes_disponiveis ?? 0,
+    });
+  });
+
+  return Array.from(mapa.values());
+}
+
+function combinarDetalhe(recifeBase, detalheApi) {
+  if (!recifeBase) {
+    return null;
+  }
+
+  const detalheFallback = FALLBACK_DETALHES[recifeBase.slug] || {};
+  const especiesApi =
+    Array.isArray(detalheApi?.especies) && detalheApi.especies.length > 0
+      ? detalheApi.especies
+      : null;
+
+  return {
+    ...recifeBase,
+    ...detalheFallback,
+    ...detalheApi,
+    imagem_url: detalheApi?.imagem_url || recifeBase.imagem_url || '',
+    especies: especiesApi || detalheFallback.especies || [],
+    monitoramento_recente:
+      detalheApi?.monitoramento_recente || detalheFallback.monitoramento_recente || null,
+    informacoes_disponiveis:
+      detalheApi?.informacoes_disponiveis ??
+      recifeBase.informacoes_disponiveis ??
+      (especiesApi || detalheFallback.especies || []).length,
+  };
+}
+
+async function buscarJson(url) {
+  if (typeof fetch !== 'function') {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+function resolverLinkImagem(especie) {
+  return especie?.fonte_imagem_url || especie?.foto_url || '';
+}
+
+function resolverRotuloLinkImagem(especie) {
+  return especie?.fonte_imagem_url ? 'Ver fonte da imagem' : 'Abrir imagem';
+}
+
+function resolverCreditoImagem(especie) {
+  return especie?.credito_imagem || (especie?.foto_url ? 'Acervo local do projeto' : '');
 }
 
 function Header({ onNavigate }) {
@@ -210,7 +271,8 @@ function HomePage({ onNavigate }) {
               Pagina de localizacoes de corais
             </div>
             <p className="text-sm text-gray-600">
-              Explore recifes, informacoes disponiveis e a disponibilidade do painel de risco.
+              Explore recifes, veja o painel de risco de cada local e consulte sua galeria
+              de especies.
             </p>
           </button>
 
@@ -386,33 +448,33 @@ function BancoDadosPage() {
   );
 }
 
-function RecifesPage({ onSelect }) {
+function RecifesPage({ locais, onSelect }) {
   return (
     <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <h2 className="text-2xl font-bold text-ocean-dark">Localizacoes de corais</h2>
       <p className="mb-6 mt-2 text-gray-600">
-        Selecione um local para ver suas informacoes e a disponibilidade do painel de risco.
+        Cada pagina de local possui painel de risco e galeria de especies associadas.
       </p>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {RECIFES.map((local) => (
+        {locais.map((local) => (
           <button
-            key={local.id}
+            key={local.slug}
             type="button"
-            onClick={() => onSelect(local.id)}
+            onClick={() => onSelect(local.slug)}
             className="overflow-hidden rounded-2xl border border-sand-dark/20 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md"
           >
-            <ImagemRecife nome={local.nome} imagem={local.imagem} />
+            <ImagemRecife nome={local.nome} imagem={local.imagem_url} />
             <div className="p-5">
               <h3 className="text-lg font-bold text-ocean-dark">{local.nome}</h3>
               <p className="mt-1 text-sm text-gray-500">
                 {local.estado} - {local.cidade}
               </p>
               <p className="mt-3 text-sm font-medium text-gray-700">
-                Informacoes disponiveis: {local.informacoesDisponiveis}
+                Informacoes disponiveis: {local.informacoes_disponiveis}
               </p>
               <p className="mt-2 text-sm text-gray-500">
-                Ultima atualizacao: {formatarData(local.ultimaAtualizacao)}
+                Ultima atualizacao: {formatarData(local.ultima_atualizacao)}
               </p>
             </div>
           </button>
@@ -422,9 +484,162 @@ function RecifesPage({ onSelect }) {
   );
 }
 
-function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage }) {
+function CardEspecie({ especie, onOpen }) {
+  const linkImagem = resolverLinkImagem(especie);
+  const rotuloLinkImagem = resolverRotuloLinkImagem(especie);
+  const creditoImagem = resolverCreditoImagem(especie);
+
   return (
-    <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <article className="overflow-hidden rounded-2xl border border-sand-dark/20 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+      <button type="button" onClick={() => onOpen(especie)} className="block w-full text-left">
+        <div className="flex h-56 items-center justify-center overflow-hidden bg-sand-light">
+          {especie.foto_url ? (
+            <img src={especie.foto_url} alt={especie.nome_comum} className="h-full w-full object-cover" />
+          ) : (
+            <Fish size={64} className="text-ocean-light/50" />
+          )}
+        </div>
+        <div className="p-5">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-lg font-bold text-ocean-dark">
+                {especie.nome_comum || 'Nome nao informado'}
+              </h4>
+              <p className="text-sm italic text-gray-500">{especie.nome_cientifico}</p>
+            </div>
+            <span className="rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-gray-700">
+              {especie.tipo}
+            </span>
+          </div>
+
+          <p className="line-clamp-3 text-sm text-gray-600">
+            {especie.descricao || 'Sem descricao cadastrada para esta especie.'}
+          </p>
+        </div>
+      </button>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sand-dark/10 px-5 py-4 text-sm">
+        <span className="text-gray-500">{creditoImagem || 'Sem credito de imagem'}</span>
+        {linkImagem && (
+          <a
+            href={linkImagem}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 font-semibold text-ocean-dark hover:underline"
+          >
+            <ExternalLink size={14} />
+            {rotuloLinkImagem}
+          </a>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ModalEspecie({ especie, onClose }) {
+  if (!especie) {
+    return null;
+  }
+
+  const linkImagem = resolverLinkImagem(especie);
+  const rotuloLinkImagem = resolverRotuloLinkImagem(especie);
+  const creditoImagem = resolverCreditoImagem(especie);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ocean-dark/80 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl md:flex"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex h-72 items-center justify-center bg-sand-light md:h-auto md:w-1/2">
+          {especie.foto_url ? (
+            <img src={especie.foto_url} alt={especie.nome_comum} className="h-full w-full object-cover" />
+          ) : (
+            <Fish size={96} className="text-ocean-light/50" />
+          )}
+        </div>
+
+        <div className="relative overflow-y-auto p-8 md:w-1/2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-full bg-sand-light px-3 py-1 text-sm font-semibold text-ocean-dark"
+          >
+            Fechar
+          </button>
+
+          <span className="mb-3 inline-flex items-center gap-2 rounded-full bg-sand-light px-3 py-1 text-xs font-semibold uppercase tracking-wider text-ocean-dark">
+            <Info size={14} />
+            {especie.tipo}
+          </span>
+          <h3 className="text-3xl font-bold text-ocean-dark">
+            {especie.nome_comum || 'Nome nao informado'}
+          </h3>
+          <p className="mt-1 text-lg italic text-gray-500">{especie.nome_cientifico}</p>
+
+          <div className="mt-6 space-y-5 text-sm text-gray-600">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-ocean-light">
+                Descricao
+              </p>
+              <p className="leading-relaxed">
+                {especie.descricao || 'Sem descricao detalhada cadastrada.'}
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-ocean-light">
+                Conservacao
+              </p>
+              <p>{especie.status_conservacao || 'Nao avaliado'}</p>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-ocean-light">
+                Credito da imagem
+              </p>
+              <p>{creditoImagem || 'Sem credito informado'}</p>
+            </div>
+
+            {linkImagem && (
+              <a
+                href={linkImagem}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-ocean-light/30 px-4 py-2 font-semibold text-ocean-dark transition hover:bg-ocean-dark hover:text-white"
+              >
+                <ExternalLink size={16} />
+                {rotuloLinkImagem}
+              </a>
+            )}
+
+            {especie.fonte_url && (
+              <a
+                href={especie.fonte_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-ocean-light/30 px-4 py-2 font-semibold text-ocean-dark transition hover:bg-ocean-dark hover:text-white"
+              >
+                <ExternalLink size={16} />
+                Fonte e mais informacoes
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage, onOpenEspecie }) {
+  const painelDisponivel = possuiPainelCompleto(recife.monitoramento_recente);
+  const especies = recife.especies || [];
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <button
         type="button"
         onClick={onBack}
@@ -434,7 +649,7 @@ function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage }) {
       </button>
 
       <div className="overflow-hidden rounded-3xl border border-sand-dark/20 bg-white shadow-sm">
-        <ImagemRecife nome={recife.nome} imagem={recife.imagem} />
+        <ImagemRecife nome={recife.nome} imagem={recife.imagem_url} />
 
         <div className="p-6">
           <h2 className="text-2xl font-bold text-ocean-dark">{recife.nome}</h2>
@@ -449,10 +664,10 @@ function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage }) {
                 Catalogo local
               </p>
               <p className="mt-2 text-sm text-gray-600">
-                Informacoes disponiveis: {recife.informacoesDisponiveis}
+                Informacoes disponiveis: {recife.informacoes_disponiveis}
               </p>
               <p className="mt-1 text-sm text-gray-600">
-                Ultima atualizacao: {formatarData(recife.ultimaAtualizacao)}
+                Ultima atualizacao: {formatarData(recife.ultima_atualizacao)}
               </p>
             </div>
 
@@ -460,10 +675,10 @@ function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage }) {
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ocean-light">
                 Painel de risco
               </p>
-              {recife.variaveisMinimas ? (
+              {painelDisponivel ? (
                 <p className="mt-2 inline-flex items-center gap-2 text-sm text-emerald-700">
                   <CheckCircle2 size={16} />
-                  Variaveis minimas disponiveis para predicao.
+                  Variaveis minimas disponiveis para predicao neste local.
                 </p>
               ) : (
                 <p className="mt-2 inline-flex items-center gap-2 text-sm text-amber-700">
@@ -474,28 +689,50 @@ function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage }) {
             </div>
           </div>
 
+          {siteOffline && (
+            <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <strong>Modo manutencao:</strong> {offlineMessage || 'Exibindo dados locais de referencia.'}
+            </div>
+          )}
+
           <div className="mt-6 rounded-2xl border border-sand-dark/20 p-4">
-            <h3 className="mb-3 text-lg font-semibold text-ocean-dark">
+            <h3 className="mb-4 text-lg font-semibold text-ocean-dark">
               Painel de risco da localizacao
             </h3>
 
-            {siteOffline ? (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                <strong>Modo manutencao:</strong>{' '}
-                {offlineMessage || 'O backend esta temporariamente offline.'}
-              </div>
-            ) : recife.variaveisMinimas ? (
-              <div className="space-y-4">
-                <PainelRisco publicOffline={false} />
-                <p className="text-sm text-gray-500">
-                  Se o painel nao aparecer, a API pode estar sem registros recentes em
-                  <code className="ml-1 rounded bg-sand-light px-1 py-0.5">/api/monitoramento/</code>.
-                </p>
-              </div>
+            {painelDisponivel ? (
+              <PainelRisco dados={recife.monitoramento_recente} />
             ) : (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
                 O painel de risco permanece desabilitado para este recife ate que as
                 variaveis obrigatorias sejam completadas.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-ocean-dark">Galeria de especies</h3>
+                <p className="text-sm text-gray-500">
+                  Especies cadastradas e associadas a este local.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-ocean-dark">
+                <Activity size={14} />
+                {especies.length} especie(s)
+              </span>
+            </div>
+
+            {especies.length > 0 ? (
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {especies.map((especie) => (
+                  <CardEspecie key={especie.id} especie={especie} onOpen={onOpenEspecie} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+                Nenhuma especie foi associada a este recife ainda no painel administrativo.
               </div>
             )}
           </div>
@@ -507,63 +744,101 @@ function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage }) {
 
 export default function App() {
   const [pagina, setPagina] = useState('home');
+  const [locais, setLocais] = useState(FALLBACK_RECIFES);
   const [recifeSelecionado, setRecifeSelecionado] = useState(null);
+  const [detalhesPorSlug, setDetalhesPorSlug] = useState({});
+  const [especieSelecionada, setEspecieSelecionada] = useState(null);
   const [siteOffline, setSiteOffline] = useState(false);
   const [offlineMessage, setOfflineMessage] = useState('');
 
   useEffect(() => {
     let ativo = true;
 
-    if (typeof fetch !== 'function') {
-      return undefined;
-    }
+    async function carregarBase() {
+      const [statusPayload, locaisPayload] = await Promise.all([
+        buscarJson('/api/status/'),
+        buscarJson('/api/locais/'),
+      ]);
 
-    async function carregarStatus() {
-      try {
-        const response = await fetch('/api/status/');
-        if (!response.ok) {
-          return;
-        }
+      if (!ativo) {
+        return;
+      }
 
-        const payload = await response.json();
-        if (!ativo) {
-          return;
-        }
+      if (statusPayload) {
+        setSiteOffline(Boolean(statusPayload.offline_mode));
+        setOfflineMessage(statusPayload.message || '');
+      }
 
-        setSiteOffline(Boolean(payload.offline_mode));
-        setOfflineMessage(payload.message || '');
-      } catch (error) {
-        if (!ativo) {
-          return;
-        }
-
-        setSiteOffline(false);
-        setOfflineMessage('');
+      if (Array.isArray(locaisPayload) && locaisPayload.length > 0) {
+        setLocais(combinarLocais(locaisPayload));
       }
     }
 
-    carregarStatus();
+    carregarBase();
 
     return () => {
       ativo = false;
     };
   }, []);
 
-  const recifeAtual = useMemo(
-    () => RECIFES.find((item) => item.id === recifeSelecionado) || null,
-    [recifeSelecionado],
-  );
+  useEffect(() => {
+    let ativo = true;
+
+    if (pagina !== 'detalhe' || !recifeSelecionado) {
+      return undefined;
+    }
+
+    async function carregarDetalhe() {
+      const detalhePayload = await buscarJson(`/api/locais/${recifeSelecionado}/`);
+      if (!ativo || !detalhePayload) {
+        return;
+      }
+
+      const localBase =
+        locais.find((local) => local.slug === recifeSelecionado) ||
+        FALLBACK_RECIFES.find((local) => local.slug === recifeSelecionado);
+
+      if (!localBase) {
+        return;
+      }
+
+      setDetalhesPorSlug((anterior) => ({
+        ...anterior,
+        [recifeSelecionado]: combinarDetalhe(localBase, detalhePayload),
+      }));
+    }
+
+    carregarDetalhe();
+
+    return () => {
+      ativo = false;
+    };
+  }, [locais, pagina, recifeSelecionado]);
+
+  const recifeAtual = useMemo(() => {
+    if (!recifeSelecionado) {
+      return null;
+    }
+
+    const localBase =
+      locais.find((local) => local.slug === recifeSelecionado) ||
+      FALLBACK_RECIFES.find((local) => local.slug === recifeSelecionado);
+
+    return combinarDetalhe(localBase, detalhesPorSlug[recifeSelecionado]);
+  }, [detalhesPorSlug, locais, recifeSelecionado]);
 
   const navegar = (destino) => {
     if (destino !== 'detalhe') {
       setRecifeSelecionado(null);
+      setEspecieSelecionada(null);
     }
 
     setPagina(destino);
   };
 
-  const abrirRecife = (recifeId) => {
-    setRecifeSelecionado(recifeId);
+  const abrirRecife = (recifeSlug) => {
+    setRecifeSelecionado(recifeSlug);
+    setEspecieSelecionada(null);
     setPagina('detalhe');
   };
 
@@ -575,23 +850,25 @@ export default function App() {
         <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
           <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
             <strong>Modo manutencao:</strong>{' '}
-            {offlineMessage ||
-              'Site em manutencao para reestruturacao do backend e banco de dados.'}
+            {offlineMessage || 'Site em manutencao para reestruturacao do backend e banco de dados.'}
           </div>
         </div>
       )}
 
       {pagina === 'home' && <HomePage onNavigate={navegar} />}
       {pagina === 'banco' && <BancoDadosPage />}
-      {pagina === 'recifes' && <RecifesPage onSelect={abrirRecife} />}
+      {pagina === 'recifes' && <RecifesPage locais={locais} onSelect={abrirRecife} />}
       {pagina === 'detalhe' && recifeAtual && (
         <LocalDetalhePage
           recife={recifeAtual}
           onBack={() => navegar('recifes')}
           siteOffline={siteOffline}
           offlineMessage={offlineMessage}
+          onOpenEspecie={setEspecieSelecionada}
         />
       )}
+
+      <ModalEspecie especie={especieSelecionada} onClose={() => setEspecieSelecionada(null)} />
     </div>
   );
 }
