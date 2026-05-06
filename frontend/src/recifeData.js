@@ -47,7 +47,7 @@ export const FALLBACK_DETALHES = {
         "status_conservacao": "Vulneravel",
         "foto_url": "/media/especies/Mussismilia_braziliensis.jpg",
         "credito_imagem": "Acervo local do projeto",
-        "fonte_imagem_url": "/media/especies/Mussismilia_braziliensis.jpg",
+        "fonte_imagem_url": "https://www.inaturalist.org/observations/326387144",
         "fonte_url": ""
       },
       {
@@ -59,7 +59,7 @@ export const FALLBACK_DETALHES = {
         "status_conservacao": "Pouco preocupante",
         "foto_url": "/media/especies/Montastraea_cavernosa.jpg",
         "credito_imagem": "Acervo local do projeto",
-        "fonte_imagem_url": "/media/especies/Montastraea_cavernosa.jpg",
+        "fonte_imagem_url": "https://www.inaturalist.org/observations/326387704",
         "fonte_url": ""
       },
       {
@@ -108,7 +108,6 @@ export const FALLBACK_DETALHES = {
       "irradiancia": 31.8,
       "turbidez": 0.17,
       "salinidade": 36.1,
-      "ph": 8.09,
       "oxigenio": 6.42,
       "nitrato": 0.36,
       "clorofila": 0.64,
@@ -140,7 +139,6 @@ export const FALLBACK_DETALHES = {
       "irradiancia": 30.4,
       "turbidez": 0.22,
       "salinidade": 35.9,
-      "ph": 8.07,
       "oxigenio": 6.27,
       "nitrato": 0.43,
       "clorofila": 0.71,
@@ -196,7 +194,6 @@ export const FALLBACK_DETALHES = {
       "irradiancia": 29.6,
       "turbidez": 0.28,
       "salinidade": 35.7,
-      "ph": 8.05,
       "oxigenio": 6.31,
       "nitrato": 0.51,
       "clorofila": 0.82,

@@ -16,69 +16,204 @@ import {
 } from 'lucide-react';
 
 import PainelRisco from './PainelRisco';
+import homeCardBanco from './assets/home/card-banco.png';
+import homeCardPainel from './assets/home/card-painel.png';
+import homeCardRecifes from './assets/home/card-recifes.png';
+import homeHeroCoral from './assets/home/hero-coral.png';
+import {
+  CAMPOS_MONITORAMENTO_OBRIGATORIOS,
+  MONITORAMENTO_VARIAVEIS,
+  RISCO_STATUS,
+} from './monitoramentoConfig';
 import { FALLBACK_DETALHES, FALLBACK_RECIFES } from './recifeData';
+import svgPaths from './svg-r6f04ghq4r';
 
 const DADOS_GERAIS = [
   {
-    id: 'copernicus_sst_2026_03',
-    titulo: 'Temperatura da Superficie do Mar (SST) - Abrolhos',
-    tipoData: 'intervalo',
+    id: 'copernicus_sst_abrolhos_2026_03',
+    titulo: 'Temperatura da superficie do mar - Abrolhos',
+    tipoDado: 'Climatico',
+    recorteTemporal: 'intervalo',
     dataInicio: '2026-03-01',
     dataFim: '2026-03-31',
     dataPublicacao: null,
+    periodoRotulo: 'Mar/2026',
     estado: 'Bahia',
     cidade: 'Caravelas',
+    localizacao: 'Parque Nacional Marinho de Abrolhos',
+    localSlug: 'abrolhos-ba',
     fonte: 'Copernicus',
     tamanho: '1.8 GB',
     formato: 'CSV',
+    resumo:
+      'Serie mensal de temperatura da superficie do mar usada para acompanhamento termico do recife.',
     downloadUrl: '/dados/sst.csv',
   },
   {
-    id: 'noaa_dhw_2026_03',
-    titulo: 'Degree Heating Week (DHW) - Banco dos Abrolhos',
-    tipoData: 'intervalo',
+    id: 'noaa_dhw_abrolhos_2026_03',
+    titulo: 'Degree Heating Week - Banco dos Abrolhos',
+    tipoDado: 'Oceanografico',
+    recorteTemporal: 'intervalo',
     dataInicio: '2026-03-01',
     dataFim: '2026-03-31',
     dataPublicacao: null,
+    periodoRotulo: 'Mar/2026',
     estado: 'Bahia',
-    cidade: 'Alcobaca',
+    cidade: 'Caravelas',
+    localizacao: 'Parque Nacional Marinho de Abrolhos',
+    localSlug: 'abrolhos-ba',
     fonte: 'NOAA',
     tamanho: '420 MB',
     formato: 'NetCDF',
+    resumo: 'Camada mensal de aquecimento acumulado para monitoramento de estresse termico.',
     downloadUrl: '/dados/dhw.csv',
   },
   {
-    id: 'ncbi_especies_2026_q1',
-    titulo: 'Compilado genetico de especies de corais',
-    tipoData: 'publicacao',
+    id: 'inventario_biodiversidade_abrolhos_2026_q1',
+    titulo: 'Inventario de biodiversidade recifal - Abrolhos',
+    tipoDado: 'Biodiversidade',
+    recorteTemporal: 'publicacao',
     dataInicio: null,
     dataFim: null,
-    dataPublicacao: '2026-04-05',
+    dataPublicacao: '2026-04-06',
+    periodoRotulo: 'Abr/2026',
     estado: 'Bahia',
-    cidade: 'Porto Seguro',
+    cidade: 'Caravelas',
+    localizacao: 'Parque Nacional Marinho de Abrolhos',
+    localSlug: 'abrolhos-ba',
+    fonte: 'Projeto Coral Brasil',
+    tamanho: '48 MB',
+    formato: 'JSON',
+    resumo: 'Levantamento consolidado de especies associadas ao recife e suas ocorrencias.',
+    downloadUrl: '/dados/biodiversidade-abrolhos.json',
+  },
+  {
+    id: 'microbioma_picaozinho_2026_03',
+    titulo: 'Microbioma de agua recifal - Picaozinho',
+    tipoDado: 'Microbioma',
+    recorteTemporal: 'intervalo',
+    dataInicio: '2026-03-10',
+    dataFim: '2026-03-24',
+    dataPublicacao: null,
+    periodoRotulo: 'Mar/2026',
+    estado: 'Paraiba',
+    cidade: 'Joao Pessoa',
+    localizacao: 'Recife de Picaozinho',
+    localSlug: 'picaozinho-pb',
     fonte: 'NCBI',
-    tamanho: '95 MB',
-    formato: 'FASTA',
+    tamanho: '3.1 GB',
+    formato: 'FASTQ',
+    resumo: 'Sequenciamento metagenomico para avaliacao microbiana do ambiente recifal.',
     downloadUrl: null,
   },
   {
-    id: 'nasa_par_2026_03',
-    titulo: 'Irradiancia PAR costeira',
-    tipoData: 'intervalo',
-    dataInicio: '2026-03-15',
-    dataFim: '2026-03-31',
+    id: 'genetico_abrolhos_2026_q1',
+    titulo: 'Banco genetico de corais brasileiros - Abrolhos',
+    tipoDado: 'Genetico',
+    recorteTemporal: 'publicacao',
+    dataInicio: null,
+    dataFim: null,
+    dataPublicacao: '2026-04-05',
+    periodoRotulo: 'Abr/2026',
+    estado: 'Bahia',
+    cidade: 'Caravelas',
+    localizacao: 'Parque Nacional Marinho de Abrolhos',
+    localSlug: 'abrolhos-ba',
+    fonte: 'NCBI',
+    tamanho: '95 MB',
+    formato: 'FASTA',
+    resumo: 'Compilado genetico com sequencias de referencia para especies coralineas.',
+    downloadUrl: null,
+  },
+  {
+    id: 'imagem_porto_2026_04',
+    titulo: 'Mosaico fotografico subaquatico - Porto de Galinhas',
+    tipoDado: 'Imagem',
+    recorteTemporal: 'intervalo',
+    dataInicio: '2026-04-01',
+    dataFim: '2026-04-12',
     dataPublicacao: null,
+    periodoRotulo: 'Abr/2026',
     estado: 'Pernambuco',
-    cidade: 'Recife',
-    fonte: 'NASA',
-    tamanho: '780 MB',
-    formato: 'CSV',
-    downloadUrl: '/dados/par.csv',
+    cidade: 'Ipojuca',
+    localizacao: 'Piscinas Naturais de Porto de Galinhas',
+    localSlug: 'porto-de-galinhas-pe',
+    fonte: 'Projeto Coral Brasil',
+    tamanho: '2.4 GB',
+    formato: 'GeoTIFF',
+    resumo: 'Colecao de imagens georreferenciadas para inspeção visual do recife.',
+    downloadUrl: '/dados/mosaico-porto.tif',
+  },
+  {
+    id: 'relatorio_picaozinho_2026_04',
+    titulo: 'Relatorio tecnico de campo - Picaozinho',
+    tipoDado: 'Relatorio',
+    recorteTemporal: 'publicacao',
+    dataInicio: null,
+    dataFim: null,
+    dataPublicacao: '2026-04-18',
+    periodoRotulo: 'Abr/2026',
+    estado: 'Paraiba',
+    cidade: 'Joao Pessoa',
+    localizacao: 'Recife de Picaozinho',
+    localSlug: 'picaozinho-pb',
+    fonte: 'Projeto Coral Brasil',
+    tamanho: '12 MB',
+    formato: 'PDF',
+    resumo: 'Relatorio com observacoes de campo, fotografias e anotacoes de amostragem.',
+    downloadUrl: '/dados/relatorio-picaozinho.pdf',
+  },
+  {
+    id: 'modelo_branqueamento_nordeste_2026_q2',
+    titulo: 'Modelo preditivo de branqueamento - Costa Nordeste',
+    tipoDado: 'Modelo preditivo',
+    recorteTemporal: 'publicacao',
+    dataInicio: null,
+    dataFim: null,
+    dataPublicacao: '2026-04-22',
+    periodoRotulo: 'Abr/2026',
+    estado: 'Regional',
+    cidade: 'Costa Nordeste',
+    localizacao: 'Costa Nordeste',
+    localSlug: null,
+    fonte: 'Projeto Coral Brasil',
+    tamanho: '680 MB',
+    formato: 'Parquet',
+    resumo: 'Saida consolidada de um modelo regional para risco de branqueamento coralino.',
+    downloadUrl: '/dados/modelo-branqueamento.parquet',
   },
 ];
 
 const FONTES = ['Todas', ...new Set(DADOS_GERAIS.map((item) => item.fonte))];
+const TIPOS_DADO = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.tipoDado))];
+const LOCALIZACOES = ['Todas', ...new Set(DADOS_GERAIS.map((item) => item.localizacao))];
+const FORMATOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.formato))];
 const ESTADOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.estado))];
+const PERIODOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.periodoRotulo))];
+
+const HOME_DESTAQUES = [
+  {
+    id: 'recifes',
+    pagina: 'recifes',
+    imagem: homeCardRecifes,
+    titulo: 'Recifes Monitorados',
+    descricao: 'Veja dados ambientais, risco atual e especies associadas por localizacao.',
+  },
+  {
+    id: 'painel',
+    pagina: 'recifes',
+    imagem: homeCardPainel,
+    titulo: 'Painel de Risco',
+    descricao: 'Acompanhe temperatura, DHW, PAR, salinidade, oxigenio e clorofila.',
+  },
+  {
+    id: 'banco',
+    pagina: 'banco',
+    imagem: homeCardBanco,
+    titulo: 'Banco de Dados',
+    descricao: 'Consulte datasets climaticos, biologicos, geneticos, imagens e relatorios.',
+  },
+];
 
 function formatarData(data) {
   if (!data) {
@@ -90,16 +225,38 @@ function formatarData(data) {
 }
 
 function formatarPeriodo(item) {
-  if (item.tipoData === 'publicacao') {
+  if (item.recorteTemporal === 'publicacao') {
     return `Publicado em ${formatarData(item.dataPublicacao)}`;
   }
 
   return `${formatarData(item.dataInicio)} ate ${formatarData(item.dataFim)}`;
 }
 
-function ImagemRecife({ nome, imagem }) {
+function formatarLocal(item) {
+  return `${item.estado} - ${item.cidade}`;
+}
+
+function formatarQuantidadeEspecies(total) {
+  return `${total} ${total === 1 ? 'especie cadastrada' : 'especies cadastradas'}`;
+}
+
+function obterMetaRisco(nivelAlerta) {
+  return RISCO_STATUS[nivelAlerta] || RISCO_STATUS.SEM_RISCO;
+}
+
+function scrollToTopo() {
+  if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      window.scrollTo(0, 0);
+    }
+  }
+}
+
+function ImagemRecife({ nome, imagem, className = 'h-48 w-full object-cover' }) {
   if (imagem) {
-    return <img src={imagem} alt={nome} className="h-48 w-full object-cover" />;
+    return <img src={imagem} alt={nome} className={className} />;
   }
 
   return (
@@ -117,19 +274,7 @@ function possuiPainelCompleto(monitoramento) {
     return false;
   }
 
-  const camposObrigatorios = [
-    'sst_atual',
-    'dhw_calculado',
-    'irradiancia',
-    'salinidade',
-    'ph',
-    'oxigenio',
-    'nitrato',
-    'clorofila',
-    'turbidez',
-  ];
-
-  return camposObrigatorios.every(
+  return CAMPOS_MONITORAMENTO_OBRIGATORIOS.every(
     (campo) => monitoramento[campo] !== null && monitoramento[campo] !== undefined,
   );
 }
@@ -144,7 +289,10 @@ function combinarLocais(apiLocais = []) {
       ...local,
       imagem_url: local.imagem_url || anterior.imagem_url || '',
       informacoes_disponiveis:
-        local.informacoes_disponiveis ?? anterior.informacoes_disponiveis ?? 0,
+        local.quantidade_especies ??
+        local.informacoes_disponiveis ??
+        anterior.informacoes_disponiveis ??
+        0,
     });
   });
 
@@ -172,6 +320,7 @@ function combinarDetalhe(recifeBase, detalheApi) {
       detalheApi?.monitoramento_recente || detalheFallback.monitoramento_recente || null,
     informacoes_disponiveis:
       detalheApi?.informacoes_disponiveis ??
+      detalheApi?.quantidade_especies ??
       recifeBase.informacoes_disponiveis ??
       (especiesApi || detalheFallback.especies || []).length,
   };
@@ -206,99 +355,312 @@ function resolverCreditoImagem(especie) {
   return especie?.credito_imagem || (especie?.foto_url ? 'Acervo local do projeto' : '');
 }
 
-function Header({ onNavigate }) {
+function obterQuantidadeEspeciesLocal(local) {
+  const especiesFallback = FALLBACK_DETALHES[local.slug]?.especies?.length;
   return (
-    <header className="sticky top-0 z-40 bg-ocean-dark text-white shadow-md">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    local.quantidade_especies ??
+    local.informacoes_disponiveis ??
+    especiesFallback ??
+    0
+  );
+}
+
+function obterMonitoramentoLocal(local) {
+  return (
+    local.monitoramento_recente ||
+    FALLBACK_DETALHES[local.slug]?.monitoramento_recente ||
+    null
+  );
+}
+
+function obterRiscoAtualLocal(local) {
+  return (
+    local.nivel_alerta ||
+    local.risco_atual ||
+    obterMonitoramentoLocal(local)?.nivel_alerta ||
+    null
+  );
+}
+
+function obterItensNavegacao(paginaAtual) {
+  if (paginaAtual === 'banco') {
+    return [
+      { id: 'home', rotulo: 'Pagina inicial', destino: 'home' },
+      { id: 'recifes', rotulo: 'Explorar recifes', destino: 'recifes' },
+    ];
+  }
+
+  if (paginaAtual === 'recifes' || paginaAtual === 'detalhe') {
+    return [
+      { id: 'home', rotulo: 'Pagina inicial', destino: 'home' },
+      { id: 'banco', rotulo: 'Banco de dados', destino: 'banco' },
+    ];
+  }
+
+  return [
+    { id: 'recifes', rotulo: 'Explorar recifes', destino: 'recifes' },
+    { id: 'banco', rotulo: 'Banco de dados', destino: 'banco' },
+  ];
+}
+
+function obterDatasetsRelacionados(localSlug) {
+  return DADOS_GERAIS.filter((item) => item.localSlug === localSlug);
+}
+
+function BrandMark({ claro = false }) {
+  return (
+    <div className={claro ? 'text-white' : 'text-ocean-dark'}>
+      <span className="block text-[1.55rem] font-black leading-[0.88] tracking-tight sm:text-[1.9rem]">
+        Projeto
+      </span>
+      <span className="block text-[1.55rem] font-black leading-[0.88] tracking-tight sm:text-[1.9rem]">
+        Coral Brasil
+      </span>
+      <span
+        className={`mt-1 block max-w-[14rem] text-[0.58rem] font-semibold uppercase tracking-[0.2em] ${
+          claro ? 'text-white/70' : 'text-ocean-dark/65'
+        }`}
+      >
+        Monitoramento, biodiversidade e risco nos recifes brasileiros
+      </span>
+    </div>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <path d={svgPaths.p3c382d72} fill="currentColor" fillOpacity="0.45" />
+    </svg>
+  );
+}
+
+function LinkedinIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <path
+        clipRule="evenodd"
+        d={svgPaths.p1fcf5070}
+        fill="currentColor"
+        fillOpacity="0.45"
+        fillRule="evenodd"
+      />
+      <path d={svgPaths.pe7ea00} fill="#fff" />
+      <path d={svgPaths.p1ab31680} fill="#fff" />
+      <path d={svgPaths.p28c6df0} fill="#fff" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <path d={svgPaths.pdaf0200} fill="currentColor" fillOpacity="0.45" />
+    </svg>
+  );
+}
+
+function Header({ onNavigate, paginaAtual }) {
+  const isHome = paginaAtual === 'home';
+  const itensNavegacao = obterItensNavegacao(paginaAtual);
+
+  return (
+    <header
+      className={
+        isHome
+          ? 'relative z-40 bg-[#2b6978] text-white'
+          : 'sticky top-0 z-40 border-b border-white/10 bg-[#2b6978]/95 text-white shadow-md backdrop-blur'
+      }
+    >
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
         <button
           type="button"
           onClick={() => onNavigate('home')}
-          className="text-left text-lg font-bold tracking-tight sm:text-xl"
+          className="shrink-0 text-left"
+          aria-label="Ir para a pagina inicial"
         >
-          Projeto Coral Brasil
+          <BrandMark claro />
         </button>
 
-        <nav className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate('home')}
-            className="rounded-lg bg-white/10 px-4 py-2 transition hover:bg-white/20"
-          >
-            Pagina inicial
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('recifes')}
-            className="rounded-lg bg-terra px-4 py-2 font-semibold transition hover:opacity-90"
-          >
-            Escolher recifes
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('banco')}
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 font-semibold text-ocean-dark transition hover:bg-sand-light"
-          >
-            <Database size={16} />
-            Banco de dados geral
-          </button>
+        <nav className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
+          {itensNavegacao.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.destino)}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 sm:px-5"
+            >
+              {item.rotulo}
+            </button>
+          ))}
         </nav>
       </div>
     </header>
   );
 }
 
-function HomePage({ onNavigate }) {
+function HomePage({ onNavigate, siteOffline, offlineMessage }) {
   return (
-    <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-      <div className="rounded-3xl border border-sand-dark/20 bg-white p-8 shadow-lg md:p-12">
-        <p className="mb-3 text-xs uppercase tracking-[0.2em] text-ocean-light">Introducao</p>
-        <h1 className="mb-4 text-3xl font-bold text-ocean-dark md:text-5xl">
-          Monitoramento integrado para recifes de coral do Brasil
-        </h1>
-        <p className="mb-8 max-w-3xl leading-relaxed text-gray-600">
-          Esta plataforma centraliza dados ambientais, referencias complementares e
-          acompanhamento de risco para apoiar pesquisa, gestao e observacao de recifes.
-        </p>
+    <section className="relative overflow-hidden bg-gradient-to-b from-[#2b6978] via-[#b0d7d4] via-[40%] to-[#ffefeb]">
+      <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => onNavigate('recifes')}
-            className="rounded-2xl border border-ocean-light/20 bg-sand-light/30 p-5 text-left transition hover:border-ocean-light/50 hover:shadow-md"
-          >
-            <div className="mb-2 inline-flex items-center gap-2 font-semibold text-ocean-dark">
-              <MapPin size={18} />
-              Pagina de localizacoes de corais
-            </div>
-            <p className="text-sm text-gray-600">
-              Explore recifes, veja o painel de risco de cada local e consulte sua galeria
-              de especies.
-            </p>
-          </button>
+      <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pb-20 pt-4 sm:px-6 sm:pb-24 lg:px-8">
+        {siteOffline && (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/95 p-4 text-sm text-amber-950 shadow-sm backdrop-blur">
+            <strong>Modo manutencao:</strong>{' '}
+            {offlineMessage || 'Exibindo dados locais de referencia durante a reestruturacao.'}
+          </div>
+        )}
 
-          <button
-            type="button"
-            onClick={() => onNavigate('banco')}
-            className="rounded-2xl border border-ocean-light/20 bg-sand-light/30 p-5 text-left transition hover:border-ocean-light/50 hover:shadow-md"
-          >
-            <div className="mb-2 inline-flex items-center gap-2 font-semibold text-ocean-dark">
-              <Database size={18} />
-              Banco de dados geral
-            </div>
-            <p className="text-sm text-gray-600">
-              Consulte conjuntos de dados por fonte, periodo e localizacao antes de baixar.
-            </p>
-          </button>
+        <div className="flex justify-center pt-4 sm:pt-8">
+          <img
+            src={homeHeroCoral}
+            alt="Coral em destaque na pagina inicial"
+            className="w-full max-w-[980px] object-contain drop-shadow-[0_32px_48px_rgba(19,74,87,0.18)]"
+          />
         </div>
+
+        <div className="max-w-3xl pb-4 sm:pb-10">
+          <h1 className="text-[1.9rem] font-bold leading-[1.15] tracking-[-0.02em] text-[#2b6978] sm:text-[2.4rem] lg:text-[2.75rem]">
+            Mergulhe na biodiversidade coralina brasileira.
+          </h1>
+          <p className="mt-4 max-w-2xl text-base font-medium leading-[1.55] text-black/60 sm:text-lg">
+            Esta plataforma centraliza dados ambientais, referencias complementares e
+            acompanhamento de risco para apoiar pesquisa, gestao e observacao de recifes.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => onNavigate('recifes')}
+              className="rounded-[10px] bg-[#2b6978] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#245766] sm:w-auto"
+            >
+              Explorar recifes
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('banco')}
+              className="rounded-[10px] border border-[#2b6978]/20 bg-white/70 px-5 py-3 text-sm font-medium text-[#2b6978] transition hover:bg-white"
+            >
+              Banco de dados geral
+            </button>
+          </div>
+        </div>
+
+        <ul className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          {HOME_DESTAQUES.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => onNavigate(item.pagina)}
+                className="group block w-full text-left"
+              >
+                <div className="relative aspect-[362.66/483] overflow-hidden rounded-2xl shadow-lg shadow-ocean-dark/10">
+                  <img
+                    src={item.imagem}
+                    alt={item.titulo}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                  />
+                </div>
+
+                <div className="pt-6">
+                  <h2 className="text-2xl font-semibold leading-[1.2] tracking-[-0.02em] text-[#2b6978]">
+                    {item.titulo}
+                  </h2>
+                  <p className="mt-2 text-base leading-[1.55] text-black/60 sm:text-lg">
+                    {item.descricao}
+                  </p>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
+  );
+}
+
+function CampoFiltro({ label, icon: Icon, children }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-ocean-dark">
+        <Icon size={16} />
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function DatasetCard({ item, compact = false }) {
+  const padding = compact ? 'p-4' : 'p-5';
+
+  return (
+    <article
+      className={`flex h-full flex-col rounded-2xl border border-sand-dark/20 bg-white ${padding} shadow-sm`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ocean-light">
+            {item.fonte}
+          </p>
+          <h3 className="mt-1 text-lg font-bold text-ocean-dark">{item.titulo}</h3>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-gray-700">
+            {item.tipoDado}
+          </span>
+          <span className="rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-gray-700">
+            {item.formato}
+          </span>
+        </div>
+      </div>
+
+      <p className="mt-3 text-sm leading-relaxed text-gray-600">{item.resumo}</p>
+
+      <div className="mt-4 space-y-2 text-sm text-gray-600">
+        <p className="inline-flex items-center gap-2">
+          <MapPin size={15} />
+          {item.localizacao} - {formatarLocal(item)}
+        </p>
+        <p className="inline-flex items-center gap-2">
+          <CalendarRange size={15} />
+          {formatarPeriodo(item)}
+        </p>
+        <p>
+          <strong>Tamanho:</strong> {item.tamanho}
+        </p>
+      </div>
+
+      <div className="mt-5 flex flex-1 items-end">
+        {item.downloadUrl ? (
+          <a
+            href={item.downloadUrl}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-dark px-4 py-2 text-sm font-semibold text-white transition hover:bg-ocean-light sm:w-auto"
+          >
+            <Download size={16} />
+            Baixar conjunto
+          </a>
+        ) : (
+          <span className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 sm:w-auto">
+            <AlertTriangle size={16} />
+            Download indisponivel no momento
+          </span>
+        )}
+      </div>
+    </article>
   );
 }
 
 function BancoDadosPage() {
   const [termoBusca, setTermoBusca] = useState('');
   const [fonteSelecionada, setFonteSelecionada] = useState('Todas');
+  const [tipoDadoSelecionado, setTipoDadoSelecionado] = useState('Todos');
+  const [localizacaoSelecionada, setLocalizacaoSelecionada] = useState('Todas');
+  const [formatoSelecionado, setFormatoSelecionado] = useState('Todos');
   const [estadoSelecionado, setEstadoSelecionado] = useState('Todos');
+  const [periodoSelecionado, setPeriodoSelecionado] = useState('Todos');
 
   const resultados = useMemo(() => {
     const termoNormalizado = termoBusca.trim().toLowerCase();
@@ -308,53 +670,78 @@ function BancoDadosPage() {
         !termoNormalizado ||
         item.titulo.toLowerCase().includes(termoNormalizado) ||
         item.cidade.toLowerCase().includes(termoNormalizado) ||
-        item.estado.toLowerCase().includes(termoNormalizado);
+        item.estado.toLowerCase().includes(termoNormalizado) ||
+        item.resumo.toLowerCase().includes(termoNormalizado);
 
       const bateFonte =
         fonteSelecionada === 'Todas' || item.fonte === fonteSelecionada;
-
+      const bateTipo =
+        tipoDadoSelecionado === 'Todos' || item.tipoDado === tipoDadoSelecionado;
+      const bateLocalizacao =
+        localizacaoSelecionada === 'Todas' || item.localizacao === localizacaoSelecionada;
+      const bateFormato =
+        formatoSelecionado === 'Todos' || item.formato === formatoSelecionado;
       const bateEstado =
         estadoSelecionado === 'Todos' || item.estado === estadoSelecionado;
+      const batePeriodo =
+        periodoSelecionado === 'Todos' || item.periodoRotulo === periodoSelecionado;
 
-      return bateBusca && bateFonte && bateEstado;
+      return (
+        bateBusca &&
+        bateFonte &&
+        bateTipo &&
+        bateLocalizacao &&
+        bateFormato &&
+        bateEstado &&
+        batePeriodo
+      );
     });
-  }, [estadoSelecionado, fonteSelecionada, termoBusca]);
+  }, [
+    estadoSelecionado,
+    formatoSelecionado,
+    fonteSelecionada,
+    localizacaoSelecionada,
+    periodoSelecionado,
+    termoBusca,
+    tipoDadoSelecionado,
+  ]);
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center gap-3">
-        <Database className="text-ocean-dark" />
-        <div>
-          <h2 className="text-2xl font-bold text-ocean-dark">Banco de dados geral</h2>
-          <p className="text-sm text-gray-600">
-            Dados de predicao e referencias complementares reunidos em um unico catalogo.
-          </p>
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="rounded-3xl border border-sand-dark/20 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Database className="mt-1 text-ocean-dark" />
+            <div>
+              <h2 className="text-2xl font-bold text-ocean-dark">Banco de dados geral</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600 sm:text-base">
+                Catalogo amplo de datasets climaticos, oceanograficos, biologicos,
+                geneticos, imagens, relatorios e modelos preditivos associados ao projeto.
+              </p>
+            </div>
+          </div>
+
+          <span className="rounded-full bg-sand-light px-4 py-2 text-sm font-semibold text-ocean-dark">
+            {resultados.length} dataset(s)
+          </span>
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-sand-dark/20 bg-white p-5 shadow-sm md:grid-cols-3">
-        <label className="block">
-          <span className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-ocean-dark">
-            <Search size={16} />
-            Buscar
-          </span>
+      <div className="grid gap-4 rounded-3xl border border-sand-dark/20 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-4">
+        <CampoFiltro label="Buscar" icon={Search}>
           <input
             value={termoBusca}
             onChange={(event) => setTermoBusca(event.target.value)}
-            placeholder="Titulo, cidade ou estado"
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 outline-none transition focus:border-ocean-light"
+            placeholder="Titulo, resumo, cidade ou estado"
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
           />
-        </label>
+        </CampoFiltro>
 
-        <label className="block">
-          <span className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-ocean-dark">
-            <Filter size={16} />
-            Fonte
-          </span>
+        <CampoFiltro label="Fonte" icon={Filter}>
           <select
             value={fonteSelecionada}
             onChange={(event) => setFonteSelecionada(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 outline-none transition focus:border-ocean-light"
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
           >
             {FONTES.map((fonte) => (
               <option key={fonte} value={fonte}>
@@ -362,17 +749,55 @@ function BancoDadosPage() {
               </option>
             ))}
           </select>
-        </label>
+        </CampoFiltro>
 
-        <label className="block">
-          <span className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-ocean-dark">
-            <MapPin size={16} />
-            Estado
-          </span>
+        <CampoFiltro label="Tipo de dado" icon={Database}>
+          <select
+            value={tipoDadoSelecionado}
+            onChange={(event) => setTipoDadoSelecionado(event.target.value)}
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+          >
+            {TIPOS_DADO.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {tipo}
+              </option>
+            ))}
+          </select>
+        </CampoFiltro>
+
+        <CampoFiltro label="Localizacao" icon={MapPin}>
+          <select
+            value={localizacaoSelecionada}
+            onChange={(event) => setLocalizacaoSelecionada(event.target.value)}
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+          >
+            {LOCALIZACOES.map((localizacao) => (
+              <option key={localizacao} value={localizacao}>
+                {localizacao}
+              </option>
+            ))}
+          </select>
+        </CampoFiltro>
+
+        <CampoFiltro label="Formato" icon={Download}>
+          <select
+            value={formatoSelecionado}
+            onChange={(event) => setFormatoSelecionado(event.target.value)}
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+          >
+            {FORMATOS.map((formato) => (
+              <option key={formato} value={formato}>
+                {formato}
+              </option>
+            ))}
+          </select>
+        </CampoFiltro>
+
+        <CampoFiltro label="Estado" icon={MapPin}>
           <select
             value={estadoSelecionado}
             onChange={(event) => setEstadoSelecionado(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 outline-none transition focus:border-ocean-light"
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
           >
             {ESTADOS.map((estado) => (
               <option key={estado} value={estado}>
@@ -380,105 +805,94 @@ function BancoDadosPage() {
               </option>
             ))}
           </select>
-        </label>
+        </CampoFiltro>
+
+        <CampoFiltro label="Periodo" icon={CalendarRange}>
+          <select
+            value={periodoSelecionado}
+            onChange={(event) => setPeriodoSelecionado(event.target.value)}
+            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+          >
+            {PERIODOS.map((periodo) => (
+              <option key={periodo} value={periodo}>
+                {periodo}
+              </option>
+            ))}
+          </select>
+        </CampoFiltro>
       </div>
 
-      <p className="mt-4 text-sm text-gray-600">
-        {resultados.length} conjunto(s) encontrado(s).
-      </p>
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {resultados.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500 lg:col-span-2">
             Nenhum conjunto de dados corresponde aos filtros atuais.
           </div>
         )}
 
         {resultados.map((item) => (
-          <article
-            key={item.id}
-            className="rounded-2xl border border-sand-dark/20 bg-white p-5 shadow-sm"
-          >
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ocean-light">
-                  {item.fonte}
-                </p>
-                <h3 className="mt-1 text-lg font-bold text-ocean-dark">{item.titulo}</h3>
-              </div>
-              <span className="rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-gray-700">
-                {item.formato}
-              </span>
-            </div>
-
-            <div className="space-y-2 text-sm text-gray-600">
-              <p className="inline-flex items-center gap-2">
-                <MapPin size={15} />
-                {item.estado} - {item.cidade}
-              </p>
-              <p className="inline-flex items-center gap-2">
-                <CalendarRange size={15} />
-                {formatarPeriodo(item)}
-              </p>
-              <p>
-                <strong>Tamanho:</strong> {item.tamanho}
-              </p>
-            </div>
-
-            <div className="mt-5">
-              {item.downloadUrl ? (
-                <a
-                  href={item.downloadUrl}
-                  className="inline-flex items-center gap-2 rounded-xl bg-ocean-dark px-4 py-2 text-sm font-semibold text-white transition hover:bg-ocean-light"
-                >
-                  <Download size={16} />
-                  Baixar conjunto
-                </a>
-              ) : (
-                <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
-                  <AlertTriangle size={16} />
-                  Download indisponivel no momento
-                </span>
-              )}
-            </div>
-          </article>
+          <DatasetCard key={item.id} item={item} />
         ))}
       </div>
     </section>
   );
 }
 
+function BadgeRisco({ nivelAlerta }) {
+  const meta = obterMetaRisco(nivelAlerta);
+
+  return (
+    <span
+      className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${meta.bordaClasse} ${meta.fundoClasse} ${meta.textoClasse}`}
+    >
+      {meta.textoCurto}
+    </span>
+  );
+}
+
 function RecifesPage({ locais, onSelect }) {
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <h2 className="text-2xl font-bold text-ocean-dark">Localizacoes de corais</h2>
-      <p className="mb-6 mt-2 text-gray-600">
-        Cada pagina de local possui painel de risco e galeria de especies associadas.
-      </p>
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div>
+        <h2 className="text-2xl font-bold text-ocean-dark">Explorar recifes</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600 sm:text-base">
+          Explore as localizacoes monitoradas, consulte risco atual, especies cadastradas
+          e acompanhe a ultima atualizacao de cada area.
+        </p>
+      </div>
 
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {locais.map((local) => (
-          <button
-            key={local.slug}
-            type="button"
-            onClick={() => onSelect(local.slug)}
-            className="overflow-hidden rounded-2xl border border-sand-dark/20 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-          >
-            <ImagemRecife nome={local.nome} imagem={local.imagem_url} />
-            <div className="p-5">
-              <h3 className="text-lg font-bold text-ocean-dark">{local.nome}</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {local.estado} - {local.cidade}
-              </p>
-              <p className="mt-3 text-sm font-medium text-gray-700">
-                Informacoes disponiveis: {local.informacoes_disponiveis}
-              </p>
-              <p className="mt-2 text-sm text-gray-500">
-                Ultima atualizacao: {formatarData(local.ultima_atualizacao)}
-              </p>
-            </div>
-          </button>
-        ))}
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {locais.map((local) => {
+          const quantidadeEspecies = obterQuantidadeEspeciesLocal(local);
+          const nivelAlerta = obterRiscoAtualLocal(local);
+
+          return (
+            <button
+              key={local.slug}
+              type="button"
+              onClick={() => onSelect(local.slug)}
+              className="flex h-full flex-col overflow-hidden rounded-2xl border border-sand-dark/20 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            >
+              <ImagemRecife nome={local.nome} imagem={local.imagem_url} />
+
+              <div className="flex flex-1 flex-col p-5">
+                <h3 className="text-lg font-bold text-ocean-dark">{local.nome}</h3>
+                <p className="mt-1 text-sm text-gray-500">{formatarLocal(local)}</p>
+
+                <div className="mt-4 space-y-2 text-sm text-gray-700">
+                  <p>{formatarQuantidadeEspecies(quantidadeEspecies)}</p>
+                  <p>
+                    Risco atual: <span className="font-semibold">{obterMetaRisco(nivelAlerta).textoCurto}</span>
+                  </p>
+                  <p>Ultima atualizacao: {formatarData(local.ultima_atualizacao)}</p>
+                </div>
+
+                <div className="mt-4">
+                  <BadgeRisco nivelAlerta={nivelAlerta} />
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -494,14 +908,18 @@ function CardEspecie({ especie, onOpen }) {
       <button type="button" onClick={() => onOpen(especie)} className="block w-full text-left">
         <div className="flex h-56 items-center justify-center overflow-hidden bg-sand-light">
           {especie.foto_url ? (
-            <img src={especie.foto_url} alt={especie.nome_comum} className="h-full w-full object-cover" />
+            <img
+              src={especie.foto_url}
+              alt={especie.nome_comum}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <Fish size={64} className="text-ocean-light/50" />
           )}
         </div>
         <div className="p-5">
           <div className="mb-2 flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <h4 className="text-lg font-bold text-ocean-dark">
                 {especie.nome_comum || 'Nome nao informado'}
               </h4>
@@ -554,15 +972,19 @@ function ModalEspecie({ especie, onClose }) {
         className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl md:flex"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex h-72 items-center justify-center bg-sand-light md:h-auto md:w-1/2">
+        <div className="flex h-64 items-center justify-center bg-sand-light md:h-auto md:w-1/2">
           {especie.foto_url ? (
-            <img src={especie.foto_url} alt={especie.nome_comum} className="h-full w-full object-cover" />
+            <img
+              src={especie.foto_url}
+              alt={especie.nome_comum}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <Fish size={96} className="text-ocean-light/50" />
           )}
         </div>
 
-        <div className="relative overflow-y-auto p-8 md:w-1/2">
+        <div className="relative overflow-y-auto p-6 sm:p-8 md:w-1/2">
           <button
             type="button"
             onClick={onClose}
@@ -634,111 +1056,329 @@ function ModalEspecie({ especie, onClose }) {
   );
 }
 
-function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage, onOpenEspecie }) {
-  const painelDisponivel = possuiPainelCompleto(recife.monitoramento_recente);
-  const especies = recife.especies || [];
+function SectionTitle({ titulo, descricao }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-xl font-semibold text-ocean-dark sm:text-2xl">{titulo}</h3>
+      <p className="text-sm leading-relaxed text-gray-600 sm:text-base">{descricao}</p>
+    </div>
+  );
+}
+
+function StatCard({ titulo, valor, detalhe, children }) {
+  return (
+    <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ocean-light">
+        {titulo}
+      </p>
+      <div className="mt-3">
+        <p className="text-lg font-bold text-ocean-dark">{valor}</p>
+        {detalhe && <p className="mt-1 text-sm text-gray-600">{detalhe}</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MedicaoCard({ variavel, valor }) {
+  const Icon = variavel.icone;
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ocean-light">
+            Medicao ambiental
+          </p>
+          <h4 className="mt-2 text-lg font-semibold text-ocean-dark">{variavel.label}</h4>
+        </div>
+        <Icon className={variavel.corIcone} size={22} />
+      </div>
+
+      <p className="mt-4 text-2xl font-bold text-ocean-dark">
+        {valor !== null && valor !== undefined ? Number(valor).toFixed(2) : '--'}
+      </p>
+      <p className="mt-1 text-sm text-gray-500">{variavel.unidade}</p>
+    </div>
+  );
+}
+
+function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage, onOpenEspecie }) {
+  const medicaoAmbientalAtual = recife.monitoramento_recente;
+  const painelDisponivel = possuiPainelCompleto(medicaoAmbientalAtual);
+  const especiesAssociadas = recife.especies || [];
+  const datasetsRelacionados = obterDatasetsRelacionados(recife.slug);
+  const riscoAtual = obterMetaRisco(medicaoAmbientalAtual?.nivel_alerta);
+
+  return (
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 font-medium text-ocean-dark transition hover:underline"
+        className="w-fit font-medium text-ocean-dark transition hover:underline"
       >
         Voltar para localizacoes
       </button>
 
       <div className="overflow-hidden rounded-3xl border border-sand-dark/20 bg-white shadow-sm">
-        <ImagemRecife nome={recife.nome} imagem={recife.imagem_url} />
+        <ImagemRecife
+          nome={recife.nome}
+          imagem={recife.imagem_url}
+          className="h-56 w-full object-cover sm:h-72"
+        />
 
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-ocean-dark">{recife.nome}</h2>
-          <p className="mt-1 text-gray-600">
-            {recife.estado} - {recife.cidade}
+        <div className="p-5 sm:p-6 lg:p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-ocean-light">
+            Localizacao monitorada
           </p>
-          <p className="mt-4 leading-relaxed text-gray-600">{recife.descricao}</p>
+          <h2 className="mt-2 text-3xl font-bold text-ocean-dark sm:text-4xl">{recife.nome}</h2>
+          <p className="mt-2 text-base text-gray-600">{formatarLocal(recife)}</p>
+          <p className="mt-4 max-w-4xl leading-relaxed text-gray-600">{recife.descricao}</p>
+          <p className="mt-4 text-sm text-gray-500">
+            Ultima atualizacao: {formatarData(recife.ultima_atualizacao)}
+          </p>
+        </div>
+      </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-sand-dark/20 p-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ocean-light">
-                Catalogo local
-              </p>
-              <p className="mt-2 text-sm text-gray-600">
-                Informacoes disponiveis: {recife.informacoes_disponiveis}
-              </p>
-              <p className="mt-1 text-sm text-gray-600">
-                Ultima atualizacao: {formatarData(recife.ultima_atualizacao)}
-              </p>
-            </div>
+      {siteOffline && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>Modo manutencao:</strong>{' '}
+          {offlineMessage || 'Exibindo dados locais de referencia.'}
+        </div>
+      )}
 
-            <div className="rounded-2xl border border-sand-dark/20 p-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ocean-light">
-                Painel de risco
-              </p>
-              {painelDisponivel ? (
-                <p className="mt-2 inline-flex items-center gap-2 text-sm text-emerald-700">
-                  <CheckCircle2 size={16} />
-                  Variaveis minimas disponiveis para predicao neste local.
-                </p>
-              ) : (
-                <p className="mt-2 inline-flex items-center gap-2 text-sm text-amber-700">
-                  <AlertTriangle size={16} />
-                  Ainda faltam variaveis essenciais para predicao.
-                </p>
-              )}
+      <section className="space-y-4">
+        <SectionTitle
+          titulo="Informacoes gerais"
+          descricao={`Resumo geral da localizacao ${recife.nome}, incluindo biodiversidade, risco e acervo associado.`}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            titulo="Localizacao"
+            valor={recife.nome}
+            detalhe={formatarLocal(recife)}
+          />
+          <StatCard
+            titulo="Especies associadas"
+            valor={formatarQuantidadeEspecies(especiesAssociadas.length)}
+            detalhe="Catalogo biologico associado a esta localizacao."
+          />
+          <StatCard
+            titulo="Risco atual"
+            valor={riscoAtual.textoCurto}
+            detalhe="Classificacao atual baseada na predicao e monitoramento recente."
+          >
+            <div className="mt-3">
+              <BadgeRisco nivelAlerta={medicaoAmbientalAtual?.nivel_alerta} />
             </div>
+          </StatCard>
+          <StatCard
+            titulo="Datasets relacionados"
+            valor={`${datasetsRelacionados.length} ${datasetsRelacionados.length === 1 ? 'dataset' : 'datasets'}`}
+            detalhe="Conjuntos de dados associados diretamente a esta localizacao."
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <SectionTitle
+          titulo="Medicoes ambientais"
+          descricao={`Series e metricas ambientais vinculadas a ${recife.nome} para acompanhamento de condicoes do recife.`}
+        />
+
+        {medicaoAmbientalAtual ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {MONITORAMENTO_VARIAVEIS.map((variavel) => (
+              <MedicaoCard
+                key={variavel.campo}
+                variavel={variavel}
+                valor={medicaoAmbientalAtual[variavel.campo]}
+              />
+            ))}
           </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+            Nenhuma medicao ambiental recente foi vinculada a esta localizacao.
+          </div>
+        )}
+      </section>
 
-          {siteOffline && (
-            <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-              <strong>Modo manutencao:</strong> {offlineMessage || 'Exibindo dados locais de referencia.'}
-            </div>
-          )}
+      <section className="space-y-4">
+        <SectionTitle
+          titulo="Painel de predicao"
+          descricao={`Painel consolidado de predicao de risco e monitoramento associado a ${recife.nome}.`}
+        />
 
-          <div className="mt-6 rounded-2xl border border-sand-dark/20 p-4">
-            <h3 className="mb-4 text-lg font-semibold text-ocean-dark">
-              Painel de risco da localizacao
-            </h3>
+        {painelDisponivel ? (
+          <PainelRisco dados={medicaoAmbientalAtual} />
+        ) : (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            O painel de predicao permanece desabilitado para este recife ate que as
+            variaveis obrigatorias sejam completadas.
+          </div>
+        )}
 
+        <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
+          <p className="inline-flex items-center gap-2 text-sm font-medium text-ocean-dark">
             {painelDisponivel ? (
-              <PainelRisco dados={recife.monitoramento_recente} />
+              <>
+                <CheckCircle2 size={16} />
+                Variaveis minimas disponiveis para predicao nesta localizacao.
+              </>
             ) : (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                O painel de risco permanece desabilitado para este recife ate que as
-                variaveis obrigatorias sejam completadas.
-              </div>
+              <>
+                <AlertTriangle size={16} />
+                Ainda faltam variaveis essenciais para liberar a predicao.
+              </>
             )}
+          </p>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <SectionTitle
+            titulo="Especies associadas"
+            descricao={`Especies vinculadas a ${recife.nome} na camada biologica da plataforma.`}
+          />
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-ocean-dark">
+            <Activity size={14} />
+            {especiesAssociadas.length} especie(s)
+          </span>
+        </div>
+
+        {especiesAssociadas.length > 0 ? (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {especiesAssociadas.map((especie) => (
+              <CardEspecie key={especie.id} especie={especie} onOpen={onOpenEspecie} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+            Nenhuma especie foi associada a esta localizacao ainda no painel administrativo.
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <SectionTitle
+          titulo="Datasets relacionados"
+          descricao={`Datasets do catalogo geral que fazem referencia direta a ${recife.nome}.`}
+        />
+
+        {datasetsRelacionados.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {datasetsRelacionados.map((dataset) => (
+              <DatasetCard key={dataset.id} item={dataset} compact />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+            Ainda nao ha datasets relacionados diretamente a esta localizacao.
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function Footer({ onNavigate }) {
+  return (
+    <footer className="bg-[#ffefeb]">
+      <div className="mx-auto flex max-w-7xl flex-col gap-12 border-t border-black/10 px-4 py-14 sm:px-6 lg:flex-row lg:justify-between lg:px-8 lg:py-16">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-[-0.02em] text-black">
+            Projeto Coral Brasil
+          </h2>
+          <p className="mt-3 max-w-xs text-base leading-[1.45] text-black/55">
+            Monitoramento, biodiversidade e conservacao dos recifes brasileiros.
+          </p>
+          <div className="mt-8 flex items-center gap-6 text-black/45">
+            <InstagramIcon />
+            <LinkedinIcon />
+            <XIcon />
+          </div>
+        </div>
+
+        <div className="grid gap-10 sm:grid-cols-3 sm:gap-12">
+          <div>
+            <p className="pb-4 text-sm font-semibold tracking-[-0.01em] text-black">
+              Projeto
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => onNavigate('home')}
+                className="block text-left text-base text-black/55 transition hover:text-black"
+              >
+                Sobre
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('recifes')}
+                className="block text-left text-base text-black/55 transition hover:text-black"
+              >
+                Banco de Especies
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('recifes')}
+                className="block text-left text-base text-black/55 transition hover:text-black"
+              >
+                Monitoramento
+              </button>
+            </div>
           </div>
 
-          <div className="mt-8">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-ocean-dark">Galeria de especies</h3>
-                <p className="text-sm text-gray-500">
-                  Especies cadastradas e associadas a este local.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-sand-light px-3 py-1 text-xs font-semibold text-ocean-dark">
-                <Activity size={14} />
-                {especies.length} especie(s)
-              </span>
+          <div>
+            <p className="pb-4 text-sm font-semibold tracking-[-0.01em] text-black">
+              Dados
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => onNavigate('banco')}
+                className="block text-left text-base text-black/55 transition hover:text-black"
+              >
+                NOAA
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('banco')}
+                className="block text-left text-base text-black/55 transition hover:text-black"
+              >
+                Copernicus
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('banco')}
+                className="block text-left text-base text-black/55 transition hover:text-black"
+              >
+                Metodologia
+              </button>
             </div>
+          </div>
 
-            {especies.length > 0 ? (
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {especies.map((especie) => (
-                  <CardEspecie key={especie.id} especie={especie} onOpen={onOpenEspecie} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
-                Nenhuma especie foi associada a este recife ainda no painel administrativo.
-              </div>
-            )}
+          <div>
+            <p className="pb-4 text-sm font-semibold tracking-[-0.01em] text-black">
+              Contato
+            </p>
+            <div className="space-y-2 text-base text-black/55">
+              <p>GitHub</p>
+              <p>Equipe</p>
+              <button
+                type="button"
+                onClick={() => onNavigate('banco')}
+                className="block text-left transition hover:text-black"
+              >
+                Relatorios
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </section>
+    </footer>
   );
 }
 
@@ -834,40 +1474,52 @@ export default function App() {
     }
 
     setPagina(destino);
+    scrollToTopo();
   };
 
   const abrirRecife = (recifeSlug) => {
     setRecifeSelecionado(recifeSlug);
     setEspecieSelecionada(null);
     setPagina('detalhe');
+    scrollToTopo();
   };
 
   return (
-    <div className="min-h-screen bg-sand-light text-gray-800">
-      <Header onNavigate={navegar} />
+    <div className="app-layout min-h-screen overflow-x-hidden bg-sand-light text-gray-800">
+      <Header onNavigate={navegar} paginaAtual={pagina} />
 
-      {siteOffline && (
-        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
-          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            <strong>Modo manutencao:</strong>{' '}
-            {offlineMessage || 'Site em manutencao para reestruturacao do backend e banco de dados.'}
+      <main className="main-content flex-1">
+        {siteOffline && pagina !== 'home' && (
+          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <strong>Modo manutencao:</strong>{' '}
+              {offlineMessage ||
+                'Site em manutencao para reestruturacao do backend e banco de dados.'}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {pagina === 'home' && <HomePage onNavigate={navegar} />}
-      {pagina === 'banco' && <BancoDadosPage />}
-      {pagina === 'recifes' && <RecifesPage locais={locais} onSelect={abrirRecife} />}
-      {pagina === 'detalhe' && recifeAtual && (
-        <LocalDetalhePage
-          recife={recifeAtual}
-          onBack={() => navegar('recifes')}
-          siteOffline={siteOffline}
-          offlineMessage={offlineMessage}
-          onOpenEspecie={setEspecieSelecionada}
-        />
-      )}
+        {pagina === 'home' && (
+          <HomePage
+            onNavigate={navegar}
+            siteOffline={siteOffline}
+            offlineMessage={offlineMessage}
+          />
+        )}
+        {pagina === 'banco' && <BancoDadosPage />}
+        {pagina === 'recifes' && <RecifesPage locais={locais} onSelect={abrirRecife} />}
+        {pagina === 'detalhe' && recifeAtual && (
+          <LocalDetalhePage
+            recife={recifeAtual}
+            onBack={() => navegar('recifes')}
+            siteOffline={siteOffline}
+            offlineMessage={offlineMessage}
+            onOpenEspecie={setEspecieSelecionada}
+          />
+        )}
+      </main>
 
+      <Footer onNavigate={navegar} />
       <ModalEspecie especie={especieSelecionada} onClose={() => setEspecieSelecionada(null)} />
     </div>
   );
