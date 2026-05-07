@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -85,6 +86,34 @@ class DatasetCatalogoList(OfflineModeMixin, generics.ListAPIView):
 
     def get_queryset(self):
         return DatasetCatalogo.objects.filter(ativo=True)
+
+
+class LocalRecifeDatasetRelacionadosList(OfflineModeMixin, generics.ListAPIView):
+    serializer_class = DatasetCatalogoSerializer
+
+    def get_local(self):
+        if not hasattr(self, '_local'):
+            self._local = get_object_or_404(
+                LocalRecife.objects.filter(ativo=True),
+                slug=self.kwargs['slug'],
+            )
+        return self._local
+
+    def get_queryset(self):
+        local = self.get_local()
+        filtros = Q(local_slug=local.slug)
+
+        if local.nome:
+            filtros |= Q(localizacao__iexact=local.nome)
+
+        if local.estado and local.cidade:
+            filtros |= (
+                Q(local_slug='')
+                & Q(estado__iexact=local.estado)
+                & Q(cidade__iexact=local.cidade)
+            )
+
+        return DatasetCatalogo.objects.filter(ativo=True).filter(filtros).distinct()
 
 
 class ApiStatusView(generics.GenericAPIView):

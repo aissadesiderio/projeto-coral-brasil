@@ -87,17 +87,27 @@ class LocalRecifeApiTests(TestCase):
 @override_settings(OFFLINE_MODE=False)
 class DatasetCatalogoApiTests(TestCase):
     def setUp(self):
-        DatasetCatalogo.objects.update_or_create(
-            id='copernicus_sst_abrolhos_2026_03',
+        self.local, _ = LocalRecife.objects.update_or_create(
+            slug='recife-datasets-teste-ba',
             defaults={
-                'titulo': 'Temperatura da superficie do mar - Abrolhos',
+                'nome': 'Recife de Datasets Teste',
+                'estado': 'Bahia',
+                'cidade': 'Ilheus',
+                'descricao': 'Local de teste para datasets relacionados.',
+                'ativo': True,
+            },
+        )
+        DatasetCatalogo.objects.update_or_create(
+            id='dataset_teste_slug_canonico',
+            defaults={
+                'titulo': 'Temperatura da superficie do mar - Recife de Datasets Teste',
                 'resumo': 'Serie mensal de temperatura da superficie do mar.',
                 'fonte': 'Copernicus',
                 'tipo_dado': 'Climatico',
-                'localizacao': 'Parque Nacional Marinho de Abrolhos',
-                'local_slug': 'abrolhos-ba',
+                'localizacao': 'Recife de Datasets Teste',
+                'local_slug': 'recife-datasets-teste-ba',
                 'estado': 'Bahia',
-                'cidade': 'Caravelas',
+                'cidade': 'Ilheus',
                 'formato': 'CSV',
                 'recorte_temporal': 'intervalo',
                 'data_inicio': date(2026, 3, 1),
@@ -106,6 +116,27 @@ class DatasetCatalogoApiTests(TestCase):
                 'tamanho_mb': 1843.2,
                 'url_download': '/dados/sst.csv',
                 'ordem_exibicao': 1,
+                'ativo': True,
+            },
+        )
+        DatasetCatalogo.objects.update_or_create(
+            id='relatorio_abrolhos_sem_slug',
+            defaults={
+                'titulo': 'Relatorio de campo de Abrolhos',
+                'resumo': 'Dataset relacionado por cidade e estado sem local_slug canonico.',
+                'fonte': 'Projeto Coral Brasil',
+                'tipo_dado': 'Relatorio',
+                'localizacao': 'Recife de Datasets Teste',
+                'local_slug': '',
+                'estado': 'Bahia',
+                'cidade': 'Ilheus',
+                'formato': 'PDF',
+                'recorte_temporal': 'publicacao',
+                'data_publicacao': date(2026, 4, 18),
+                'periodo_rotulo': 'Abr/2026',
+                'tamanho_mb': 24.5,
+                'url_download': '/dados/relatorio-abrolhos.pdf',
+                'ordem_exibicao': 2,
                 'ativo': True,
             },
         )
@@ -128,6 +159,28 @@ class DatasetCatalogoApiTests(TestCase):
                 'ativo': False,
             },
         )
+        DatasetCatalogo.objects.update_or_create(
+            id='dataset_picaozinho',
+            defaults={
+                'titulo': 'Microbioma de Picaozinho',
+                'resumo': 'Nao deve aparecer para Abrolhos.',
+                'fonte': 'NCBI',
+                'tipo_dado': 'Microbioma',
+                'localizacao': 'Recife de Picaozinho',
+                'local_slug': 'picaozinho-pb',
+                'estado': 'Paraiba',
+                'cidade': 'Joao Pessoa',
+                'formato': 'FASTQ',
+                'recorte_temporal': 'intervalo',
+                'data_inicio': date(2026, 3, 10),
+                'data_fim': date(2026, 3, 24),
+                'periodo_rotulo': 'Mar/2026',
+                'tamanho_mb': 3174.4,
+                'url_download': '',
+                'ordem_exibicao': 3,
+                'ativo': True,
+            },
+        )
 
     def test_dataset_catalog_list_returns_public_shape(self):
         response = self.client.get(reverse('dataset_catalogo_list'))
@@ -135,16 +188,37 @@ class DatasetCatalogoApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         ids = [item['id'] for item in payload]
-        self.assertIn('copernicus_sst_abrolhos_2026_03', ids)
+        self.assertIn('dataset_teste_slug_canonico', ids)
         self.assertNotIn('dataset_inativo', ids)
 
-        dataset = next(
-            item for item in payload if item['id'] == 'copernicus_sst_abrolhos_2026_03'
-        )
+        dataset = next(item for item in payload if item['id'] == 'dataset_teste_slug_canonico')
         self.assertEqual(dataset['tipo_dado'], 'Climatico')
         self.assertEqual(dataset['periodo_rotulo'], 'Mar/2026')
         self.assertEqual(dataset['tamanho_mb'], 1843.2)
         self.assertEqual(dataset['url_download'], '/dados/sst.csv')
+
+    def test_local_related_dataset_endpoint_prioritizes_real_matches_and_transition_fields(self):
+        response = self.client.get(
+            reverse('local_recife_datasets_list', kwargs={'slug': self.local.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = [item['id'] for item in payload]
+
+        self.assertEqual(
+            ids,
+            ['dataset_teste_slug_canonico', 'relatorio_abrolhos_sem_slug'],
+        )
+        self.assertNotIn('dataset_picaozinho', ids)
+        self.assertTrue(all(item['localizacao'] for item in payload))
+
+    def test_local_related_dataset_endpoint_returns_404_for_unknown_local(self):
+        response = self.client.get(
+            reverse('local_recife_datasets_list', kwargs={'slug': 'local-inexistente'})
+        )
+
+        self.assertEqual(response.status_code, 404)
 
 
 @override_settings(OFFLINE_MODE=False)

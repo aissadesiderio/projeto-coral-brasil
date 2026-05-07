@@ -6,7 +6,6 @@ import DatasetCard from '../components/DatasetCard';
 import ImagemRecife from '../components/ImagemRecife';
 import PainelRisco from '../components/PainelRisco';
 import SectionTitle from '../components/SectionTitle';
-import { obterDatasetsRelacionados } from '../data/datasets';
 import { formatarData, formatarLocal } from '../utils/formatters';
 import { ROTAS_APP } from '../utils/navigation';
 import { possuiPainelCompleto } from '../utils/recifes';
@@ -18,11 +17,14 @@ export default function LocalRecifePage({
   onOpenEspecie,
   carregandoDetalhe = false,
   erroDetalhe = false,
+  datasetsRelacionados = [],
+  carregandoDatasetsRelacionados = false,
+  erroDatasetsRelacionados = false,
+  usandoFallbackDatasets = false,
 }) {
   const medicaoAmbientalAtual = recife.monitoramento_recente;
   const painelDisponivel = possuiPainelCompleto(medicaoAmbientalAtual);
   const especiesAssociadas = recife.especies || [];
-  const datasetsRelacionados = obterDatasetsRelacionados(recife.slug);
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -133,7 +135,20 @@ export default function LocalRecifePage({
           descricao={`Datasets do catalogo geral que fazem referencia direta a ${recife.nome}.`}
         />
 
-        {datasetsRelacionados.length > 0 ? (
+        {erroDatasetsRelacionados && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            Nao foi possivel atualizar os datasets relacionados por API agora.
+            {usandoFallbackDatasets
+              ? ' Exibindo uma referencia local transitoria quando disponivel.'
+              : ''}
+          </div>
+        )}
+
+        {carregandoDatasetsRelacionados && datasetsRelacionados.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+            Carregando datasets relacionados desta localizacao...
+          </div>
+        ) : datasetsRelacionados.length > 0 ? (
           <div className="grid gap-5 lg:grid-cols-2">
             {datasetsRelacionados.map((dataset) => (
               <DatasetCard key={dataset.id} item={dataset} compact />
@@ -141,7 +156,9 @@ export default function LocalRecifePage({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
-            Ainda nao ha datasets relacionados diretamente a esta localizacao.
+            {erroDatasetsRelacionados
+              ? 'Nao foi possivel carregar datasets relacionados no momento e nenhuma referencia local estava disponivel.'
+              : 'Ainda nao ha datasets relacionados diretamente a esta localizacao.'}
           </div>
         )}
       </section>
