@@ -14,3 +14,7 @@ export async function buscarJson(url) {
     return null;
   }
 }
+
+export async function buscarCatalogoDatasets() {
+  return buscarJson('/api/datasets/');
+}

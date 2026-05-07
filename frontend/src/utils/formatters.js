@@ -8,15 +8,20 @@ export function formatarData(data) {
 }
 
 export function formatarPeriodo(item) {
-  if (item.recorteTemporal === 'publicacao') {
+  if (item.recorteTemporal === 'publicacao' && item.dataPublicacao) {
     return `Publicado em ${formatarData(item.dataPublicacao)}`;
   }
 
-  return `${formatarData(item.dataInicio)} ate ${formatarData(item.dataFim)}`;
+  if (item.dataInicio || item.dataFim) {
+    return `${formatarData(item.dataInicio)} ate ${formatarData(item.dataFim)}`;
+  }
+
+  return item.periodoRotulo || 'Periodo nao informado';
 }
 
 export function formatarLocal(item) {
-  return `${item.estado} - ${item.cidade}`;
+  const partes = [item.estado, item.cidade].filter(Boolean);
+  return partes.length > 0 ? partes.join(' - ') : 'Nao informado';
 }
 
 export function formatarQuantidadeEspecies(total) {
@@ -28,7 +33,11 @@ export function scrollToTopo() {
     try {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      window.scrollTo(0, 0);
+      try {
+        window.scrollTo(0, 0);
+      } catch (fallbackError) {
+        // Ignora ambientes que nao implementam scroll programatico.
+      }
     }
   }
 }

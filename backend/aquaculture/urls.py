@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path('status/', views.ApiStatusView.as_view(), name='api_status'),
+    path('datasets/', views.DatasetCatalogoList.as_view(), name='dataset_catalogo_list'),
     path('locais/', views.LocalRecifeList.as_view(), name='local_recife_list'),
     path('locais/<slug:slug>/', views.LocalRecifeDetail.as_view(), name='local_recife_detail'),
     path('especies/', views.EspecieList.as_view(), name='especie_list'),

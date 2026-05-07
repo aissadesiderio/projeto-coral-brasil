@@ -1,4 +1,7 @@
+import { Link } from 'react-router-dom';
+
 import svgPaths from '../svg-r6f04ghq4r';
+import { ROTAS_APP } from '../utils/navigation';
 
 function InstagramIcon() {
   return (
@@ -33,7 +36,7 @@ function XIcon() {
   );
 }
 
-export default function Footer({ onNavigate }) {
+export default function Footer() {
   return (
     <footer className="bg-[#ffefeb]">
       <div className="mx-auto flex max-w-7xl flex-col gap-12 border-t border-black/10 px-4 py-14 sm:px-6 lg:flex-row lg:justify-between lg:px-8 lg:py-16">
@@ -55,54 +58,48 @@ export default function Footer({ onNavigate }) {
           <div>
             <p className="pb-4 text-sm font-semibold tracking-[-0.01em] text-black">Projeto</p>
             <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => onNavigate('home')}
+              <Link
+                to={ROTAS_APP.home}
                 className="block text-left text-base text-black/55 transition hover:text-black"
               >
                 Sobre
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('recifes')}
+              </Link>
+              <Link
+                to={ROTAS_APP.recifes}
                 className="block text-left text-base text-black/55 transition hover:text-black"
               >
                 Banco de Especies
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('recifes')}
+              </Link>
+              <Link
+                to={ROTAS_APP.recifes}
                 className="block text-left text-base text-black/55 transition hover:text-black"
               >
                 Monitoramento
-              </button>
+              </Link>
             </div>
           </div>
 
           <div>
             <p className="pb-4 text-sm font-semibold tracking-[-0.01em] text-black">Dados</p>
             <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => onNavigate('banco')}
+              <Link
+                to={ROTAS_APP.banco}
                 className="block text-left text-base text-black/55 transition hover:text-black"
               >
                 NOAA
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('banco')}
+              </Link>
+              <Link
+                to={ROTAS_APP.banco}
                 className="block text-left text-base text-black/55 transition hover:text-black"
               >
                 Copernicus
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('banco')}
+              </Link>
+              <Link
+                to={ROTAS_APP.banco}
                 className="block text-left text-base text-black/55 transition hover:text-black"
               >
                 Metodologia
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -111,13 +108,12 @@ export default function Footer({ onNavigate }) {
             <div className="space-y-2 text-base text-black/55">
               <p>GitHub</p>
               <p>Equipe</p>
-              <button
-                type="button"
-                onClick={() => onNavigate('banco')}
+              <Link
+                to={ROTAS_APP.banco}
                 className="block text-left transition hover:text-black"
               >
                 Relatorios
-              </button>
+              </Link>
             </div>
           </div>
         </div>

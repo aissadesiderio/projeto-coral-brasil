@@ -1,16 +1,27 @@
 from datetime import date
+from io import StringIO
 from pathlib import Path
 import shutil
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.admin.sites import AdminSite
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from db import setup_graph
 from .admin import LocalRecifeAdmin
 from .code_sync import sync_project_code_from_db
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
+from .neo4j_schema import (
+    DJANGO_STATUS_PREDICAO_MODEL_SLUG,
+    SCHEMA_QUERIES,
+    build_especie_row,
+    build_fonte_dados_seed_payload,
+    build_localizacao_row,
+    build_status_predicao_row,
+)
 from .neo4j_service import Neo4jServiceError, listar_localizacoes_grafo, obter_localizacao_grafo
 
 
@@ -71,6 +82,69 @@ class LocalRecifeApiTests(TestCase):
         payload = response.json()
         nomes = [item['nome_cientifico'] for item in payload]
         self.assertIn('Mussismilia braziliensis', nomes)
+
+
+@override_settings(OFFLINE_MODE=False)
+class DatasetCatalogoApiTests(TestCase):
+    def setUp(self):
+        DatasetCatalogo.objects.update_or_create(
+            id='copernicus_sst_abrolhos_2026_03',
+            defaults={
+                'titulo': 'Temperatura da superficie do mar - Abrolhos',
+                'resumo': 'Serie mensal de temperatura da superficie do mar.',
+                'fonte': 'Copernicus',
+                'tipo_dado': 'Climatico',
+                'localizacao': 'Parque Nacional Marinho de Abrolhos',
+                'local_slug': 'abrolhos-ba',
+                'estado': 'Bahia',
+                'cidade': 'Caravelas',
+                'formato': 'CSV',
+                'recorte_temporal': 'intervalo',
+                'data_inicio': date(2026, 3, 1),
+                'data_fim': date(2026, 3, 31),
+                'periodo_rotulo': 'Mar/2026',
+                'tamanho_mb': 1843.2,
+                'url_download': '/dados/sst.csv',
+                'ordem_exibicao': 1,
+                'ativo': True,
+            },
+        )
+        DatasetCatalogo.objects.update_or_create(
+            id='dataset_inativo',
+            defaults={
+                'titulo': 'Dataset inativo',
+                'resumo': 'Nao deve aparecer na API.',
+                'fonte': 'Interno',
+                'tipo_dado': 'Relatorio',
+                'localizacao': 'Costa Nordeste',
+                'estado': 'Regional',
+                'cidade': 'Costa Nordeste',
+                'formato': 'PDF',
+                'recorte_temporal': 'publicacao',
+                'data_publicacao': date(2026, 4, 22),
+                'periodo_rotulo': 'Abr/2026',
+                'tamanho_mb': 12,
+                'ordem_exibicao': 99,
+                'ativo': False,
+            },
+        )
+
+    def test_dataset_catalog_list_returns_public_shape(self):
+        response = self.client.get(reverse('dataset_catalogo_list'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = [item['id'] for item in payload]
+        self.assertIn('copernicus_sst_abrolhos_2026_03', ids)
+        self.assertNotIn('dataset_inativo', ids)
+
+        dataset = next(
+            item for item in payload if item['id'] == 'copernicus_sst_abrolhos_2026_03'
+        )
+        self.assertEqual(dataset['tipo_dado'], 'Climatico')
+        self.assertEqual(dataset['periodo_rotulo'], 'Mar/2026')
+        self.assertEqual(dataset['tamanho_mb'], 1843.2)
+        self.assertEqual(dataset['url_download'], '/dados/sst.csv')
 
 
 @override_settings(OFFLINE_MODE=False)
@@ -202,6 +276,100 @@ class Neo4jServiceReadTests(TestCase):
         self.assertEqual(payload['slug'], 'abrolhos-ba')
         self.assertEqual(payload['especies'][0]['nome_cientifico'], 'Mussismilia braziliensis')
         self.assertEqual(payload['predicoes'][0]['nivel_alerta'], 'ALERTA_1')
+        expected_parameters = {'localizacao_id': 'abrolhos-ba'}
+        self.assertEqual(executar_read_mock.call_args_list[0].args[1], expected_parameters)
+        self.assertEqual(executar_read_mock.call_args_list[1].args[1], expected_parameters)
+        self.assertEqual(executar_read_mock.call_args_list[2].args[1], expected_parameters)
+
+
+class Neo4jSchemaBuilderTests(TestCase):
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='schema-recife-ba',
+            nome='Recife de Schema',
+            estado='Bahia',
+            cidade='Caravelas',
+            descricao='Local de teste para schema Neo4j.',
+            ultima_atualizacao=date(2026, 4, 16),
+        )
+        self.especie = Especie.objects.create(
+            nome_cientifico='Mussismilia schemaensis',
+            nome_comum='Coral de schema',
+            tipo='CORAL',
+            descricao='Especie de teste.',
+            status_conservacao='Vulneravel',
+            credito_imagem='Equipe local',
+            fonte_imagem_url='https://exemplo.org/imagem',
+            fonte_url='https://exemplo.org/especie',
+        )
+        self.predicao = StatusPredicao.objects.create(
+            local_recife=self.local,
+            data=date(2026, 4, 16),
+            sst_atual=29.1,
+            limite_termico=27.0,
+            anomalia=2.1,
+            dhw_calculado=6.4,
+            vento_velocidade=5.2,
+            irradiancia=32.5,
+            turbidez=0.18,
+            salinidade=36.0,
+            ph=8.1,
+            oxigenio=6.5,
+            nitrato=0.4,
+            clorofila=0.7,
+            risco_integrado=78.0,
+            nivel_alerta='ALERTA_1',
+        )
+
+    def test_build_localizacao_and_especie_rows_use_canonical_ids(self):
+        local_row = build_localizacao_row(self.local)
+        especie_row = build_especie_row(self.local, self.especie)
+
+        self.assertEqual(local_row['id'], 'schema-recife-ba')
+        self.assertEqual(local_row['props']['slug'], 'schema-recife-ba')
+        self.assertEqual(especie_row['id'], 'mussismilia-schemaensis')
+        self.assertEqual(especie_row['localizacao_id'], 'schema-recife-ba')
+        self.assertEqual(especie_row['props']['nome_cientifico'], 'Mussismilia schemaensis')
+
+    def test_build_status_predicao_row_splits_measurement_and_prediction_nodes(self):
+        row = build_status_predicao_row(self.predicao)
+
+        self.assertEqual(row['localizacao_id'], 'schema-recife-ba')
+        self.assertEqual(row['medicao']['id'], 'schema-recife-ba:2026-04-16')
+        self.assertEqual(
+            row['predicao']['id'],
+            f'schema-recife-ba:2026-04-16:{DJANGO_STATUS_PREDICAO_MODEL_SLUG}',
+        )
+        self.assertEqual(row['medicao']['props']['sst'], 29.1)
+        self.assertEqual(row['medicao']['props']['par'], 32.5)
+        self.assertEqual(row['medicao']['props']['kd490'], 0.18)
+        self.assertEqual(row['predicao']['props']['risco_integrado'], 78.0)
+        self.assertEqual(row['predicao']['props']['nivel_alerta'], 'ALERTA_1')
+
+    def test_build_fonte_dados_seed_payload_returns_current_transition_source(self):
+        payload = build_fonte_dados_seed_payload()
+
+        self.assertEqual(payload['id'], 'django-statuspredicao:v1')
+        self.assertEqual(payload['props']['pipeline'], 'neo4j_seed')
+        self.assertEqual(payload['props']['status'], 'ativo')
+
+
+class Neo4jCommandWiringTests(TestCase):
+    @patch('aquaculture.management.commands.neo4j_init.executar_queries_schema')
+    @patch('aquaculture.management.commands.neo4j_init.verificar_conexao_neo4j')
+    def test_neo4j_init_uses_canonical_schema_queries(self, verificar_mock, executar_mock):
+        executar_mock.return_value = len(SCHEMA_QUERIES)
+
+        call_command('neo4j_init', stdout=StringIO())
+
+        verificar_mock.assert_called_once_with()
+        executar_mock.assert_called_once_with(SCHEMA_QUERIES)
+
+    @patch('db.setup_graph.call_command')
+    def test_setup_graph_delegates_to_official_commands(self, call_command_mock):
+        setup_graph.setup()
+
+        call_command_mock.assert_has_calls([call('neo4j_init'), call('neo4j_seed')])
 
 
 @override_settings(OFFLINE_MODE=False)

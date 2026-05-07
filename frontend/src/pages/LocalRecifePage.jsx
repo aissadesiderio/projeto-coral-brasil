@@ -1,4 +1,5 @@
 import { Activity, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import CardEspecie from '../components/CardEspecie';
 import DatasetCard from '../components/DatasetCard';
@@ -7,14 +8,16 @@ import PainelRisco from '../components/PainelRisco';
 import SectionTitle from '../components/SectionTitle';
 import { obterDatasetsRelacionados } from '../data/datasets';
 import { formatarData, formatarLocal } from '../utils/formatters';
+import { ROTAS_APP } from '../utils/navigation';
 import { possuiPainelCompleto } from '../utils/recifes';
 
 export default function LocalRecifePage({
   recife,
-  onBack,
   siteOffline,
   offlineMessage,
   onOpenEspecie,
+  carregandoDetalhe = false,
+  erroDetalhe = false,
 }) {
   const medicaoAmbientalAtual = recife.monitoramento_recente;
   const painelDisponivel = possuiPainelCompleto(medicaoAmbientalAtual);
@@ -23,13 +26,22 @@ export default function LocalRecifePage({
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <button
-        type="button"
-        onClick={onBack}
-        className="w-fit font-medium text-ocean-dark transition hover:underline"
-      >
+      <Link to={ROTAS_APP.recifes} className="w-fit font-medium text-ocean-dark transition hover:underline">
         Voltar para localizacoes
-      </button>
+      </Link>
+
+      {carregandoDetalhe && (
+        <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 text-sm text-slate-600 shadow-sm">
+          Atualizando os dados mais recentes desta localizacao...
+        </div>
+      )}
+
+      {erroDetalhe && !carregandoDetalhe && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          Nao foi possivel atualizar este detalhe agora. Exibindo os dados disponiveis na
+          aplicacao.
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-3xl border border-sand-dark/20 bg-white shadow-sm">
         <ImagemRecife

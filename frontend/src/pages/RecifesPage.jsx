@@ -2,7 +2,7 @@ import { MapPin } from 'lucide-react';
 
 import CardRecife from '../components/CardRecife';
 
-export default function RecifesPage({ locais, onSelect, carregando = false }) {
+export default function RecifesPage({ locais, carregando = false, erroCarregamento = false }) {
   const possuiLocais = locais.length > 0;
 
   return (
@@ -19,12 +19,18 @@ export default function RecifesPage({ locais, onSelect, carregando = false }) {
           {carregando && (
             <p className="mt-3 text-sm text-slate-500">Carregando localizacoes do grafo...</p>
           )}
+          {erroCarregamento && (
+            <p className="mt-3 text-sm text-amber-700">
+              Nao foi possivel atualizar todas as localizacoes agora. Exibindo os dados de
+              referencia disponiveis.
+            </p>
+          )}
         </div>
 
         {possuiLocais ? (
           <div className="grid gap-x-6 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
             {locais.map((local) => (
-              <CardRecife key={local.slug} local={local} onSelect={onSelect} />
+              <CardRecife key={local.slug} local={local} />
             ))}
           </div>
         ) : carregando ? (

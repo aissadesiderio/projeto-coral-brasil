@@ -1,7 +1,6 @@
 # Neo4j commands
 
-Esta integracao popula o Neo4j em paralelo ao banco Django atual.
-A API continua usando Django ORM normalmente.
+Esta integracao popula o Neo4j em paralelo ao banco Django atual, usando um unico schema canonico definido em `aquaculture/neo4j_schema.py`.
 
 ## Configuracao
 
@@ -21,7 +20,7 @@ As mesmas variaveis tambem podem ser configuradas no ambiente do servidor:
 
 ## Inicializar schema
 
-Cria as constraints iniciais no Neo4j com `IF NOT EXISTS`:
+Cria as constraints oficiais do schema canonico:
 
 ```powershell
 python backend/manage.py neo4j_init
@@ -29,13 +28,22 @@ python backend/manage.py neo4j_init
 
 ## Popular dados
 
-Le os dados atuais do banco Django e sincroniza localizacoes, especies, predicoes e relacoes:
+Le os dados atuais do banco Django e sincroniza:
+
+- `LocalRecife` -> `Localizacao`
+- `Especie` -> `Especie`
+- `StatusPredicao` -> `MedicaoAmbiental` + `Predicao`
 
 ```powershell
 python backend/manage.py neo4j_seed
 ```
 
-## Observacao
+## Bootstrap legado
 
-Nesta etapa, o Neo4j esta sendo populado em paralelo.
-As views, serializers e APIs atuais continuam consultando o banco Django via ORM.
+O arquivo `backend/db/setup_graph.py` ainda existe apenas como atalho de compatibilidade:
+
+```powershell
+python backend/manage.py shell < backend/db/setup_graph.py
+```
+
+Ele apenas chama `neo4j_init` e `neo4j_seed`. Nao ha mais uma segunda definicao de schema nesse arquivo.
