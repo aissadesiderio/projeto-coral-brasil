@@ -14,12 +14,13 @@ import { combinarDetalhe, combinarLocais } from './utils/recifes';
 
 export default function App() {
   const [pagina, setPagina] = useState('home');
-  const [locais, setLocais] = useState(FALLBACK_RECIFES);
+  const [locais, setLocais] = useState([]);
   const [recifeSelecionado, setRecifeSelecionado] = useState(null);
   const [detalhesPorSlug, setDetalhesPorSlug] = useState({});
   const [especieSelecionada, setEspecieSelecionada] = useState(null);
   const [siteOffline, setSiteOffline] = useState(false);
   const [offlineMessage, setOfflineMessage] = useState('');
+  const [carregandoLocais, setCarregandoLocais] = useState(true);
 
   useEffect(() => {
     let ativo = true;
@@ -27,7 +28,7 @@ export default function App() {
     async function carregarBase() {
       const [statusPayload, locaisPayload] = await Promise.all([
         buscarJson('/api/status/'),
-        buscarJson('/api/locais/'),
+        buscarJson('/api/grafo/localizacoes/'),
       ]);
 
       if (!ativo) {
@@ -39,9 +40,9 @@ export default function App() {
         setOfflineMessage(statusPayload.message || '');
       }
 
-      if (Array.isArray(locaisPayload) && locaisPayload.length > 0) {
-        setLocais(combinarLocais(locaisPayload));
-      }
+      const locaisNormalizados = Array.isArray(locaisPayload) ? combinarLocais(locaisPayload) : [];
+      setLocais(locaisNormalizados.length > 0 ? locaisNormalizados : FALLBACK_RECIFES);
+      setCarregandoLocais(false);
     }
 
     carregarBase();
@@ -59,8 +60,13 @@ export default function App() {
     }
 
     async function carregarDetalhe() {
-      const detalhePayload = await buscarJson(`/api/locais/${recifeSelecionado}/`);
-      if (!ativo || !detalhePayload) {
+      const detalhePayload = await buscarJson(`/api/grafo/localizacoes/${recifeSelecionado}/`);
+      const detalheValido =
+        detalhePayload &&
+        typeof detalhePayload === 'object' &&
+        Object.keys(detalhePayload).length > 0;
+
+      if (!ativo || !detalheValido) {
         return;
       }
 
@@ -131,7 +137,9 @@ export default function App() {
           />
         )}
         {pagina === 'banco' && <BancoDadosPage />}
-        {pagina === 'recifes' && <RecifesPage locais={locais} onSelect={abrirRecife} />}
+        {pagina === 'recifes' && (
+          <RecifesPage locais={locais} onSelect={abrirRecife} carregando={carregandoLocais} />
+        )}
         {pagina === 'detalhe' && recifeAtual && (
           <LocalRecifePage
             recife={recifeAtual}

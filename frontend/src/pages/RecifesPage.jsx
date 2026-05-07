@@ -2,7 +2,7 @@ import { MapPin } from 'lucide-react';
 
 import CardRecife from '../components/CardRecife';
 
-export default function RecifesPage({ locais, onSelect }) {
+export default function RecifesPage({ locais, onSelect, carregando = false }) {
   const possuiLocais = locais.length > 0;
 
   return (
@@ -16,6 +16,9 @@ export default function RecifesPage({ locais, onSelect }) {
             Visualize as localizacoes monitoradas e abra cada pagina para consultar
             biodiversidade, risco atual e historico recente.
           </p>
+          {carregando && (
+            <p className="mt-3 text-sm text-slate-500">Carregando localizacoes do grafo...</p>
+          )}
         </div>
 
         {possuiLocais ? (
@@ -23,6 +26,10 @@ export default function RecifesPage({ locais, onSelect }) {
             {locais.map((local) => (
               <CardRecife key={local.slug} local={local} onSelect={onSelect} />
             ))}
+          </div>
+        ) : carregando ? (
+          <div className="rounded-[32px] border border-dashed border-[#2b6978]/20 bg-white/80 px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+            Buscando dados mais recentes dos recifes monitorados.
           </div>
         ) : (
           <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[32px] border border-dashed border-[#2b6978]/20 bg-white/80 px-6 py-12 text-center shadow-sm">

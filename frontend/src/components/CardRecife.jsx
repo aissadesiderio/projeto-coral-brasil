@@ -2,9 +2,10 @@ import { ExternalLink, MapPin } from 'lucide-react';
 
 import {
   obterMetaRisco,
+  obterNivelAlertaLocal,
   obterMonitoramentoLocal,
   obterQuantidadeEspeciesLocal,
-  obterRiscoAtualLocal,
+  obterValorRiscoAtualLocal,
 } from '../utils/recifes';
 import {
   formatarData,
@@ -26,7 +27,8 @@ function BadgeRisco({ nivelAlerta }) {
 
 export default function CardRecife({ local, onSelect }) {
   const quantidadeEspecies = obterQuantidadeEspeciesLocal(local);
-  const nivelAlerta = obterRiscoAtualLocal(local);
+  const nivelAlerta = obterNivelAlertaLocal(local);
+  const riscoAtual = obterValorRiscoAtualLocal(local);
   const metaRisco = obterMetaRisco(nivelAlerta);
   const ultimaAtualizacao = local.ultima_atualizacao || obterMonitoramentoLocal(local)?.data || null;
 
@@ -57,7 +59,10 @@ export default function CardRecife({ local, onSelect }) {
         <div className="mt-5 space-y-1.5 text-sm leading-6 text-slate-700">
           <p>{formatarQuantidadeEspecies(quantidadeEspecies)}</p>
           <p>
-            Risco atual: <span className={`font-semibold ${metaRisco.textoClasse}`}>{metaRisco.textoCurto}</span>
+            Risco atual:{' '}
+            <span className={`font-semibold ${metaRisco.textoClasse}`}>
+              {riscoAtual !== null ? `${riscoAtual.toFixed(1)}%` : 'Nao informado'}
+            </span>
           </p>
           <p>Ultima atualizacao: {formatarData(ultimaAtualizacao)}</p>
         </div>

@@ -33,8 +33,9 @@ MATCH (l:Localizacao)
 OPTIONAL MATCH (l)-[:ABRIGA_ESPECIE]->(e:Especie)
 WITH l, count(DISTINCT e) AS quantidade_especies
 OPTIONAL MATCH (l)-[:TEM_PREDICAO]->(p:Predicao)
-WITH l, quantidade_especies, count(DISTINCT p) AS quantidade_predicoes, max(p.data) AS ultima_predicao_data
-OPTIONAL MATCH (l)-[:TEM_PREDICAO]->(ultima_predicao:Predicao {data: ultima_predicao_data})
+WITH l, quantidade_especies, p
+ORDER BY l.slug, p.data DESC
+WITH l, quantidade_especies, collect(p) AS predicoes
 RETURN
     l.slug AS slug,
     l.nome AS nome,
@@ -43,9 +44,10 @@ RETURN
     l.descricao AS descricao,
     l.ultima_atualizacao AS ultima_atualizacao,
     quantidade_especies,
-    quantidade_predicoes,
-    ultima_predicao.risco_integrado AS risco_atual,
-    ultima_predicao_data
+    size(predicoes) AS quantidade_predicoes,
+    predicoes[0].risco_integrado AS risco_atual,
+    predicoes[0].nivel_alerta AS nivel_alerta_atual,
+    predicoes[0].data AS ultima_predicao_data
 ORDER BY nome, slug
 """
 

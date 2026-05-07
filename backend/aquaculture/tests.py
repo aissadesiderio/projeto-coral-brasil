@@ -11,7 +11,7 @@ from django.urls import reverse
 from .admin import LocalRecifeAdmin
 from .code_sync import sync_project_code_from_db
 from .models import Especie, LocalRecife, StatusPredicao
-from .neo4j_service import Neo4jServiceError, obter_localizacao_grafo
+from .neo4j_service import Neo4jServiceError, listar_localizacoes_grafo, obter_localizacao_grafo
 
 
 @override_settings(OFFLINE_MODE=False)
@@ -88,6 +88,7 @@ class GrafoLocalizacaoApiTests(TestCase):
                 'quantidade_especies': 1,
                 'quantidade_predicoes': 2,
                 'risco_atual': 78.0,
+                'nivel_alerta_atual': 'ALERTA_1',
                 'ultima_predicao_data': '2026-04-16',
             }
         ]
@@ -98,6 +99,7 @@ class GrafoLocalizacaoApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload[0]['slug'], 'abrolhos-ba')
         self.assertEqual(payload[0]['quantidade_predicoes'], 2)
+        self.assertEqual(payload[0]['nivel_alerta_atual'], 'ALERTA_1')
 
     @patch('aquaculture.views.obter_localizacao_grafo')
     def test_grafo_localizacao_detail_returns_404_when_slug_is_missing(self, obter_mock):
@@ -123,6 +125,30 @@ class GrafoLocalizacaoApiTests(TestCase):
 
 
 class Neo4jServiceReadTests(TestCase):
+    @patch('aquaculture.neo4j_service.executar_read')
+    def test_listar_localizacoes_grafo_returns_current_alert_level(self, executar_read_mock):
+        executar_read_mock.return_value = [
+            {
+                'slug': 'abrolhos-ba',
+                'nome': 'Parque Nacional Marinho de Abrolhos',
+                'estado': 'Bahia',
+                'cidade': 'Caravelas',
+                'descricao': 'Local de teste para o grafo.',
+                'ultima_atualizacao': '2026-04-16',
+                'quantidade_especies': 1,
+                'quantidade_predicoes': 2,
+                'risco_atual': 78.0,
+                'nivel_alerta_atual': 'ALERTA_1',
+                'ultima_predicao_data': '2026-04-16',
+            }
+        ]
+
+        payload = listar_localizacoes_grafo()
+
+        self.assertEqual(payload[0]['risco_atual'], 78.0)
+        self.assertEqual(payload[0]['nivel_alerta_atual'], 'ALERTA_1')
+        self.assertEqual(payload[0]['ultima_predicao_data'], '2026-04-16')
+
     @patch('aquaculture.neo4j_service.executar_read')
     def test_obter_localizacao_grafo_returns_local_with_species_and_predictions(self, executar_read_mock):
         executar_read_mock.side_effect = [
