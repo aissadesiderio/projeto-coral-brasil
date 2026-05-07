@@ -13,7 +13,7 @@ from django.urls import reverse
 from db import setup_graph
 from .admin import LocalRecifeAdmin
 from .code_sync import sync_project_code_from_db
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
 from .neo4j_schema import (
     DJANGO_STATUS_PREDICAO_MODEL_SLUG,
     SCHEMA_QUERIES,
@@ -82,6 +82,69 @@ class LocalRecifeApiTests(TestCase):
         payload = response.json()
         nomes = [item['nome_cientifico'] for item in payload]
         self.assertIn('Mussismilia braziliensis', nomes)
+
+
+@override_settings(OFFLINE_MODE=False)
+class DatasetCatalogoApiTests(TestCase):
+    def setUp(self):
+        DatasetCatalogo.objects.update_or_create(
+            id='copernicus_sst_abrolhos_2026_03',
+            defaults={
+                'titulo': 'Temperatura da superficie do mar - Abrolhos',
+                'resumo': 'Serie mensal de temperatura da superficie do mar.',
+                'fonte': 'Copernicus',
+                'tipo_dado': 'Climatico',
+                'localizacao': 'Parque Nacional Marinho de Abrolhos',
+                'local_slug': 'abrolhos-ba',
+                'estado': 'Bahia',
+                'cidade': 'Caravelas',
+                'formato': 'CSV',
+                'recorte_temporal': 'intervalo',
+                'data_inicio': date(2026, 3, 1),
+                'data_fim': date(2026, 3, 31),
+                'periodo_rotulo': 'Mar/2026',
+                'tamanho_mb': 1843.2,
+                'url_download': '/dados/sst.csv',
+                'ordem_exibicao': 1,
+                'ativo': True,
+            },
+        )
+        DatasetCatalogo.objects.update_or_create(
+            id='dataset_inativo',
+            defaults={
+                'titulo': 'Dataset inativo',
+                'resumo': 'Nao deve aparecer na API.',
+                'fonte': 'Interno',
+                'tipo_dado': 'Relatorio',
+                'localizacao': 'Costa Nordeste',
+                'estado': 'Regional',
+                'cidade': 'Costa Nordeste',
+                'formato': 'PDF',
+                'recorte_temporal': 'publicacao',
+                'data_publicacao': date(2026, 4, 22),
+                'periodo_rotulo': 'Abr/2026',
+                'tamanho_mb': 12,
+                'ordem_exibicao': 99,
+                'ativo': False,
+            },
+        )
+
+    def test_dataset_catalog_list_returns_public_shape(self):
+        response = self.client.get(reverse('dataset_catalogo_list'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = [item['id'] for item in payload]
+        self.assertIn('copernicus_sst_abrolhos_2026_03', ids)
+        self.assertNotIn('dataset_inativo', ids)
+
+        dataset = next(
+            item for item in payload if item['id'] == 'copernicus_sst_abrolhos_2026_03'
+        )
+        self.assertEqual(dataset['tipo_dado'], 'Climatico')
+        self.assertEqual(dataset['periodo_rotulo'], 'Mar/2026')
+        self.assertEqual(dataset['tamanho_mb'], 1843.2)
+        self.assertEqual(dataset['url_download'], '/dados/sst.csv')
 
 
 @override_settings(OFFLINE_MODE=False)

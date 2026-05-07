@@ -66,6 +66,10 @@ beforeEach(() => {
       });
     }
 
+    if (url === '/api/datasets/') {
+      return criarRespostaJson([]);
+    }
+
     return criarRespostaJson({}, false);
   });
 });

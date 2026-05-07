@@ -4,13 +4,14 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
 from .neo4j_service import (
     Neo4jServiceError,
     listar_localizacoes_grafo,
     obter_localizacao_grafo,
 )
 from .serializers import (
+    DatasetCatalogoSerializer,
     EspecieSerializer,
     LocalRecifeDetailSerializer,
     LocalRecifeListSerializer,
@@ -77,6 +78,13 @@ class StatusPredicaoList(OfflineModeMixin, generics.ListAPIView):
                 Q(local_recife__slug=local_slug) | Q(local_recife__isnull=True)
             )
         return queryset
+
+
+class DatasetCatalogoList(OfflineModeMixin, generics.ListAPIView):
+    serializer_class = DatasetCatalogoSerializer
+
+    def get_queryset(self):
+        return DatasetCatalogo.objects.filter(ativo=True)
 
 
 class ApiStatusView(generics.GenericAPIView):

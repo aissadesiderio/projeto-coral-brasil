@@ -137,3 +137,44 @@ class StatusPredicao(models.Model):
     def __str__(self):
         local = self.local_recife.nome if self.local_recife else 'Geral'
         return f'{local} - {self.data}: {self.nivel_alerta} (DHW: {self.dhw_calculado})'
+
+
+class DatasetCatalogo(models.Model):
+    RECORTE_TEMPORAL_CHOICES = [
+        ('intervalo', 'Intervalo'),
+        ('publicacao', 'Publicacao'),
+    ]
+
+    id = models.SlugField(max_length=160, primary_key=True)
+    titulo = models.CharField(max_length=255)
+    resumo = models.TextField(blank=True, verbose_name='Resumo do dataset')
+    fonte = models.CharField(max_length=120)
+    tipo_dado = models.CharField(max_length=120)
+    localizacao = models.CharField(max_length=200, blank=True)
+    local_slug = models.SlugField(max_length=120, blank=True)
+    estado = models.CharField(max_length=100, blank=True)
+    cidade = models.CharField(max_length=100, blank=True)
+    formato = models.CharField(max_length=50, blank=True)
+    recorte_temporal = models.CharField(
+        max_length=20,
+        choices=RECORTE_TEMPORAL_CHOICES,
+        default='intervalo',
+    )
+    data_inicio = models.DateField(blank=True, null=True)
+    data_fim = models.DateField(blank=True, null=True)
+    data_publicacao = models.DateField(blank=True, null=True)
+    periodo_rotulo = models.CharField(max_length=80, blank=True)
+    tamanho_mb = models.FloatField(blank=True, null=True)
+    url_download = models.CharField(max_length=500, blank=True)
+    ordem_exibicao = models.PositiveIntegerField(default=0)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['ordem_exibicao', 'titulo']
+        verbose_name = 'Dataset do catalogo'
+        verbose_name_plural = 'Datasets do catalogo'
+
+    def __str__(self):
+        return self.titulo

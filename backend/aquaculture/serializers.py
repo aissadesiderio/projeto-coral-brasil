@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
 
 
 class StatusPredicaoSerializer(serializers.ModelSerializer):
@@ -123,3 +123,29 @@ class LocalRecifeDetailSerializer(LocalRecifeListSerializer):
             return None
 
         return StatusPredicaoSerializer(monitoramento, context=self.context).data
+
+
+class DatasetCatalogoSerializer(serializers.ModelSerializer):
+    tamanho_mb = serializers.FloatField(allow_null=True)
+
+    class Meta:
+        model = DatasetCatalogo
+        fields = [
+            'id',
+            'titulo',
+            'resumo',
+            'fonte',
+            'tipo_dado',
+            'localizacao',
+            'local_slug',
+            'estado',
+            'cidade',
+            'formato',
+            'recorte_temporal',
+            'data_inicio',
+            'data_fim',
+            'data_publicacao',
+            'periodo_rotulo',
+            'tamanho_mb',
+            'url_download',
+        ]

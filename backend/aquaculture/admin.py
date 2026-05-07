@@ -3,7 +3,7 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from .code_sync import sync_project_code_from_db
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
 
 
 class SyncToCodeAdminMixin:
@@ -248,4 +248,23 @@ class StatusPredicaoAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     search_fields = ('local_recife__nome',)
     date_hierarchy = 'data'
     autocomplete_fields = ('local_recife',)
+    save_on_top = True
+
+
+@admin.register(DatasetCatalogo)
+class DatasetCatalogoAdmin(admin.ModelAdmin):
+    list_display = (
+        'titulo',
+        'fonte',
+        'tipo_dado',
+        'localizacao',
+        'estado',
+        'formato',
+        'periodo_rotulo',
+        'ativo',
+    )
+    list_filter = ('fonte', 'tipo_dado', 'formato', 'estado', 'ativo')
+    search_fields = ('id', 'titulo', 'resumo', 'localizacao', 'cidade', 'estado', 'fonte')
+    ordering = ('ordem_exibicao', 'titulo')
+    list_editable = ('ativo',)
     save_on_top = True

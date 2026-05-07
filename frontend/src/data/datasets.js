@@ -3,6 +3,7 @@ import homeCardPainel from '../assets/home/card-painel.png';
 import homeCardRecifes from '../assets/home/card-recifes.png';
 import homeHeroCoral from '../assets/home/hero-coral.png';
 
+// Catalogo estatico mantido apenas como fallback transicional do frontend.
 export const DADOS_GERAIS = [
   {
     id: 'copernicus_sst_abrolhos_2026_03',
@@ -158,13 +159,6 @@ export const DADOS_GERAIS = [
     downloadUrl: '/dados/modelo-branqueamento.parquet',
   },
 ];
-
-export const FONTES = ['Todas', ...new Set(DADOS_GERAIS.map((item) => item.fonte))];
-export const TIPOS_DADO = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.tipoDado))];
-export const LOCALIZACOES = ['Todas', ...new Set(DADOS_GERAIS.map((item) => item.localizacao))];
-export const FORMATOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.formato))];
-export const ESTADOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.estado))];
-export const PERIODOS = ['Todos', ...new Set(DADOS_GERAIS.map((item) => item.periodoRotulo))];
 
 export const HOME_HERO_IMAGE = homeHeroCoral;
 
