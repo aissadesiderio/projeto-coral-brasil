@@ -1,260 +1,158 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Info, Droplets, Fish, Anchor, Bug, Activity, ExternalLink } from 'lucide-react';
-import PainelRisco from './PainelRisco';
+import React, { useEffect, useMemo, useState } from 'react';
 
-// COMPONENTE DO CARD
-const CardEspecie = ({ especie, onClick }) => {
-  return (
-    <div
-      onClick={() => onClick(especie)}
-      className="bg-white rounded-xl shadow-lg hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 cursor-pointer overflow-hidden border border-sand-dark/30 group"
-    >
-      <div className="h-56 w-full bg-sand-light relative overflow-hidden flex items-center justify-center">
-        {especie.foto ? (
-          <img
-            src={especie.foto}
-            alt={especie.nome_comum}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-        ) : null}
+import Footer from './components/Footer';
+import Header from './components/Header';
+import ModalEspecie from './components/ModalEspecie';
+import { FALLBACK_RECIFES } from './data/recifeData';
+import BancoDadosPage from './pages/BancoDadosPage';
+import HomePage from './pages/HomePage';
+import LocalRecifePage from './pages/LocalRecifePage';
+import RecifesPage from './pages/RecifesPage';
+import { buscarJson } from './utils/api';
+import { scrollToTopo } from './utils/formatters';
+import { combinarDetalhe, combinarLocais } from './utils/recifes';
 
-        <div className={`absolute inset-0 flex items-center justify-center text-ocean-light/50 ${especie.foto ? 'hidden' : 'flex'}`}>
-          <Fish size={64} />
-        </div>
-
-        <div className="absolute top-3 right-3">
-          <span className="bg-white/90 backdrop-blur-sm text-ocean-dark text-xs font-bold px-3 py-1 rounded-full shadow-sm uppercase tracking-wider border border-ocean-light/20">
-            {especie.tipo}
-          </span>
-        </div>
-      </div>
-
-      <div className="p-5">
-        <h3 className="text-xl font-bold text-ocean-dark font-poppins mb-1 truncate">
-          {especie.nome_comum || "Nome Desconhecido"}
-        </h3>
-        <p className="text-sm text-gray-500 italic mb-4 border-b border-gray-100 pb-2">
-          {especie.nome_cientifico}
-        </p>
-
-        <div className="flex justify-between items-center">
-          {especie.status_conservacao ? (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-terra bg-sand-dark/20 px-2 py-1 rounded-md">
-              <Activity size={12} />
-              {especie.status_conservacao}
-            </span>
-          ) : (
-            <span className="text-xs text-gray-400">Status não avaliado</span>
-          )}
-          <span className="text-ocean-light hover:text-ocean-dark transition-colors">
-            <Info size={20} />
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// COMPONENTE PRINCIPAL
-export default function GaleriaSeresVivos() {
-  const [especies, setEspecies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState('TODOS');
+export default function App() {
+  const [pagina, setPagina] = useState('home');
+  const [locais, setLocais] = useState([]);
+  const [recifeSelecionado, setRecifeSelecionado] = useState(null);
+  const [detalhesPorSlug, setDetalhesPorSlug] = useState({});
   const [especieSelecionada, setEspecieSelecionada] = useState(null);
+  const [siteOffline, setSiteOffline] = useState(false);
+  const [offlineMessage, setOfflineMessage] = useState('');
+  const [carregandoLocais, setCarregandoLocais] = useState(true);
 
   useEffect(() => {
-    const fetchEspecies = async () => {
-      try {
-        const response = await fetch('/api/especies/');
-        const data = await response.json();
-        setEspecies(data);
-        setLoading(false);
-      } catch (error) {
-        console.error("Erro ao buscar espécies:", error);
-        setLoading(false);
+    let ativo = true;
+
+    async function carregarBase() {
+      const [statusPayload, locaisPayload] = await Promise.all([
+        buscarJson('/api/status/'),
+        buscarJson('/api/grafo/localizacoes/'),
+      ]);
+
+      if (!ativo) {
+        return;
       }
+
+      if (statusPayload) {
+        setSiteOffline(Boolean(statusPayload.offline_mode));
+        setOfflineMessage(statusPayload.message || '');
+      }
+
+      const locaisNormalizados = Array.isArray(locaisPayload) ? combinarLocais(locaisPayload) : [];
+      setLocais(locaisNormalizados.length > 0 ? locaisNormalizados : FALLBACK_RECIFES);
+      setCarregandoLocais(false);
+    }
+
+    carregarBase();
+
+    return () => {
+      ativo = false;
     };
-    fetchEspecies();
   }, []);
 
-  const especiesFiltradas = filtro === 'TODOS'
-    ? especies
-    : especies.filter(e => e.tipo === filtro);
+  useEffect(() => {
+    let ativo = true;
 
-  const filtros = [
-    { id: 'TODOS', label: 'Todos'},
-    { id: 'CORAL', label: 'Corais'},
-    { id: 'PEIXE', label: 'Peixes' },
-    { id: 'INVERTEBRADO', label: 'Invertebrados'},
-    { id: 'MAMIFERO', label: 'Mamíferos'}
-  ];
+    if (pagina !== 'detalhe' || !recifeSelecionado) {
+      return undefined;
+    }
+
+    async function carregarDetalhe() {
+      const detalhePayload = await buscarJson(`/api/grafo/localizacoes/${recifeSelecionado}/`);
+      const detalheValido =
+        detalhePayload &&
+        typeof detalhePayload === 'object' &&
+        Object.keys(detalhePayload).length > 0;
+
+      if (!ativo || !detalheValido) {
+        return;
+      }
+
+      const localBase = locais.find((local) => local.slug === recifeSelecionado);
+      if (!localBase) {
+        return;
+      }
+
+      setDetalhesPorSlug((anterior) => ({
+        ...anterior,
+        [recifeSelecionado]: combinarDetalhe(localBase, detalhePayload),
+      }));
+    }
+
+    carregarDetalhe();
+
+    return () => {
+      ativo = false;
+    };
+  }, [locais, pagina, recifeSelecionado]);
+
+  const recifeAtual = useMemo(() => {
+    if (!recifeSelecionado) {
+      return null;
+    }
+
+    const localBase = locais.find((local) => local.slug === recifeSelecionado);
+    return combinarDetalhe(localBase, detalhesPorSlug[recifeSelecionado]);
+  }, [detalhesPorSlug, locais, recifeSelecionado]);
+
+  const navegar = (destino) => {
+    if (destino !== 'detalhe') {
+      setRecifeSelecionado(null);
+      setEspecieSelecionada(null);
+    }
+
+    setPagina(destino);
+    scrollToTopo();
+  };
+
+  const abrirRecife = (recifeSlug) => {
+    setRecifeSelecionado(recifeSlug);
+    setEspecieSelecionada(null);
+    setPagina('detalhe');
+    scrollToTopo();
+  };
 
   return (
-    <div className="min-h-screen bg-sand-light font-sans text-gray-800 pb-20">
+    <div className="app-layout min-h-screen overflow-x-hidden bg-sand-light text-gray-800">
+      <Header onNavigate={navegar} paginaAtual={pagina} />
 
-      {/* Cabeçalho */}
-      <header className="bg-ocean-dark text-white pt-12 pb-20 px-6 shadow-md relative overflow-hidden">
-        <div className="container mx-auto max-w-6xl relative z-10 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold font-poppins tracking-tight mb-3">
-            Projeto Coral Brasil <span className="text-terra">.</span>
-          </h1>
-          <p className="text-ocean-light text-lg max-w-2xl mx-auto font-light">
-            Mergulhe na biodiversidade de Abrolhos.
-          </p>
-        </div>
-        <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-sand-light to-transparent opacity-10"></div>
-      </header>
-
-      {/* PAINEL DE RISCO */}
-      <div className="container mx-auto px-6 max-w-6xl relative z-30 -mt-10">
-        <PainelRisco />
-      </div>
-
-      {/* ALTERAÇÃO PRINCIPAL AQUI EMBAIXO: 
-         Mudei de '-mt-10' (que puxava pra cima) para 'mt-12' (que empurra pra baixo).
-      */}
-      <main className="container mx-auto px-6 max-w-6xl mt-12 relative z-20">
-
-        {/* Barra de Filtros */}
-        <div className="bg-white p-2 rounded-full shadow-xl mb-12 flex flex-wrap justify-center gap-2 max-w-4xl mx-auto border border-gray-100">
-          {filtros.map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFiltro(f.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full font-semibold transition-all duration-300 ${filtro === f.id
-                ? 'bg-ocean-dark text-white shadow-md transform scale-105'
-                : 'bg-transparent text-gray-500 hover:bg-sand-light hover:text-ocean-dark'
-                }`}
-            >
-              {f.icon}
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Grid de Cards */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-ocean-dark opacity-60 animate-pulse">
-            <Anchor size={48} className="mb-4 animate-bounce" />
-            <p className="text-xl font-medium">Carregando ecossistema...</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-gray-500 mb-6 text-center text-sm uppercase tracking-widest">
-              {especiesFiltradas.length} {especiesFiltradas.length === 1 ? 'espécie encontrada' : 'espécies encontradas'}
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {especiesFiltradas.map(especie => (
-                <CardEspecie
-                  key={especie.id}
-                  especie={especie}
-                  onClick={setEspecieSelecionada}
-                />
-              ))}
+      <main className={`main-content flex-1 ${pagina === 'recifes' ? 'bg-[#fff6f4]' : ''}`}>
+        {siteOffline && pagina !== 'home' && (
+          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <strong>Modo manutencao:</strong>{' '}
+              {offlineMessage ||
+                'Site em manutencao para reestruturacao do backend e banco de dados.'}
             </div>
+          </div>
+        )}
 
-            {especiesFiltradas.length === 0 && (
-              <div className="text-center py-20 bg-white/50 rounded-3xl border-2 border-dashed border-gray-300">
-                <p className="text-gray-500 text-lg">Nenhuma espécie encontrada nesta categoria.</p>
-                <button
-                  onClick={() => setFiltro('TODOS')}
-                  className="mt-4 text-terra font-bold hover:underline"
-                >
-                  Ver todas as espécies
-                </button>
-              </div>
-            )}
-          </>
+        {pagina === 'home' && (
+          <HomePage
+            onNavigate={navegar}
+            siteOffline={siteOffline}
+            offlineMessage={offlineMessage}
+          />
+        )}
+        {pagina === 'banco' && <BancoDadosPage />}
+        {pagina === 'recifes' && (
+          <RecifesPage locais={locais} onSelect={abrirRecife} carregando={carregandoLocais} />
+        )}
+        {pagina === 'detalhe' && recifeAtual && (
+          <LocalRecifePage
+            recife={recifeAtual}
+            onBack={() => navegar('recifes')}
+            siteOffline={siteOffline}
+            offlineMessage={offlineMessage}
+            onOpenEspecie={setEspecieSelecionada}
+          />
         )}
       </main>
 
-      {/* MODAL DE DETALHES */}
-      {especieSelecionada && (
-        <div
-          className="fixed inset-0 bg-ocean-dark/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity duration-300"
-          onClick={() => setEspecieSelecionada(null)}
-        >
-          <div
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden relative animate-fadeIn flex flex-col md:flex-row max-h-[90vh]"
-            onClick={e => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setEspecieSelecionada(null)}
-              className="absolute top-4 right-4 z-10 bg-white/20 hover:bg-terra hover:text-white text-white md:text-gray-500 md:hover:text-white w-10 h-10 rounded-full flex items-center justify-center transition-all backdrop-blur-md"
-            >
-              ✕
-            </button>
-
-            <div className="md:w-1/2 h-64 md:h-auto bg-gray-100 relative flex items-center justify-center bg-sand-light">
-              {especieSelecionada.foto ? (
-                <img
-                  src={especieSelecionada.foto}
-                  alt={especieSelecionada.nome_comum}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Fish size={100} className="text-ocean-light opacity-50" />
-              )}
-              <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/60 to-transparent p-6 md:hidden">
-                <h2 className="text-3xl font-bold text-white font-poppins">{especieSelecionada.nome_comum}</h2>
-              </div>
-            </div>
-
-            <div className="md:w-1/2 p-8 md:p-10 overflow-y-auto bg-white">
-              <div className="hidden md:block mb-6">
-                <span className="text-terra font-bold text-sm tracking-widest uppercase mb-2 block">
-                  {especieSelecionada.tipo}
-                </span>
-                <h2 className="text-4xl font-bold text-ocean-dark mb-1 font-poppins leading-tight">
-                  {especieSelecionada.nome_comum}
-                </h2>
-                <p className="text-lg text-gray-400 italic font-serif">
-                  {especieSelecionada.nome_cientifico}
-                </p>
-              </div>
-
-              <div className="space-y-8">
-                <div className="bg-sand-light/30 p-6 rounded-2xl border border-sand-dark/10">
-                  <h4 className="font-bold text-ocean-dark flex items-center gap-2 mb-3 text-lg">
-                    <Activity className="text-terra" size={20} /> Sobre a Espécie
-                  </h4>
-                  <p className="text-gray-600 leading-relaxed text-justify mb-4">
-                    {especieSelecionada.descricao || "Nenhuma descrição detalhada disponível para esta espécie no momento."}
-                  </p>
-                  {especieSelecionada.fonte_url && (
-                    <a
-                      href={especieSelecionada.fonte_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-ocean-dark font-bold bg-white px-4 py-2 rounded-full border border-ocean-light/30 hover:bg-ocean-dark hover:text-white hover:border-transparent transition-all duration-300 shadow-sm group"
-                    >
-                      <ExternalLink size={16} />
-                      Fonte e mais informações
-                      <span className="group-hover:translate-x-1 transition-transform">→</span>
-                    </a>
-                  )}
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-ocean-dark mb-2 text-sm uppercase tracking-wider text-gray-400">
-                    Status de Conservação
-                  </h4>
-                  <div className={`inline-block px-4 py-2 rounded-lg font-semibold shadow-sm text-white ${!especieSelecionada.status_conservacao ? 'bg-gray-400' : 'bg-ocean-dark'
-                    }`}>
-                    {especieSelecionada.status_conservacao || "Não avaliado"}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Footer onNavigate={navegar} />
+      <ModalEspecie especie={especieSelecionada} onClose={() => setEspecieSelecionada(null)} />
     </div>
   );
 }

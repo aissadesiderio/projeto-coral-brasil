@@ -5,7 +5,7 @@ import glob
 import joblib
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from aquaculture.models import StatusPredicao
+from aquaculture.models import LocalRecife, StatusPredicao
 
 class Command(BaseCommand):
     help = 'Carga Completa (Inclui Salinidade, pH, Oxigénio, Nutrientes, etc).'
@@ -16,10 +16,30 @@ class Command(BaseCommand):
         base_dir = settings.BASE_DIR
         path_dados = os.path.join(base_dir, 'dados')
         path_modelo = os.path.join(base_dir, 'ml_models', 'modelo_coral_rf.pkl')
+        path_contrato = os.path.join(base_dir, 'docs', 'contrato_canonico_variaveis.md')
+
+        # Pré-requisito mandatário: nenhuma deduplicação pode rodar sem o contrato canônico.
+        if not os.path.exists(path_contrato):
+            self.stdout.write(
+                self.style.ERROR(
+                    f"Contrato canônico ausente em '{path_contrato}'. "
+                    "Interrompendo antes das rotinas de deduplicação."
+                )
+            )
+            return
         
         # Parâmetros Fixos
         PROFUNDIDADE_Z = 7.5
         LIMITE = 27.0
+        local_padrao, _ = LocalRecife.objects.get_or_create(
+            slug='abrolhos-ba',
+            defaults={
+                'nome': 'Parque Nacional Marinho de Abrolhos',
+                'estado': 'Bahia',
+                'cidade': 'Caravelas',
+                'descricao': 'Local de referencia para o carregamento historico inicial.',
+            },
+        )
 
         # --- 1. MAPEAMENTO DE ARQUIVOS ---
         mapa_arquivos = {
@@ -153,6 +173,7 @@ class Command(BaseCommand):
             else: n = 'ALERTA_2'
 
             objs.append(StatusPredicao(
+                local_recife=local_padrao,
                 data=row['time'].date(),
                 sst_atual=row['sst'],
                 limite_termico=LIMITE,

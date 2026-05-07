@@ -2,6 +2,48 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Execução Local (site offline)
+
+- **status:** sem deploy público
+- **objetivo:** reestruturação de backend e banco
+- **critérios para voltar ao ar:**
+  - backend estabilizado (APIs e jobs validados)
+  - migrações e consistência do banco concluídas
+  - integrações externas reativadas com monitoramento
+
+### Flag de indisponibilidade pública
+
+Para rodar o frontend em modo local/offline, crie um `.env` no diretório `frontend/` com:
+
+```env
+REACT_APP_PUBLIC_OFFLINE=true
+```
+
+Com a flag ativa, chamadas públicas de produção são neutralizadas na interface.
+
+### Estrutura de páginas (site offline)
+
+- **Página inicial (introdução):** cabeçalho com nome do projeto no canto superior esquerdo + atalhos para *Escolha de Recifes* e *Banco de Dados Geral*.
+- **Banco de Dados Geral:** lista de dados de predição e adicionais com download, com filtros de busca por data (início/fim ou publicação), localização (estado/cidade) e fonte (Copernicus, NOAA, NCBI, NASA).
+- **Localizações de Corais:** cards com foto, nome do local e número de informações disponíveis; ao clicar, abre a página específica do local.
+- **Mídia no modo offline:** as imagens de locais usam apenas assets locais do frontend (sem dependência de links externos).
+- **Página do local específico:** apresenta informações do local e o painel de risco apenas quando houver variáveis suficientes para predição.
+
+### Backend local (Django/settings)
+
+A configuração local do backend agora usa:
+
+- `DJANGO_DEBUG` para controlar `DEBUG`
+- `ALLOWED_HOSTS` restrito a `localhost` e `127.0.0.1`
+- integrações de deploy/cloud desativadas (`USE_S3_STORAGE`, `ENABLE_AWS_SERVICES`, `ENABLE_EXTERNAL_TASKS`)
+
+Exemplo de variáveis:
+
+```env
+DJANGO_DEBUG=true
+DJANGO_SECRET_KEY=chave-local
+```
+
 ## Available Scripts
 
 In the project directory, you can run:

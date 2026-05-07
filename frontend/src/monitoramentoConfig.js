@@ -1,0 +1,5 @@
+export {
+  CAMPOS_MONITORAMENTO_OBRIGATORIOS,
+  MONITORAMENTO_VARIAVEIS,
+  RISCO_STATUS,
+} from './config/monitoramentoConfig';

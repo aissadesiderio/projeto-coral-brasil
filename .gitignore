@@ -8,3 +8,9 @@ staticfiles/
 db.sqlite3
 __pycache__/
 *.pyc
+.env
+media/
+node_modules/
+frontend/build/
+frontend/node_modules/
+.DS_Store

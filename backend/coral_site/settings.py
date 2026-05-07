@@ -10,23 +10,42 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-(d_7#2p8#ut+9ig647u(@@2-*8y&j0(1j-hp#(0+v8d#v&2w3%',
+)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(d_7#2p8#ut+9ig647u(@@2-*8y&j0(1j-hp#(0+v8d#v&2w3%'
+DEBUG = env_bool('DJANGO_DEBUG', True)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get(
+        'DJANGO_ALLOWED_HOSTS',
+        'localhost,127.0.0.1',
+    ).split(',')
+    if host.strip()
+]
 
-ALLOWED_HOSTS = ['18.222.189.61', 'localhost', '127.0.0.1', 'projetocoralbrasil.com.br', 'www.projetocoralbrasil.com.br']
+OFFLINE_MODE = env_bool('OFFLINE_MODE', False)
+ENABLE_CODE_SYNC = env_bool('ENABLE_CODE_SYNC', False)
 
-# pplication definition
+# Integracoes externas desativadas por padrao durante a reestruturacao local.
+USE_S3_STORAGE = False
+ENABLE_AWS_SERVICES = False
+ENABLE_EXTERNAL_TASKS = False
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -70,20 +89,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'coral_site.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -100,14 +111,23 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-#quem pode fazer "pedidos"
-
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", # O endereço do nosso app React
+    origin.strip()
+    for origin in os.environ.get(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000',
+    ).split(',')
+    if origin.strip()
 ]
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://projetocoralbrasil.com.br,https://www.projetocoralbrasil.com.br',
+    ).split(',')
+    if origin.strip()
+]
 
 LANGUAGE_CODE = 'en-us'
 
@@ -117,18 +137,14 @@ USE_I18N = True
 
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-#configuração de Arquivos de Mídia (Imagens, Uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
+NEO4J_USER = os.environ.get('NEO4J_USER', 'neo4j')
+NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', '')
