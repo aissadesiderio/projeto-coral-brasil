@@ -40,6 +40,7 @@ ALLOWED_HOSTS = [
 ]
 
 OFFLINE_MODE = env_bool('OFFLINE_MODE', False)
+ENABLE_CODE_SYNC = env_bool('ENABLE_CODE_SYNC', False)
 
 # Integracoes externas desativadas por padrao durante a reestruturacao local.
 USE_S3_STORAGE = False
@@ -115,6 +116,15 @@ CORS_ALLOWED_ORIGINS = [
     for origin in os.environ.get(
         'CORS_ALLOWED_ORIGINS',
         'http://localhost:3000',
+    ).split(',')
+    if origin.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://projetocoralbrasil.com.br,https://www.projetocoralbrasil.com.br',
     ).split(',')
     if origin.strip()
 ]

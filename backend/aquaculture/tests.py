@@ -1,11 +1,14 @@
 from datetime import date
 from pathlib import Path
 import shutil
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.admin.sites import AdminSite
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from .admin import LocalRecifeAdmin
 from .code_sync import sync_project_code_from_db
 from .models import Especie, LocalRecife, StatusPredicao
 
@@ -145,3 +148,31 @@ class SyncCodeTests(TestCase):
         self.assertIn('Recife Teste', backend_text)
         self.assertIn('Especie de teste', backend_text)
         self.assertIn('https://exemplo.org/imagem', frontend_text)
+
+
+class AdminCodeSyncFlagTests(TestCase):
+    def setUp(self):
+        self.admin = LocalRecifeAdmin(LocalRecife, AdminSite())
+
+    @override_settings(ENABLE_CODE_SYNC=False)
+    @patch('aquaculture.admin.sync_project_code_from_db')
+    def test_sync_is_skipped_when_flag_is_disabled(self, sync_mock):
+        with patch.object(self.admin, 'message_user') as message_user_mock:
+            self.admin._sync_code(request=object())
+
+        sync_mock.assert_not_called()
+        message_user_mock.assert_not_called()
+
+    @override_settings(ENABLE_CODE_SYNC=True)
+    @patch('aquaculture.admin.sync_project_code_from_db')
+    def test_sync_runs_when_flag_is_enabled(self, sync_mock):
+        sync_mock.return_value = {
+            'backend_changed': True,
+            'frontend_changed': False,
+        }
+
+        with patch.object(self.admin, 'message_user') as message_user_mock:
+            self.admin._sync_code(request=object())
+
+        sync_mock.assert_called_once_with()
+        message_user_mock.assert_called_once()

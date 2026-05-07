@@ -9,7 +9,7 @@ from .models import LocalRecife, StatusPredicao
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_SYNC_PATH = REPO_ROOT / 'backend' / 'aquaculture' / 'generated_admin_sync.py'
-FRONTEND_SYNC_PATH = REPO_ROOT / 'frontend' / 'src' / 'recifeData.js'
+FRONTEND_SYNC_PATH = REPO_ROOT / 'frontend' / 'src' / 'data' / 'recifeData.js'
 
 
 def _arquivo_url(field_file) -> str:

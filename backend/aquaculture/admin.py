@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
@@ -10,6 +11,9 @@ class SyncToCodeAdminMixin:
     sync_error_message = 'O banco foi salvo, mas a sincronizacao de arquivos falhou.'
 
     def _sync_code(self, request):
+        if not getattr(settings, 'ENABLE_CODE_SYNC', False):
+            return
+
         try:
             result = sync_project_code_from_db()
             changed = result['backend_changed'] or result['frontend_changed']
