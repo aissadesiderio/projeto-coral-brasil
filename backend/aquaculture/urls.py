@@ -9,4 +9,10 @@ urlpatterns = [
     path('especies/', views.EspecieList.as_view(), name='especie_list'),
     path('especies/<int:pk>/', views.EspecieDetail.as_view(), name='especie_detail'),
     path('monitoramento/', views.StatusPredicaoList.as_view(), name='monitoramento_list'),
+    path('grafo/localizacoes/', views.GrafoLocalizacaoList.as_view(), name='grafo_localizacoes'),
+    path(
+        'grafo/localizacoes/<slug:slug>/',
+        views.GrafoLocalizacaoDetail.as_view(),
+        name='grafo_localizacao_detail',
+    ),
 ]

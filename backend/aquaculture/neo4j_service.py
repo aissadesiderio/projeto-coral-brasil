@@ -28,6 +28,76 @@ class Neo4jServiceError(Exception):
 _driver = None
 
 
+LISTAR_LOCALIZACOES_GRAFO_QUERY = """
+MATCH (l:Localizacao)
+OPTIONAL MATCH (l)-[:ABRIGA_ESPECIE]->(e:Especie)
+WITH l, count(DISTINCT e) AS quantidade_especies
+OPTIONAL MATCH (l)-[:TEM_PREDICAO]->(p:Predicao)
+WITH l, quantidade_especies, count(DISTINCT p) AS quantidade_predicoes, max(p.data) AS ultima_predicao_data
+OPTIONAL MATCH (l)-[:TEM_PREDICAO]->(ultima_predicao:Predicao {data: ultima_predicao_data})
+RETURN
+    l.slug AS slug,
+    l.nome AS nome,
+    l.estado AS estado,
+    l.cidade AS cidade,
+    l.descricao AS descricao,
+    l.ultima_atualizacao AS ultima_atualizacao,
+    quantidade_especies,
+    quantidade_predicoes,
+    ultima_predicao.risco_integrado AS risco_atual,
+    ultima_predicao_data
+ORDER BY nome, slug
+"""
+
+OBTER_LOCALIZACAO_GRAFO_QUERY = """
+MATCH (l:Localizacao {slug: $slug})
+RETURN
+    l.slug AS slug,
+    l.nome AS nome,
+    l.estado AS estado,
+    l.cidade AS cidade,
+    l.descricao AS descricao,
+    l.ultima_atualizacao AS ultima_atualizacao,
+    l.ativo AS ativo
+LIMIT 1
+"""
+
+LISTAR_ESPECIES_LOCALIZACAO_GRAFO_QUERY = """
+MATCH (:Localizacao {slug: $slug})-[:ABRIGA_ESPECIE]->(e:Especie)
+RETURN
+    e.nome_cientifico AS nome_cientifico,
+    e.nome_comum AS nome_comum,
+    e.tipo AS tipo,
+    e.descricao AS descricao,
+    e.status_conservacao AS status_conservacao,
+    e.credito_imagem AS credito_imagem,
+    e.fonte_imagem_url AS fonte_imagem_url,
+    e.fonte_url AS fonte_url
+ORDER BY coalesce(e.nome_comum, ''), e.nome_cientifico
+"""
+
+LISTAR_PREDICOES_LOCALIZACAO_GRAFO_QUERY = """
+MATCH (:Localizacao {slug: $slug})-[:TEM_PREDICAO]->(p:Predicao)
+RETURN
+    p.local_slug AS local_slug,
+    p.data AS data,
+    p.sst_atual AS sst_atual,
+    p.limite_termico AS limite_termico,
+    p.anomalia AS anomalia,
+    p.dhw_calculado AS dhw_calculado,
+    p.irradiancia AS irradiancia,
+    p.turbidez AS turbidez,
+    p.salinidade AS salinidade,
+    p.ph AS ph,
+    p.oxigenio AS oxigenio,
+    p.nitrato AS nitrato,
+    p.clorofila AS clorofila,
+    p.risco_integrado AS risco_integrado,
+    p.nivel_alerta AS nivel_alerta
+ORDER BY p.data DESC
+"""
+
+
 def _get_neo4j_settings() -> tuple[str, str, str]:
     uri = (getattr(settings, 'NEO4J_URI', '') or '').strip()
     user = (getattr(settings, 'NEO4J_USER', '') or '').strip()
@@ -85,6 +155,22 @@ def _raise_neo4j_operation_error(action: str, exc: Exception) -> None:
     raise Neo4jServiceError(f'Falha inesperada durante {action}: {exc}') from exc
 
 
+def _normalize_neo4j_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalize_neo4j_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_neo4j_value(item) for item in value]
+
+    isoformat = getattr(value, 'isoformat', None)
+    if callable(isoformat):
+        try:
+            return isoformat()
+        except TypeError:
+            return value
+
+    return value
+
+
 def verificar_conexao_neo4j() -> bool:
     driver = get_neo4j_driver()
 
@@ -124,3 +210,42 @@ def executar_write(query: str, parameters: dict[str, Any] | None = None):
             return session.execute_write(_write_transaction)
     except Exception as exc:
         _raise_neo4j_operation_error('a escrita no Neo4j', exc)
+
+
+def executar_read(
+    query: str,
+    parameters: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    driver = get_neo4j_driver()
+    query_parameters = parameters or {}
+
+    def _read_transaction(tx):
+        result = tx.run(query, query_parameters)
+        return [_normalize_neo4j_value(record) for record in result.data()]
+
+    try:
+        with driver.session() as session:
+            return session.execute_read(_read_transaction)
+    except Exception as exc:
+        _raise_neo4j_operation_error('a leitura no Neo4j', exc)
+
+
+def listar_localizacoes_grafo() -> list[dict[str, Any]]:
+    return executar_read(LISTAR_LOCALIZACOES_GRAFO_QUERY)
+
+
+def obter_localizacao_grafo(slug: str) -> dict[str, Any] | None:
+    localizacoes = executar_read(OBTER_LOCALIZACAO_GRAFO_QUERY, {'slug': slug})
+    if not localizacoes:
+        return None
+
+    localizacao = localizacoes[0]
+    localizacao['especies'] = executar_read(
+        LISTAR_ESPECIES_LOCALIZACAO_GRAFO_QUERY,
+        {'slug': slug},
+    )
+    localizacao['predicoes'] = executar_read(
+        LISTAR_PREDICOES_LOCALIZACAO_GRAFO_QUERY,
+        {'slug': slug},
+    )
+    return localizacao

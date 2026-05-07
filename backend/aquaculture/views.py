@@ -1,9 +1,15 @@
 from django.conf import settings
 from django.db.models import Q
 from rest_framework import generics, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from .models import Especie, LocalRecife, StatusPredicao
+from .neo4j_service import (
+    Neo4jServiceError,
+    listar_localizacoes_grafo,
+    obter_localizacao_grafo,
+)
 from .serializers import (
     EspecieSerializer,
     LocalRecifeDetailSerializer,
@@ -90,3 +96,41 @@ class ApiStatusView(generics.GenericAPIView):
                 )
             }
         )
+
+
+class GrafoLocalizacaoList(OfflineModeMixin, APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        try:
+            payload = listar_localizacoes_grafo()
+        except Neo4jServiceError:
+            return Response(
+                {'detail': 'Neo4j indisponivel no momento.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(payload)
+
+
+class GrafoLocalizacaoDetail(OfflineModeMixin, APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, slug, *args, **kwargs):
+        try:
+            payload = obter_localizacao_grafo(slug)
+        except Neo4jServiceError:
+            return Response(
+                {'detail': 'Neo4j indisponivel no momento.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if payload is None:
+            return Response(
+                {'detail': 'Localizacao nao encontrada no grafo.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(payload)

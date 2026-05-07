@@ -11,6 +11,7 @@ from django.urls import reverse
 from .admin import LocalRecifeAdmin
 from .code_sync import sync_project_code_from_db
 from .models import Especie, LocalRecife, StatusPredicao
+from .neo4j_service import Neo4jServiceError, obter_localizacao_grafo
 
 
 @override_settings(OFFLINE_MODE=False)
@@ -70,6 +71,111 @@ class LocalRecifeApiTests(TestCase):
         payload = response.json()
         nomes = [item['nome_cientifico'] for item in payload]
         self.assertIn('Mussismilia braziliensis', nomes)
+
+
+@override_settings(OFFLINE_MODE=False)
+class GrafoLocalizacaoApiTests(TestCase):
+    @patch('aquaculture.views.listar_localizacoes_grafo')
+    def test_grafo_localizacao_list_returns_neo4j_payload(self, listar_mock):
+        listar_mock.return_value = [
+            {
+                'slug': 'abrolhos-ba',
+                'nome': 'Parque Nacional Marinho de Abrolhos',
+                'estado': 'Bahia',
+                'cidade': 'Caravelas',
+                'descricao': 'Local de teste para o grafo.',
+                'ultima_atualizacao': '2026-04-16',
+                'quantidade_especies': 1,
+                'quantidade_predicoes': 2,
+                'risco_atual': 78.0,
+                'ultima_predicao_data': '2026-04-16',
+            }
+        ]
+
+        response = self.client.get(reverse('grafo_localizacoes'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload[0]['slug'], 'abrolhos-ba')
+        self.assertEqual(payload[0]['quantidade_predicoes'], 2)
+
+    @patch('aquaculture.views.obter_localizacao_grafo')
+    def test_grafo_localizacao_detail_returns_404_when_slug_is_missing(self, obter_mock):
+        obter_mock.return_value = None
+
+        response = self.client.get(
+            reverse('grafo_localizacao_detail', kwargs={'slug': 'inexistente'})
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()['detail'], 'Localizacao nao encontrada no grafo.')
+
+    @patch('aquaculture.views.obter_localizacao_grafo')
+    def test_grafo_localizacao_detail_returns_503_when_neo4j_is_unavailable(self, obter_mock):
+        obter_mock.side_effect = Neo4jServiceError('Falha de conexao')
+
+        response = self.client.get(
+            reverse('grafo_localizacao_detail', kwargs={'slug': 'abrolhos-ba'})
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['detail'], 'Neo4j indisponivel no momento.')
+
+
+class Neo4jServiceReadTests(TestCase):
+    @patch('aquaculture.neo4j_service.executar_read')
+    def test_obter_localizacao_grafo_returns_local_with_species_and_predictions(self, executar_read_mock):
+        executar_read_mock.side_effect = [
+            [
+                {
+                    'slug': 'abrolhos-ba',
+                    'nome': 'Parque Nacional Marinho de Abrolhos',
+                    'estado': 'Bahia',
+                    'cidade': 'Caravelas',
+                    'descricao': 'Local de teste para o grafo.',
+                    'ultima_atualizacao': '2026-04-16',
+                    'ativo': True,
+                }
+            ],
+            [
+                {
+                    'nome_cientifico': 'Mussismilia braziliensis',
+                    'nome_comum': 'Coral-cerebro brasileiro',
+                    'tipo': 'CORAL',
+                    'descricao': 'Especie formadora de recife.',
+                    'status_conservacao': 'Vulneravel',
+                    'credito_imagem': 'Equipe local',
+                    'fonte_imagem_url': 'https://exemplo.org/imagem',
+                    'fonte_url': 'https://exemplo.org/especie',
+                }
+            ],
+            [
+                {
+                    'local_slug': 'abrolhos-ba',
+                    'data': '2026-04-16',
+                    'sst_atual': 29.1,
+                    'limite_termico': 27.0,
+                    'anomalia': 2.1,
+                    'dhw_calculado': 6.4,
+                    'irradiancia': 32.5,
+                    'turbidez': 0.18,
+                    'salinidade': 36.0,
+                    'ph': 8.1,
+                    'oxigenio': 6.5,
+                    'nitrato': 0.4,
+                    'clorofila': 0.7,
+                    'risco_integrado': 78.0,
+                    'nivel_alerta': 'ALERTA_1',
+                }
+            ],
+        ]
+
+        payload = obter_localizacao_grafo('abrolhos-ba')
+
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload['slug'], 'abrolhos-ba')
+        self.assertEqual(payload['especies'][0]['nome_cientifico'], 'Mussismilia braziliensis')
+        self.assertEqual(payload['predicoes'][0]['nivel_alerta'], 'ALERTA_1')
 
 
 @override_settings(OFFLINE_MODE=False)
