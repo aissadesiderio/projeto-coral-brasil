@@ -1,6 +1,9 @@
-import { HOME_DESTAQUES, HOME_HERO_IMAGE } from '../data/datasets';
+import { Link } from 'react-router-dom';
 
-export default function HomePage({ onNavigate, siteOffline, offlineMessage }) {
+import { HOME_DESTAQUES, HOME_HERO_IMAGE } from '../data/datasets';
+import { obterRotaPorPagina } from '../utils/navigation';
+
+export default function HomePage({ siteOffline, offlineMessage }) {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-[#2b6978] via-[#b0d7d4] via-[40%] to-[#ffefeb]">
       <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
@@ -31,31 +34,25 @@ export default function HomePage({ onNavigate, siteOffline, offlineMessage }) {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => onNavigate('recifes')}
+            <Link
+              to={obterRotaPorPagina('recifes')}
               className="rounded-[10px] bg-[#2b6978] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#245766] sm:w-auto"
             >
               Explorar recifes
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate('banco')}
+            </Link>
+            <Link
+              to={obterRotaPorPagina('banco')}
               className="rounded-[10px] border border-[#2b6978]/20 bg-white/70 px-5 py-3 text-sm font-medium text-[#2b6978] transition hover:bg-white"
             >
               Banco de dados geral
-            </button>
+            </Link>
           </div>
         </div>
 
         <ul className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {HOME_DESTAQUES.map((item) => (
             <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => onNavigate(item.pagina)}
-                className="group block w-full text-left"
-              >
+              <Link to={obterRotaPorPagina(item.pagina)} className="group block w-full text-left">
                 <div className="relative aspect-[362.66/483] overflow-hidden rounded-2xl shadow-lg shadow-ocean-dark/10">
                   <img
                     src={item.imagem}
@@ -72,7 +69,7 @@ export default function HomePage({ onNavigate, siteOffline, offlineMessage }) {
                     {item.descricao}
                   </p>
                 </div>
-              </button>
+              </Link>
             </li>
           ))}
         </ul>

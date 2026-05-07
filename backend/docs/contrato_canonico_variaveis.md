@@ -1,34 +1,59 @@
-# Contrato Canônico de Variáveis Ambientais
+# Contrato Canonico de Variaveis Ambientais
 
-> **Status:** obrigatório  
-> **Escopo:** ingestão, harmonização e deduplicação de séries temporais ambientais.  
-> **Regra de governança:** **nenhuma rotina de deduplicação pode ser executada sem este contrato vigente**.
+## Status
+- obrigatorio para qualquer ingestao que escreva em `MedicaoAmbiental`
+- valido para a sincronizacao atual do Django e para a futura pipeline NOAA/Copernicus
 
 ## Objetivo
+Padronizar os nomes de variaveis ambientais que entram no grafo Neo4j para que `MedicaoAmbiental` tenha um vocabulario unico, independentemente da origem.
 
-Padronizar nomes, unidades, conversões e regras de qualidade das variáveis vindas de NOAA/CRW e Copernicus para evitar colisão semântica, mistura de unidades e deduplicação incorreta.
+## Onde esse contrato entra no schema
 
-## Tabela única de mapeamento (fonte → canônico)
+No schema canonico:
+- variaveis ambientais vivem em `(:MedicaoAmbiental)`
+- risco e classificacao vivem em `(:Predicao)`
+- proveniencia vive em `(:FonteDados)`
 
-| Nome original da fonte | Nome canônico | Unidade canônica | Regra de conversão | Regra de qualidade/flag | Decisão | Ponto de ingestão correspondente |
-|---|---|---|---|---|---|---|
-| `CRW_SST` (NOAA/CRW) | `sst` | `°C` | Se valor vier em Kelvin, aplicar `°C = K - 273.15`; caso já esteja em °C, manter | Flag se fora de `[-2, 45]`, nulo, ou salto diário > `5°C/dia` | **manter** | `coleta_de_dados.py` (NOAA ERDDAP) + `carregar_historico.py` (`mapa_colunas['sst']`) + `setup_graph.py` (`SST`) |
-| `thetao` (Copernicus) | `sst` | `°C` | Se `thetao > 200`, assumir Kelvin e converter para °C; caso contrário manter | Mesmas flags de `sst` | **revisar** (verificar unidade por dataset antes de produção) | `carregar_historico.py` (`mapa_colunas['sst']`) |
-| `CRW_DHW` / `dhw` | `dhw` | `°C·semana` | Sem conversão; se escala for diária acumulada, normalizar para °C·semana | Flag se `<0`, `>40`, nulo prolongado, ou queda brusca > `8` em 1 dia sem reset de série | **manter** | `setup_graph.py` (`DHW`) + `carregar_historico.py` (`mapa_colunas['dhw']`) |
-| `CRW_HOTSPOT` | `hotspot` | `°C` | Sem conversão (anomalia térmica positiva) | Flag se `<0` (quando definido como hotspot), `>10`, ou discrepante de `sst - limite_termico` | **manter** | `setup_graph.py` (`HOTSPOT`); cálculo auxiliar em `carregar_historico.py` (`hotspot_calc`) |
-| `CRW_BAA` | `baa` | `categoria` (`0`, `1`, `2`, `3`, `4`) | Mapear texto/código externo para escala ordinal padrão | Flag se valor fora da escala; se máscara de qualidade indicar inválido | **manter** | `setup_graph.py` (`BAA`) + NOAA CSV (`CRW_BAA`) |
-| `CRW_SSTANOMALY` / `SST_ANOMALY` | `sst_anomalia` | `°C` | Sem conversão; alinhar sinal com `sst - climatologia` | Flag se `abs(valor) > 8` ou incoerente com `sst` | **revisar** (normalizar nomenclatura entre `SST_ANOMALY` e `CRW_SSTANOMALY`) | `setup_graph.py` (`SST_ANOMALY`) + NOAA CSV (`CRW_SSTANOMALY`) |
-| `PAR`, `par`, `par_error`, `ppfd` | `par` | `µmol fótons·m⁻²·s⁻¹` | Se a fonte vier em `mol·m⁻²·dia⁻¹`, converter para `µmol·m⁻²·s⁻¹`; `par_error` só como fallback e com flag | Flag se `<0`, `>3000`, ou se origem for `par_error` (marca `quality=degradado`) | **manter** (`par_error` = **revisar**) | `setup_graph.py` (`PAR`) + `carregar_historico.py` (`mapa_colunas['irradiancia']`) |
-| `KD490`, `kd`, `kd490` | `kd490` | `m⁻¹` | Sem conversão | Flag se `<0` ou `>5`; outlier por z-score mensal | **manter** | `setup_graph.py` (`KD490`) + `carregar_historico.py` (`mapa_colunas['turbidez']`) |
-| `chl`, `chlor_a` | `clorofila` | `mg·m⁻³` | Sem conversão | Flag se `<0` ou `>100`; mudança > `20 mg·m⁻³/dia` | **manter** | `setup_graph.py` (`CHL`) + `coleta_de_dados.py` (`variables=['chl', ...]`) + `carregar_historico.py` |
-| `o2`, `oxygen`, `dissolved_oxygen`, `do` | `oxigenio` | `mmol·m⁻³` | Se em `mg·L⁻¹`, converter para `mmol·m⁻³` por temperatura/salinidade de referência | Flag se `<0` ou supersaturação física implausível | **revisar** (unidade da fonte precisa ser registrada por dataset) | `setup_graph.py` (`O2`) + `coleta_de_dados.py` (`variables=['...','o2',...]`) + `carregar_historico.py` |
-| `so`, `sal`, `sob` | `salinidade` | `PSU` | Sem conversão (assumindo Practical Salinity) | Flag se `<0` ou `>45` | **manter** | `setup_graph.py` (`SAL`) + `coleta_de_dados.py` (`variables=['...','so']`) + `carregar_historico.py` |
-| `ph`, `talk` (fallback legado) | `ph` | `escala total` (adimensional) | `ph`: sem conversão; `talk` não é pH e não deve substituir sem transformação química explícita | Flag crítica se origem `talk` sem transformação documentada | **revisar** (evitar uso direto de `talk` como pH) | `carregar_historico.py` (`mapa_colunas['ph']`) |
+Arquivo estrutural de referencia:
+- `backend/aquaculture/neo4j_schema.py`
 
-## Regras mandatórias para deduplicação
+## Implementacao atual
 
-1. **Pré-requisito obrigatório:** deduplicar apenas após mapeamento para nome canônico + unidade canônica desta tabela.  
-2. Para colisões no mesmo `time`, priorizar registro com melhor `quality_flag`; em empate, manter o mais recente (`keep='last'`).  
-3. Nunca deduplicar misturando variáveis semanticamente diferentes (ex.: `kd490` vs `clorofila`) mesmo que compartilhem timestamp.  
-4. Toda rotina nova de deduplicação deve referenciar este contrato explicitamente.
+Nesta fase, `neo4j_seed` nao consome NOAA nem Copernicus diretamente.
+Ele transforma cada registro de `StatusPredicao` do Django em:
+- um no `MedicaoAmbiental` com variaveis canonicas;
+- um no `Predicao` com `risco_integrado` e `nivel_alerta`;
+- relacoes de proveniencia para `FonteDados {id: "django-statuspredicao:v1"}`.
 
+## Tabela canonica
+
+| Origem atual no Django | Propriedade canonica no Neo4j | No de destino | Observacao |
+|---|---|---|---|
+| `sst_atual` | `sst` | `MedicaoAmbiental` | temperatura da superficie do mar |
+| `limite_termico` | `limite_termico` | `MedicaoAmbiental` | limite termico de referencia |
+| `anomalia` | `anomalia_termica` | `MedicaoAmbiental` | diferenca entre `sst` e limite |
+| `dhw_calculado` | `dhw` | `MedicaoAmbiental` | grau-semana de aquecimento |
+| `vento_velocidade` | `vento_velocidade` | `MedicaoAmbiental` | opcional no estado atual |
+| `irradiancia` | `par` | `MedicaoAmbiental` | radiacao fotossintetica |
+| `turbidez` | `kd490` | `MedicaoAmbiental` | atenuacao/clareza da agua |
+| `salinidade` | `salinidade` | `MedicaoAmbiental` | salinidade observada |
+| `ph` | `ph` | `MedicaoAmbiental` | pH da agua |
+| `oxigenio` | `oxigenio` | `MedicaoAmbiental` | oxigenio dissolvido |
+| `nitrato` | `nitrato` | `MedicaoAmbiental` | nutriente dissolvido |
+| `clorofila` | `clorofila` | `MedicaoAmbiental` | clorofila-a |
+| `risco_integrado` | `risco_integrado` | `Predicao` | saida de risco consolidada |
+| `nivel_alerta` | `nivel_alerta` | `Predicao` | classificacao de alerta |
+
+## Regras obrigatorias
+
+1. Nenhuma nova ingestao deve gravar variaveis ambientais fora de `MedicaoAmbiental`.
+2. `Predicao` deve guardar apenas a parte preditiva e de classificacao, nao o pacote inteiro de medidas.
+3. Toda origem nova deve mapear suas colunas para os nomes canonicos desta tabela antes de gravar no Neo4j.
+4. Toda origem nova deve registrar `FonteDados.id` no formato `fonte_slug:versao`.
+
+## Relacao com NOAA e Copernicus
+
+A pipeline NOAA/Copernicus ainda nao esta implementada nesta branch, mas o contrato ja define o destino esperado:
+- NOAA/CRW e Copernicus devem escrever nas mesmas propriedades canonicas de `MedicaoAmbiental`;
+- a diferenca entre fontes deve ser representada em `FonteDados` e nas relacoes `PROVENIENTE_DE`;
+- nao deve existir uma segunda nomenclatura paralela quando essa pipeline entrar.

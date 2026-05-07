@@ -1,93 +1,110 @@
 # Documento de Arquitetura
 
 ## Escopo
-Este documento define a separação de responsabilidades entre os bancos, os padrões de execução local e os critérios de dependência entre fases do pipeline de dados e modelagem.
+Este documento registra a divisao de responsabilidades entre PostgreSQL e Neo4j e fixa o schema canonico do grafo usado pelo backend.
 
-## Responsabilidades por banco de dados
+## Responsabilidades por banco
 
-### PostgreSQL (sistema transacional)
-Responsável por dados com integridade relacional e operação da aplicação:
-- **Autenticação e administração** (usuários, grupos, permissões e recursos de admin).
-- **Dados relacionais de suporte** (cadastros, tabelas de referência, metadados operacionais e configurações).
-- **Fonte primária** para entidades que exigem constraints relacionais e histórico transacional.
+### PostgreSQL
+Permanece como fonte primaria transacional da aplicacao:
+- autenticacao, admin e configuracoes operacionais;
+- `LocalRecife`, `Especie` e `StatusPredicao` como registros oficiais do Django;
+- integridade relacional e operacao normal dos endpoints REST existentes.
 
-### Neo4j (grafo científico)
-Responsável por modelar relações científicas e consultas de travessia/impacto:
-- Nós canônicos de domínio:
-  - `Localizacao`
-  - `MedicaoAmbiental`
-  - `Predicao`
-  - `Especie`
-  - `FonteDados`
-- **Fonte primária** para relacionamentos científicos e exploração de contexto (ex.: influência de medições por localização, espécie e fonte).
+### Neo4j
+Passa a usar um unico schema canonico para consultas de grafo e travessia:
+- exploracao de `Localizacao`, `Especie`, `MedicaoAmbiental`, `Predicao` e `FonteDados`;
+- leitura agregada para endpoints de grafo;
+- representacao de relacoes cientificas sem substituir a escrita primaria no Django nesta fase.
 
-## Padrão de execução local
+## Fonte oficial do schema Neo4j
 
-### 1) URI e credenciais via `.env`
-Todas as conexões locais devem ser parametrizadas por variáveis de ambiente.
+Arquivo oficial:
+- `backend/aquaculture/neo4j_schema.py`
 
-Exemplo mínimo de variáveis:
+Comandos oficiais:
+- `python backend/manage.py neo4j_init`
+- `python backend/manage.py neo4j_seed`
 
-```dotenv
-# PostgreSQL
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=coral
-POSTGRES_USER=coral_user
-POSTGRES_PASSWORD=coral_pass
+Compatibilidade legada:
+- `backend/db/setup_graph.py` nao define schema proprio.
+- Esse arquivo apenas delega para `neo4j_init` + `neo4j_seed`.
 
-# Neo4j
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=neo4j_pass
-```
+## Schema canonico adotado
 
-Diretrizes:
-- Nunca versionar `.env` com credenciais reais.
-- Manter `.env.example` atualizado com todas as chaves obrigatórias.
-- Falta de variável obrigatória deve falhar rápido no bootstrap local.
+### Nos implementados agora
 
-### 2) Política de dados de desenvolvimento (seed mínimo)
-O ambiente de desenvolvimento deve iniciar com **seed mínimo e determinístico** para validação funcional ponta a ponta.
+`Localizacao`
+- id canonico: `slug`
+- origem atual: `LocalRecife`
+- propriedades principais: `id`, `slug`, `nome`, `estado`, `cidade`, `descricao`, `ultima_atualizacao`, `ativo`, `origem_registro`, `django_pk`
 
-Conteúdo mínimo obrigatório:
-- PostgreSQL:
-  - 1 usuário administrador.
-  - registros essenciais de referência para o app iniciar sem erro.
-- Neo4j:
-  - ao menos 1 `Localizacao`.
-  - ao menos 1 `Especie`.
-  - ao menos 1 `MedicaoAmbiental` ligada a uma `Localizacao`.
-  - ao menos 1 `Predicao` ligada a `Localizacao` e `Especie`.
-  - ao menos 1 `FonteDados` ligada à `Predicao`.
+`Especie`
+- id canonico: `slugify(nome_cientifico)`
+- origem atual: `Especie`
+- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `status_conservacao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`, `origem_registro`, `django_pk`
 
-### 3) Convenção de IDs canônicos por nó (Neo4j)
-Cada nó deve possuir um `id` canônico, estável e derivado de atributos de negócio, para evitar duplicidade de ingestão.
+`MedicaoAmbiental`
+- id canonico: `localizacao_slug:data_iso`
+- origem atual: derivada de `StatusPredicao`
+- propriedades principais: `id`, `localizacao_id`, `local_slug`, `data`, `fonte_dados_id`, `sst`, `limite_termico`, `anomalia_termica`, `dhw`, `vento_velocidade`, `par`, `kd490`, `salinidade`, `ph`, `oxigenio`, `nitrato`, `clorofila`, `origem_registro`, `django_pk`
 
-Regras:
-- Normalizar componentes para `slug` em minúsculas.
-- Usar datas em formato ISO (`YYYY-MM-DD` ou `YYYY-MM-DDTHH:mm:ssZ`).
-- Compor IDs com separador `:`.
+`Predicao`
+- id canonico: `localizacao_slug:data_iso:status-predicao-django`
+- origem atual: derivada de `StatusPredicao`
+- propriedades principais: `id`, `localizacao_id`, `local_slug`, `data`, `modelo_slug`, `medicao_id`, `fonte_dados_id`, `risco_integrado`, `nivel_alerta`, `origem_registro`, `django_pk`
 
-Padrões:
-- `Localizacao.id = localizacao_slug`
-- `MedicaoAmbiental.id = localizacao_slug:data_iso`
-- `Predicao.id = localizacao_slug:data_iso:modelo_slug`
-- `Especie.id = nome_cientifico_slug`
-- `FonteDados.id = fonte_slug:versao`
+`FonteDados`
+- id canonico: `fonte_slug:versao`
+- origem atual: seed tecnico do backend
+- no implementado agora: `django-statuspredicao:v1`
+- propriedades principais: `id`, `slug`, `nome`, `tipo`, `descricao`, `versao`, `pipeline`, `status`
 
-## Dependências de fase
+### Relacoes implementadas agora
 
-### Gate 1 — Qualidade estrutural
-- **Sem schema validado, não iniciar limpeza/mapeamento.**
-- Validação mínima:
-  - constraints/chaves obrigatórias definidas,
-  - tipos e formatos de campos críticos validados,
-  - contrato entre origem e destino documentado.
+- `(:Localizacao)-[:ABRIGA_ESPECIE]->(:Especie)`
+- `(:Localizacao)-[:TEM_MEDICAO]->(:MedicaoAmbiental)`
+- `(:Localizacao)-[:TEM_PREDICAO]->(:Predicao)`
+- `(:Predicao)-[:DERIVADA_DE]->(:MedicaoAmbiental)`
+- `(:MedicaoAmbiental)-[:PROVENIENTE_DE]->(:FonteDados)`
+- `(:Predicao)-[:PROVENIENTE_DE]->(:FonteDados)`
 
-### Gate 2 — Estabilidade operacional
-- **Sem ingestão estável, não iniciar treino de modelo.**
-- Estabilidade mínima:
-  - ingestão executa sem falhas recorrentes por janela acordada,
-  - volume e completude de dados atingem limiar mínimo,
-  - monitoramento básico (logs e contagem de registros) ativo.
+### Constraints oficiais
+
+- `Localizacao.id` unico
+- `Localizacao.slug` unico
+- `Especie.id` unico
+- `Especie.nome_cientifico` unico
+- `MedicaoAmbiental.id` unico
+- `Predicao.id` unico
+- `FonteDados.id` unico
+
+## Mapeamento do Django para o grafo
+
+### Ja implementado
+
+- `LocalRecife` alimenta `Localizacao`
+- `Especie` alimenta `Especie`
+- `StatusPredicao` e dividido em:
+  - `MedicaoAmbiental` para variaveis ambientais
+  - `Predicao` para risco e nivel de alerta
+
+### Mantido por compatibilidade
+
+- os endpoints atuais do Django nao foram alterados;
+- `neo4j_service.py` consulta o novo schema, mas devolve o mesmo formato esperado pelos endpoints de grafo ja existentes;
+- `slug` continua sendo a chave publica usada nas URLs, embora o no tenha `id` canonico explicito.
+
+## O que ainda nao esta materializado
+
+Itens planejados para a proxima etapa:
+- ingestao NOAA/CRW e Copernicus escrevendo diretamente em `MedicaoAmbiental`;
+- `FonteDados` adicionais para NOAA e Copernicus com proveniencia por dataset;
+- relacao direta entre `Predicao` e `Especie`, quando houver dado ou modelo realmente specie-specific;
+- suporte a mais de um `modelo_slug` por local e data sem usar apenas o valor transicional `status-predicao-django`.
+
+## Regras operacionais
+
+- sem `neo4j_init`, nao existe garantia de constraints validas;
+- sem `neo4j_seed`, o grafo nao reflete o estado atual do Django;
+- toda alteracao estrutural no grafo deve partir de `backend/aquaculture/neo4j_schema.py` antes de tocar comandos, servico ou documentacao.

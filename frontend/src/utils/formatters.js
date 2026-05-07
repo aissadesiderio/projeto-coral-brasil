@@ -28,7 +28,11 @@ export function scrollToTopo() {
     try {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      window.scrollTo(0, 0);
+      try {
+        window.scrollTo(0, 0);
+      } catch (fallbackError) {
+        // Ignora ambientes que nao implementam scroll programatico.
+      }
     }
   }
 }

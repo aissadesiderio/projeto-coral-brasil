@@ -2,77 +2,17 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Prefetch
 
 from aquaculture.models import Especie, LocalRecife, StatusPredicao
+from aquaculture.neo4j_schema import (
+    UPSERT_ESPECIES_QUERY,
+    UPSERT_FONTE_DADOS_QUERY,
+    UPSERT_LOCALIZACOES_QUERY,
+    UPSERT_MEDICOES_E_PREDICOES_QUERY,
+    build_especie_row,
+    build_fonte_dados_seed_payload,
+    build_localizacao_row,
+    build_status_predicao_row,
+)
 from aquaculture.neo4j_service import Neo4jServiceError, executar_write, verificar_conexao_neo4j
-
-
-UPSERT_LOCALIZACAO_QUERY = """
-MERGE (l:Localizacao {slug: $slug})
-SET l += $props
-"""
-
-UPSERT_ESPECIE_RELATION_QUERY = """
-MERGE (e:Especie {nome_cientifico: $nome_cientifico})
-SET e += $props
-WITH e
-MATCH (l:Localizacao {slug: $local_slug})
-MERGE (l)-[:ABRIGA_ESPECIE]->(e)
-"""
-
-UPSERT_PREDICAO_RELATION_QUERY = """
-MATCH (l:Localizacao {slug: $local_slug})
-MERGE (p:Predicao {local_slug: $local_slug, data: $data})
-SET p += $props
-MERGE (l)-[:TEM_PREDICAO]->(p)
-"""
-
-
-def _serialize_date(value):
-    return value.isoformat() if value else None
-
-
-def _build_localizacao_props(local: LocalRecife) -> dict:
-    return {
-        'slug': local.slug,
-        'nome': local.nome,
-        'estado': local.estado,
-        'cidade': local.cidade,
-        'descricao': local.descricao,
-        'ultima_atualizacao': _serialize_date(local.ultima_atualizacao),
-        'ativo': local.ativo,
-    }
-
-
-def _build_especie_props(especie: Especie) -> dict:
-    return {
-        'nome_cientifico': especie.nome_cientifico,
-        'nome_comum': especie.nome_comum,
-        'tipo': especie.tipo,
-        'descricao': especie.descricao,
-        'status_conservacao': especie.status_conservacao,
-        'credito_imagem': especie.credito_imagem,
-        'fonte_imagem_url': especie.fonte_imagem_url,
-        'fonte_url': especie.fonte_url,
-    }
-
-
-def _build_predicao_props(predicao: StatusPredicao) -> dict:
-    return {
-        'local_slug': predicao.local_recife.slug,
-        'data': _serialize_date(predicao.data),
-        'sst_atual': predicao.sst_atual,
-        'limite_termico': predicao.limite_termico,
-        'anomalia': predicao.anomalia,
-        'dhw_calculado': predicao.dhw_calculado,
-        'irradiancia': predicao.irradiancia,
-        'turbidez': predicao.turbidez,
-        'salinidade': predicao.salinidade,
-        'ph': predicao.ph,
-        'oxigenio': predicao.oxigenio,
-        'nitrato': predicao.nitrato,
-        'clorofila': predicao.clorofila,
-        'risco_integrado': predicao.risco_integrado,
-        'nivel_alerta': predicao.nivel_alerta,
-    }
 
 
 class Command(BaseCommand):
@@ -96,41 +36,36 @@ class Command(BaseCommand):
             Prefetch('monitoramentos', queryset=StatusPredicao.objects.order_by('data')),
         )
 
+        localizacoes_rows = []
+        especies_rows = []
+        medicoes_e_predicoes_rows = []
         localizacoes_sincronizadas = 0
         especies_sincronizadas = set()
         predicoes_sincronizadas = 0
 
+        executar_write(UPSERT_FONTE_DADOS_QUERY, build_fonte_dados_seed_payload())
+
         for local in locais:
-            executar_write(
-                UPSERT_LOCALIZACAO_QUERY,
-                {
-                    'slug': local.slug,
-                    'props': _build_localizacao_props(local),
-                },
-            )
+            localizacoes_rows.append(build_localizacao_row(local))
             localizacoes_sincronizadas += 1
 
             for especie in local.especies.all():
-                executar_write(
-                    UPSERT_ESPECIE_RELATION_QUERY,
-                    {
-                        'local_slug': local.slug,
-                        'nome_cientifico': especie.nome_cientifico,
-                        'props': _build_especie_props(especie),
-                    },
-                )
+                especies_rows.append(build_especie_row(local, especie))
                 especies_sincronizadas.add(especie.nome_cientifico)
 
             for predicao in local.monitoramentos.all():
-                executar_write(
-                    UPSERT_PREDICAO_RELATION_QUERY,
-                    {
-                        'local_slug': local.slug,
-                        'data': _serialize_date(predicao.data),
-                        'props': _build_predicao_props(predicao),
-                    },
-                )
+                medicoes_e_predicoes_rows.append(build_status_predicao_row(predicao))
                 predicoes_sincronizadas += 1
+
+        if localizacoes_rows:
+            executar_write(UPSERT_LOCALIZACOES_QUERY, {'rows': localizacoes_rows})
+        if especies_rows:
+            executar_write(UPSERT_ESPECIES_QUERY, {'rows': especies_rows})
+        if medicoes_e_predicoes_rows:
+            executar_write(
+                UPSERT_MEDICOES_E_PREDICOES_QUERY,
+                {'rows': medicoes_e_predicoes_rows},
+            )
 
         return {
             'localizacoes': localizacoes_sincronizadas,

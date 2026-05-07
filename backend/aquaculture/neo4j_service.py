@@ -2,6 +2,17 @@ from typing import Any, Iterable
 
 from django.conf import settings
 
+from .neo4j_schema import (
+    ESPECIE_LABEL,
+    LOCALIZACAO_LABEL,
+    MEDICAO_AMBIENTAL_LABEL,
+    PREDICAO_LABEL,
+    REL_ABRIGA_ESPECIE,
+    REL_DERIVADA_DE,
+    REL_TEM_PREDICAO,
+    build_localizacao_id,
+)
+
 try:
     from neo4j import GraphDatabase
     from neo4j.exceptions import AuthError, ConfigurationError, Neo4jError, ServiceUnavailable
@@ -29,10 +40,10 @@ _driver = None
 
 
 LISTAR_LOCALIZACOES_GRAFO_QUERY = """
-MATCH (l:Localizacao)
-OPTIONAL MATCH (l)-[:ABRIGA_ESPECIE]->(e:Especie)
+MATCH (l:{localizacao_label})
+OPTIONAL MATCH (l)-[:{rel_abriga_especie}]->(e:{especie_label})
 WITH l, count(DISTINCT e) AS quantidade_especies
-OPTIONAL MATCH (l)-[:TEM_PREDICAO]->(p:Predicao)
+OPTIONAL MATCH (l)-[:{rel_tem_predicao}]->(p:{predicao_label})
 WITH l, quantidade_especies, p
 ORDER BY l.slug, p.data DESC
 WITH l, quantidade_especies, collect(p) AS predicoes
@@ -49,10 +60,16 @@ RETURN
     predicoes[0].nivel_alerta AS nivel_alerta_atual,
     predicoes[0].data AS ultima_predicao_data
 ORDER BY nome, slug
-"""
+""".format(
+    localizacao_label=LOCALIZACAO_LABEL,
+    especie_label=ESPECIE_LABEL,
+    predicao_label=PREDICAO_LABEL,
+    rel_abriga_especie=REL_ABRIGA_ESPECIE,
+    rel_tem_predicao=REL_TEM_PREDICAO,
+)
 
 OBTER_LOCALIZACAO_GRAFO_QUERY = """
-MATCH (l:Localizacao {slug: $slug})
+MATCH (l:{localizacao_label} {{id: $localizacao_id}})
 RETURN
     l.slug AS slug,
     l.nome AS nome,
@@ -62,10 +79,10 @@ RETURN
     l.ultima_atualizacao AS ultima_atualizacao,
     l.ativo AS ativo
 LIMIT 1
-"""
+""".format(localizacao_label=LOCALIZACAO_LABEL)
 
 LISTAR_ESPECIES_LOCALIZACAO_GRAFO_QUERY = """
-MATCH (:Localizacao {slug: $slug})-[:ABRIGA_ESPECIE]->(e:Especie)
+MATCH (:{localizacao_label} {{id: $localizacao_id}})-[:{rel_abriga_especie}]->(e:{especie_label})
 RETURN
     e.nome_cientifico AS nome_cientifico,
     e.nome_comum AS nome_comum,
@@ -76,28 +93,39 @@ RETURN
     e.fonte_imagem_url AS fonte_imagem_url,
     e.fonte_url AS fonte_url
 ORDER BY coalesce(e.nome_comum, ''), e.nome_cientifico
-"""
+""".format(
+    localizacao_label=LOCALIZACAO_LABEL,
+    especie_label=ESPECIE_LABEL,
+    rel_abriga_especie=REL_ABRIGA_ESPECIE,
+)
 
 LISTAR_PREDICOES_LOCALIZACAO_GRAFO_QUERY = """
-MATCH (:Localizacao {slug: $slug})-[:TEM_PREDICAO]->(p:Predicao)
+MATCH (:{localizacao_label} {{id: $localizacao_id}})-[:{rel_tem_predicao}]->(p:{predicao_label})
+OPTIONAL MATCH (p)-[:{rel_derivada_de}]->(m:{medicao_ambiental_label})
 RETURN
     p.local_slug AS local_slug,
     p.data AS data,
-    p.sst_atual AS sst_atual,
-    p.limite_termico AS limite_termico,
-    p.anomalia AS anomalia,
-    p.dhw_calculado AS dhw_calculado,
-    p.irradiancia AS irradiancia,
-    p.turbidez AS turbidez,
-    p.salinidade AS salinidade,
-    p.ph AS ph,
-    p.oxigenio AS oxigenio,
-    p.nitrato AS nitrato,
-    p.clorofila AS clorofila,
+    m.sst AS sst_atual,
+    m.limite_termico AS limite_termico,
+    m.anomalia_termica AS anomalia,
+    m.dhw AS dhw_calculado,
+    m.par AS irradiancia,
+    m.kd490 AS turbidez,
+    m.salinidade AS salinidade,
+    m.ph AS ph,
+    m.oxigenio AS oxigenio,
+    m.nitrato AS nitrato,
+    m.clorofila AS clorofila,
     p.risco_integrado AS risco_integrado,
     p.nivel_alerta AS nivel_alerta
 ORDER BY p.data DESC
-"""
+""".format(
+    localizacao_label=LOCALIZACAO_LABEL,
+    predicao_label=PREDICAO_LABEL,
+    medicao_ambiental_label=MEDICAO_AMBIENTAL_LABEL,
+    rel_tem_predicao=REL_TEM_PREDICAO,
+    rel_derivada_de=REL_DERIVADA_DE,
+)
 
 
 def _get_neo4j_settings() -> tuple[str, str, str]:
@@ -237,17 +265,18 @@ def listar_localizacoes_grafo() -> list[dict[str, Any]]:
 
 
 def obter_localizacao_grafo(slug: str) -> dict[str, Any] | None:
-    localizacoes = executar_read(OBTER_LOCALIZACAO_GRAFO_QUERY, {'slug': slug})
+    parameters = {'localizacao_id': build_localizacao_id(slug)}
+    localizacoes = executar_read(OBTER_LOCALIZACAO_GRAFO_QUERY, parameters)
     if not localizacoes:
         return None
 
     localizacao = localizacoes[0]
     localizacao['especies'] = executar_read(
         LISTAR_ESPECIES_LOCALIZACAO_GRAFO_QUERY,
-        {'slug': slug},
+        parameters,
     )
     localizacao['predicoes'] = executar_read(
         LISTAR_PREDICOES_LOCALIZACAO_GRAFO_QUERY,
-        {'slug': slug},
+        parameters,
     )
     return localizacao

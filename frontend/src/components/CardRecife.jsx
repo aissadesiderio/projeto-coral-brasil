@@ -1,4 +1,5 @@
 import { ExternalLink, MapPin } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import {
   obterMetaRisco,
@@ -7,10 +8,8 @@ import {
   obterQuantidadeEspeciesLocal,
   obterValorRiscoAtualLocal,
 } from '../utils/recifes';
-import {
-  formatarData,
-  formatarQuantidadeEspecies,
-} from '../utils/formatters';
+import { formatarData, formatarQuantidadeEspecies } from '../utils/formatters';
+import { obterRotaLocalizacao } from '../utils/navigation';
 import ImagemRecife from './ImagemRecife';
 
 function BadgeRisco({ nivelAlerta }) {
@@ -25,7 +24,7 @@ function BadgeRisco({ nivelAlerta }) {
   );
 }
 
-export default function CardRecife({ local, onSelect }) {
+export default function CardRecife({ local }) {
   const quantidadeEspecies = obterQuantidadeEspeciesLocal(local);
   const nivelAlerta = obterNivelAlertaLocal(local);
   const riscoAtual = obterValorRiscoAtualLocal(local);
@@ -33,9 +32,8 @@ export default function CardRecife({ local, onSelect }) {
   const ultimaAtualizacao = local.ultima_atualizacao || obterMonitoramentoLocal(local)?.data || null;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(local.slug)}
+    <Link
+      to={obterRotaLocalizacao(local.slug)}
       className="group flex h-full flex-col text-left transition duration-300 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b6978] focus-visible:ring-offset-4 focus-visible:ring-offset-[#fff6f4]"
     >
       <div className="overflow-hidden rounded-[22px] bg-white shadow-[0_18px_45px_rgba(43,105,120,0.12)]">
@@ -78,6 +76,6 @@ export default function CardRecife({ local, onSelect }) {
           </span>
         </div>
       </div>
-    </button>
+    </Link>
   );
 }

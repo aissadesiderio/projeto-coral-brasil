@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import { obterItensNavegacao } from '../utils/navigation';
 
 function BrandMark({ claro = false }) {
@@ -20,7 +22,7 @@ function BrandMark({ claro = false }) {
   );
 }
 
-export default function Header({ onNavigate, paginaAtual }) {
+export default function Header({ paginaAtual }) {
   const isHome = paginaAtual === 'home';
   const itensNavegacao = obterItensNavegacao(paginaAtual);
 
@@ -33,25 +35,19 @@ export default function Header({ onNavigate, paginaAtual }) {
       }
     >
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-        <button
-          type="button"
-          onClick={() => onNavigate('home')}
-          className="shrink-0 text-left"
-          aria-label="Ir para a pagina inicial"
-        >
+        <Link to="/" className="shrink-0 text-left" aria-label="Ir para a pagina inicial">
           <BrandMark claro />
-        </button>
+        </Link>
 
         <nav className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
           {itensNavegacao.map((item) => (
-            <button
+            <Link
               key={item.id}
-              type="button"
-              onClick={() => onNavigate(item.destino)}
+              to={item.to}
               className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 sm:px-5"
             >
               {item.rotulo}
-            </button>
+            </Link>
           ))}
         </nav>
       </div>
