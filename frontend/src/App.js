@@ -20,11 +20,7 @@ import homeCardBanco from './assets/home/card-banco.png';
 import homeCardPainel from './assets/home/card-painel.png';
 import homeCardRecifes from './assets/home/card-recifes.png';
 import homeHeroCoral from './assets/home/hero-coral.png';
-import {
-  CAMPOS_MONITORAMENTO_OBRIGATORIOS,
-  MONITORAMENTO_VARIAVEIS,
-  RISCO_STATUS,
-} from './monitoramentoConfig';
+import { CAMPOS_MONITORAMENTO_OBRIGATORIOS, RISCO_STATUS } from './monitoramentoConfig';
 import { FALLBACK_DETALHES, FALLBACK_RECIFES } from './recifeData';
 import svgPaths from './svg-r6f04ghq4r';
 
@@ -255,12 +251,16 @@ function scrollToTopo() {
 }
 
 function ImagemRecife({ nome, imagem, className = 'h-48 w-full object-cover' }) {
+  const fallbackClassName = className.replace('object-cover', '').trim();
+
   if (imagem) {
     return <img src={imagem} alt={nome} className={className} />;
   }
 
   return (
-    <div className="flex h-48 w-full items-end bg-gradient-to-br from-ocean-dark via-ocean-light to-cyan-400 p-4 text-white">
+    <div
+      className={`flex items-end bg-gradient-to-br from-ocean-dark via-ocean-light to-cyan-400 p-4 text-white ${fallbackClassName}`}
+    >
       <div>
         <ImageOff size={18} className="mb-2 opacity-80" />
         <p className="text-sm font-semibold">{nome}</p>
@@ -850,49 +850,95 @@ function BadgeRisco({ nivelAlerta }) {
 }
 
 function RecifesPage({ locais, onSelect }) {
+  const possuiLocais = locais.length > 0;
+
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div>
-        <h2 className="text-2xl font-bold text-ocean-dark">Explorar recifes</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600 sm:text-base">
-          Explore as localizacoes monitoradas, consulte risco atual, especies cadastradas
-          e acompanhe a ultima atualizacao de cada area.
-        </p>
-      </div>
+    <section className="py-8 sm:py-10 lg:py-12">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl">
+          <h2 className="text-4xl font-bold tracking-[-0.03em] text-[#2b6978] sm:text-[3.15rem]">
+            Explorar Localizacoes
+          </h2>
+          <p className="mt-4 text-base leading-7 text-slate-600">
+            Visualize as localizacoes monitoradas e abra cada pagina para consultar
+            biodiversidade, risco atual e historico recente.
+          </p>
+        </div>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {locais.map((local) => {
-          const quantidadeEspecies = obterQuantidadeEspeciesLocal(local);
-          const nivelAlerta = obterRiscoAtualLocal(local);
+        {possuiLocais ? (
+          <div className="grid gap-x-6 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
+            {locais.map((local) => {
+              const quantidadeEspecies = obterQuantidadeEspeciesLocal(local);
+              const nivelAlerta = obterRiscoAtualLocal(local);
+              const metaRisco = obterMetaRisco(nivelAlerta);
+              const ultimaAtualizacao =
+                local.ultima_atualizacao || obterMonitoramentoLocal(local)?.data || null;
 
-          return (
-            <button
-              key={local.slug}
-              type="button"
-              onClick={() => onSelect(local.slug)}
-              className="flex h-full flex-col overflow-hidden rounded-2xl border border-sand-dark/20 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-            >
-              <ImagemRecife nome={local.nome} imagem={local.imagem_url} />
+              return (
+                <button
+                  key={local.slug}
+                  type="button"
+                  onClick={() => onSelect(local.slug)}
+                  className="group flex h-full flex-col text-left transition duration-300 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b6978] focus-visible:ring-offset-4 focus-visible:ring-offset-[#fff6f4]"
+                >
+                  <div className="overflow-hidden rounded-[22px] bg-white shadow-[0_18px_45px_rgba(43,105,120,0.12)]">
+                    <ImagemRecife
+                      nome={local.nome}
+                      imagem={local.imagem_url}
+                      className="h-56 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                    />
+                  </div>
 
-              <div className="flex flex-1 flex-col p-5">
-                <h3 className="text-lg font-bold text-ocean-dark">{local.nome}</h3>
-                <p className="mt-1 text-sm text-gray-500">{formatarLocal(local)}</p>
+                  <div className="flex flex-1 flex-col px-1 pb-1 pt-5">
+                    <h3 className="text-[1.6rem] font-bold leading-[1.15] tracking-[-0.025em] text-[#2b6978]">
+                      {local.nome}
+                    </h3>
 
-                <div className="mt-4 space-y-2 text-sm text-gray-700">
-                  <p>{formatarQuantidadeEspecies(quantidadeEspecies)}</p>
-                  <p>
-                    Risco atual: <span className="font-semibold">{obterMetaRisco(nivelAlerta).textoCurto}</span>
-                  </p>
-                  <p>Ultima atualizacao: {formatarData(local.ultima_atualizacao)}</p>
-                </div>
+                    <p className="mt-5 inline-flex items-center gap-2 text-sm text-slate-500">
+                      <MapPin size={16} className="text-[#2b6978]" />
+                      {local.estado} - {local.cidade}
+                    </p>
 
-                <div className="mt-4">
-                  <BadgeRisco nivelAlerta={nivelAlerta} />
-                </div>
-              </div>
-            </button>
-          );
-        })}
+                    <div className="mt-5 space-y-1.5 text-sm leading-6 text-slate-700">
+                      <p>{formatarQuantidadeEspecies(quantidadeEspecies)}</p>
+                      <p>
+                        Risco atual:{' '}
+                        <span className={`font-semibold ${metaRisco.textoClasse}`}>
+                          {metaRisco.textoCurto}
+                        </span>
+                      </p>
+                      <p>Ultima atualizacao: {formatarData(ultimaAtualizacao)}</p>
+                    </div>
+
+                    <div className="mt-5 inline-flex items-center gap-3">
+                      <BadgeRisco nivelAlerta={nivelAlerta} />
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#2b6978]">
+                        Abrir
+                        <ExternalLink
+                          size={15}
+                          className="transition duration-300 group-hover:translate-x-0.5"
+                        />
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[32px] border border-dashed border-[#2b6978]/20 bg-white/80 px-6 py-12 text-center shadow-sm">
+            <div className="rounded-full bg-[#f4fbfc] p-4 text-[#2b6978]">
+              <MapPin size={28} />
+            </div>
+            <h3 className="mt-5 text-2xl font-semibold text-[#194452]">
+              Nenhuma localizacao disponivel no momento
+            </h3>
+            <p className="mt-3 max-w-xl text-base leading-7 text-slate-600">
+              Assim que novas localizacoes forem carregadas, elas aparecerao aqui
+              automaticamente com seus dados de risco, biodiversidade e atualizacao.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1065,50 +1111,11 @@ function SectionTitle({ titulo, descricao }) {
   );
 }
 
-function StatCard({ titulo, valor, detalhe, children }) {
-  return (
-    <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ocean-light">
-        {titulo}
-      </p>
-      <div className="mt-3">
-        <p className="text-lg font-bold text-ocean-dark">{valor}</p>
-        {detalhe && <p className="mt-1 text-sm text-gray-600">{detalhe}</p>}
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function MedicaoCard({ variavel, valor }) {
-  const Icon = variavel.icone;
-
-  return (
-    <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ocean-light">
-            Medicao ambiental
-          </p>
-          <h4 className="mt-2 text-lg font-semibold text-ocean-dark">{variavel.label}</h4>
-        </div>
-        <Icon className={variavel.corIcone} size={22} />
-      </div>
-
-      <p className="mt-4 text-2xl font-bold text-ocean-dark">
-        {valor !== null && valor !== undefined ? Number(valor).toFixed(2) : '--'}
-      </p>
-      <p className="mt-1 text-sm text-gray-500">{variavel.unidade}</p>
-    </div>
-  );
-}
-
 function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage, onOpenEspecie }) {
   const medicaoAmbientalAtual = recife.monitoramento_recente;
   const painelDisponivel = possuiPainelCompleto(medicaoAmbientalAtual);
   const especiesAssociadas = recife.especies || [];
   const datasetsRelacionados = obterDatasetsRelacionados(recife.slug);
-  const riscoAtual = obterMetaRisco(medicaoAmbientalAtual?.nivel_alerta);
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -1146,63 +1153,6 @@ function LocalDetalhePage({ recife, onBack, siteOffline, offlineMessage, onOpenE
           {offlineMessage || 'Exibindo dados locais de referencia.'}
         </div>
       )}
-
-      <section className="space-y-4">
-        <SectionTitle
-          titulo="Informacoes gerais"
-          descricao={`Resumo geral da localizacao ${recife.nome}, incluindo biodiversidade, risco e acervo associado.`}
-        />
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            titulo="Localizacao"
-            valor={recife.nome}
-            detalhe={formatarLocal(recife)}
-          />
-          <StatCard
-            titulo="Especies associadas"
-            valor={formatarQuantidadeEspecies(especiesAssociadas.length)}
-            detalhe="Catalogo biologico associado a esta localizacao."
-          />
-          <StatCard
-            titulo="Risco atual"
-            valor={riscoAtual.textoCurto}
-            detalhe="Classificacao atual baseada na predicao e monitoramento recente."
-          >
-            <div className="mt-3">
-              <BadgeRisco nivelAlerta={medicaoAmbientalAtual?.nivel_alerta} />
-            </div>
-          </StatCard>
-          <StatCard
-            titulo="Datasets relacionados"
-            valor={`${datasetsRelacionados.length} ${datasetsRelacionados.length === 1 ? 'dataset' : 'datasets'}`}
-            detalhe="Conjuntos de dados associados diretamente a esta localizacao."
-          />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <SectionTitle
-          titulo="Medicoes ambientais"
-          descricao={`Series e metricas ambientais vinculadas a ${recife.nome} para acompanhamento de condicoes do recife.`}
-        />
-
-        {medicaoAmbientalAtual ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {MONITORAMENTO_VARIAVEIS.map((variavel) => (
-              <MedicaoCard
-                key={variavel.campo}
-                variavel={variavel}
-                valor={medicaoAmbientalAtual[variavel.campo]}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
-            Nenhuma medicao ambiental recente foi vinculada a esta localizacao.
-          </div>
-        )}
-      </section>
 
       <section className="space-y-4">
         <SectionTitle
@@ -1488,7 +1438,7 @@ export default function App() {
     <div className="app-layout min-h-screen overflow-x-hidden bg-sand-light text-gray-800">
       <Header onNavigate={navegar} paginaAtual={pagina} />
 
-      <main className="main-content flex-1">
+      <main className={`main-content flex-1 ${pagina === 'recifes' ? 'bg-[#fff6f4]' : ''}`}>
         {siteOffline && pagina !== 'home' && (
           <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
             <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
