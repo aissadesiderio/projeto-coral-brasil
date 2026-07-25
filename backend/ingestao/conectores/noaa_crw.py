@@ -33,16 +33,22 @@ VARIAVEIS_ERDDAP = (
 )
 
 
-# Servidor e dataset padrao: o par que comprovadamente produziu os dados que o
-# projeto ja tem em maos. O arquivo dados/dhw_5km_6006_cdf9_04d9.csv veio deste
-# dataset - o sufixo do nome e o identificador de consulta do ERDDAP do
-# PACIOOS - e suas colunas sao exatamente as cinco de VARIAVEIS_ERDDAP.
+# Servidor e dataset padrao. Escolhidos por evidencia, nao por preferencia:
 #
-# O espelho da NOAA (coastwatch.noaa.gov/erddap) serve o mesmo produto sob o
-# dataset_id `noaacrwdhwDaily`. Para usa-lo, ajuste as duas variaveis de
-# ambiente juntas - servidor e dataset_id andam em par.
-SERVIDOR_PADRAO = 'https://pae-paha.pacioos.hawaii.edu/erddap'
-DATASET_PADRAO = 'dhw_5km'
+# - `coastwatch.pfeg.noaa.gov` + `NOAA_DHW` foi verificado respondendo com as
+#   cinco variaveis (incluindo CRW_BAA, o target) em 25/07/2026. E tambem o
+#   servidor que o `coleta_de_dados.py` original usava.
+# - PACIOOS (`pae-paha.pacioos.hawaii.edu` + `dhw_5km`) gerou os CSVs que o
+#   projeto ja tem, mas em 25/07/2026 falhava com CERTIFICATE_VERIFY_FAILED em
+#   duas redes independentes - problema de certificado do servidor, nao de
+#   bloqueio local.
+# - `coastwatch.noaa.gov` + `noaacrwdhwDaily` respondeu 403 nas mesmas redes.
+#
+# Servidor e dataset SEMPRE andam em par: cada espelho publica o mesmo produto
+# sob um id proprio. Use `manage.py testar_fontes` para descobrir o par que
+# funciona numa rede nova.
+SERVIDOR_PADRAO = 'https://coastwatch.pfeg.noaa.gov/erddap'
+DATASET_PADRAO = 'NOAA_DHW'
 
 
 class ConectorNoaaCrw(ConectorBase):

@@ -189,9 +189,9 @@ if env.bool('DJANGO_BEHIND_PROXY', default=False):
 # Coral Reef Watch sob um identificador proprio.
 NOAA_ERDDAP_SERVER = env(
     'NOAA_ERDDAP_SERVER',
-    default='https://pae-paha.pacioos.hawaii.edu/erddap',
+    default='https://coastwatch.pfeg.noaa.gov/erddap',
 )
-NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='dhw_5km')
+NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='NOAA_DHW')
 
 # Copernicus Marine. A biblioteca `copernicusmarine` le estas variaveis
 # direto do ambiente; como o django-environ exporta o que le do .env para

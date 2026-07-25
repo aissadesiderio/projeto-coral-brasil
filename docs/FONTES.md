@@ -30,7 +30,15 @@ Este documento registra **toda** fonte de informação usada na construção do 
 **Instituição:** National Oceanic and Atmospheric Administration / NESDIS / STAR — Coral Reef Watch Program (EUA)
 **Produto:** Daily Global 5 km (0,05°) Satellite Coral Bleaching Heat Stress Monitoring Product Suite, versão 3.1
 **Página oficial:** https://coralreefwatch.noaa.gov/product/5km/
-**Acesso programático:** ERDDAP — `noaacrwdhwDaily` em https://coastwatch.noaa.gov/erddap/info/noaacrwdhwDaily/index.html (espelho PACIOOS: `dhw_5km` em https://pae-paha.pacioos.hawaii.edu/erddap/info/dhw_5km/index.html)
+**Acesso programático:** ERDDAP. Três espelhos publicam o mesmo produto, cada um sob um identificador próprio — servidor e dataset **sempre andam em par**. Disponibilidade medida em 25/07/2026 com `manage.py testar_fontes`, em duas redes independentes:
+
+| Espelho | Servidor | Dataset | Estado |
+|---|---|---|---|
+| pfeg (**padrão do projeto**) | `coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ responde com as 5 variáveis |
+| NOAA CoastWatch | `coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 nas duas redes |
+| PACIOOS | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ⚠️ `CERTIFICATE_VERIFY_FAILED` nas duas redes |
+
+O PACIOOS foi a origem dos CSVs que o projeto já possui, mas a falha de certificado nas duas redes indica problema no servidor, não bloqueio local — por isso o padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
 **Licença:** domínio público (obra do governo federal dos EUA); citação requerida por cortesia científica.
 
 | Arquivo local | Variáveis | Período | Como foi obtido |
@@ -419,4 +427,5 @@ conforme a regra de governança daquele documento.
 | 24/07/2026 | Merge do commit `34879bf` (react-router, split de componentes, `DatasetCatalogo`, serviço Neo4j). §6.14 **agravada**: os 8 datasets fictícios saíram do frontend e foram semeados no banco, passando a ser servidos por API real. `react-router-dom` 6.30.1 incluída na §5. |
 | 24/07/2026 | **§6.14 resolvida.** Seed fictício removido pela migration `0016`; catálogo reconstruído a partir dos 9 arquivos reais via `manage.py inventariar_datasets`, com tamanho e período lidos do disco. Exclusões de arquivos com problema de integridade documentadas em código. |
 | 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
-| 25/07/2026 | Pipeline de ingestão (`backend/ingestao/`) com o conector NOAA CRW. Servidor e dataset padrão passam a ser **PACIOOS `dhw_5km`** — o par que comprovadamente gerou `dhw_5km_6006_cdf9_04d9.csv`. §6.3 (alcalinidade como pH) e §6.5 (DHW fora da norma) ficam **neutralizadas no novo caminho**, ainda presentes no `carregar_historico.py` legado. |
+| 25/07/2026 | Pipeline de ingestão (`backend/ingestao/`) com o conector NOAA CRW. §6.3 (alcalinidade como pH) e §6.5 (DHW fora da norma) ficam **neutralizadas no novo caminho**, ainda presentes no `carregar_historico.py` legado. |
+| 25/07/2026 | Espelho ERDDAP padrão definido por medição (`testar_fontes` em duas redes): **pfeg + `NOAA_DHW`**, único a responder com as 5 variáveis. PACIOOS com certificado inválido, CoastWatch com 403. Ver §1.1. |

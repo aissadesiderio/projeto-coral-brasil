@@ -111,10 +111,17 @@ variáveis cada dataset publica**, e recomenda o par a usar. Também avisa se o
 publica o mesmo produto sob um id próprio. Trocar só um dos dois gera um 404
 difícil de diagnosticar.
 
-| Espelho | Servidor | Dataset |
-|---|---|---|
-| PACIOOS (padrão) | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` |
-| NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` |
+Situação verificada em 25/07/2026:
+
+| Espelho | Servidor | Dataset | Estado |
+|---|---|---|---|
+| pfeg (**padrão**) | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 variáveis |
+| NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
+| PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ⚠️ certificado inválido |
+
+O PACIOOS gerou os CSVs que o projeto já tem, mas falhou com
+`CERTIFICATE_VERIFY_FAILED` em duas redes independentes — problema no
+certificado do servidor, não bloqueio local.
 
 **Copernicus** exige conta gratuita — preencha
 `COPERNICUSMARINE_SERVICE_USERNAME` e `..._PASSWORD` no `.env`.
