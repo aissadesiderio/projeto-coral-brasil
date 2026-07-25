@@ -47,6 +47,10 @@ ALLOWED_HOSTS = env.list(
 
 OFFLINE_MODE = env.bool('OFFLINE_MODE', default=False)
 
+# Permite a exportacao do banco para arquivos de codigo (recifeData.js).
+# Desligado por padrao: editar dados nao deve reescrever arquivos-fonte.
+ENABLE_CODE_SYNC = env.bool('ENABLE_CODE_SYNC', default=False)
+
 # Integracoes externas desativadas por padrao durante a reestruturacao local.
 USE_S3_STORAGE = False
 ENABLE_AWS_SERVICES = False
@@ -123,6 +127,14 @@ AUTH_PASSWORD_VALIDATORS = [
 CORS_ALLOWED_ORIGINS = env.list(
     'CORS_ALLOWED_ORIGINS',
     default=['http://localhost:3000'],
+)
+
+CSRF_TRUSTED_ORIGINS = env.list(
+    'CSRF_TRUSTED_ORIGINS',
+    default=[
+        'https://projetocoralbrasil.com.br',
+        'https://www.projetocoralbrasil.com.br',
+    ],
 )
 
 LANGUAGE_CODE = 'en-us'

@@ -25,7 +25,13 @@ db.sqlite3
 
 # --- Node / frontend ---
 node_modules/
+frontend/node_modules/
 frontend/build/
+
+# --- Midia enviada pelo usuario ---
+# Fotos ja versionadas em backend/media/especies/ continuam rastreadas;
+# esta regra evita que novos uploads entrem no repositorio.
+media/
 
 # --- Dados brutos ---
 # Os CSVs sao regenerados pelo pipeline de ingestao e documentados em
@@ -47,3 +53,4 @@ relatorios_gerados/*.csv
 .vscode/
 Thumbs.db
 desktop.ini
+.DS_Store

@@ -1,11 +1,19 @@
 from django.conf import settings
 from django.db.models import Q
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
+from .neo4j_service import (
+    Neo4jServiceError,
+    listar_localizacoes_grafo,
+    obter_localizacao_grafo,
+)
 from .serializers import (
+    DatasetCatalogoSerializer,
     EspecieSerializer,
     LocalRecifeDetailSerializer,
     LocalRecifeListSerializer,
@@ -79,6 +87,41 @@ class StatusPredicaoList(OfflineModeMixin, generics.ListAPIView):
         return queryset
 
 
+class DatasetCatalogoList(OfflineModeMixin, generics.ListAPIView):
+    serializer_class = DatasetCatalogoSerializer
+
+    def get_queryset(self):
+        return DatasetCatalogo.objects.filter(ativo=True)
+
+
+class LocalRecifeDatasetRelacionadosList(OfflineModeMixin, generics.ListAPIView):
+    serializer_class = DatasetCatalogoSerializer
+
+    def get_local(self):
+        if not hasattr(self, '_local'):
+            self._local = get_object_or_404(
+                LocalRecife.objects.filter(ativo=True),
+                slug=self.kwargs['slug'],
+            )
+        return self._local
+
+    def get_queryset(self):
+        local = self.get_local()
+        filtros = Q(local_slug=local.slug)
+
+        if local.nome:
+            filtros |= Q(localizacao__iexact=local.nome)
+
+        if local.estado and local.cidade:
+            filtros |= (
+                Q(local_slug='')
+                & Q(estado__iexact=local.estado)
+                & Q(cidade__iexact=local.cidade)
+            )
+
+        return DatasetCatalogo.objects.filter(ativo=True).filter(filtros).distinct()
+
+
 class ApiStatusView(generics.GenericAPIView):
     """Status simples para frontend identificar modo offline."""
 
@@ -96,3 +139,41 @@ class ApiStatusView(generics.GenericAPIView):
                 )
             }
         )
+
+
+class GrafoLocalizacaoList(OfflineModeMixin, APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        try:
+            payload = listar_localizacoes_grafo()
+        except Neo4jServiceError:
+            return Response(
+                {'detail': 'Neo4j indisponivel no momento.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(payload)
+
+
+class GrafoLocalizacaoDetail(OfflineModeMixin, APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, slug, *args, **kwargs):
+        try:
+            payload = obter_localizacao_grafo(slug)
+        except Neo4jServiceError:
+            return Response(
+                {'detail': 'Neo4j indisponivel no momento.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if payload is None:
+            return Response(
+                {'detail': 'Localizacao nao encontrada no grafo.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(payload)

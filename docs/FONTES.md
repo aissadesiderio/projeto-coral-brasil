@@ -236,6 +236,7 @@ Levantadas no planejamento, com justificativa de por que interessam ao projeto.
 | django-environ | 0.12.0 | Leitura de `backend/.env` e da `DATABASE_URL` | https://django-environ.readthedocs.io |
 | React | 19.2 (CRA 5.0.1) | Frontend SPA | https://react.dev |
 | Tailwind CSS | 3.4.17 | Estilização | https://tailwindcss.com |
+| react-router-dom | 6.30.1 | Roteamento do SPA (substituiu a navegação por `useState`) | https://reactrouter.com |
 | lucide-react | — | Ícones | https://lucide.dev |
 | pandas / numpy | — | Processamento das séries temporais | https://pandas.pydata.org |
 | scikit-learn | — | Random Forest do modelo de risco | https://scikit-learn.org |
@@ -303,8 +304,27 @@ Os arquivos vêm de pontos diferentes: −38,710/−17,976 (maioria), −38,716/
 ### 6.13 `par.csv` corrompido
 As coordenadas aparecem como `-17.187.504` e `-3.952.083` (separador de milhar aplicado indevidamente na exportação) e a coluna `par` está preenchida com `NaN` nas primeiras linhas. 58 MB provavelmente inúteis.
 
-### 6.14 Catálogo público fictício
-`frontend/src/App.js` expõe um array `DADOS_GERAIS` com 8 datasets inventados, datas de 2026, tamanhos fictícios e `downloadUrl` apontando para arquivos inexistentes (`/dados/biodiversidade-abrolhos.json`, `/dados/mosaico-porto.tif`, `/dados/relatorio-picaozinho.pdf`, `/dados/modelo-branqueamento.parquet`). Três deles são atribuídos à fonte "Projeto Coral Brasil" e dois ao "NCBI" — **sem que exista qualquer dado real do NCBI no projeto.**
+### 6.14 Catálogo público fictício — agora dentro do banco de dados 🚨
+**Status agravado em 24/07/2026** (commit `34879bf`).
+
+Originalmente os 8 datasets inventados viviam num array `DADOS_GERAIS` hardcoded em `frontend/src/App.js`. A refatoração moveu **os mesmos 8 registros fictícios** para o modelo `DatasetCatalogo`, semeados pela migration `0014_seed_datasetcatalogo` e servidos pelo endpoint real `/api/datasets/`.
+
+Isso **piora** o problema de integridade: o que antes era claramente um mock de frontend agora tem tabela, API, serializer e página de catálogo — passa a parecer dado real.
+
+| Fonte declarada | Título | Problema |
+|---|---|---|
+| Copernicus | Temperatura da superfície do mar — Abrolhos | `tamanho_mb` = 1843,2 (o `sst.csv` real tem 0,68 MB); período "Mar/2026" inventado |
+| NOAA | Degree Heating Week — Banco dos Abrolhos | Metadados inventados |
+| Projeto Coral Brasil | Inventário de biodiversidade recifal — Abrolhos | Não existe tal inventário |
+| **NCBI** | Microbioma de água recifal — Picãozinho | 🚨 **Não há nenhum dado do NCBI no projeto** |
+| **NCBI** | Banco genético de corais brasileiros — Abrolhos | 🚨 **Idem** |
+| Projeto Coral Brasil | Mosaico fotográfico subaquático — Porto de Galinhas | Não existe |
+| Projeto Coral Brasil | Relatório técnico de campo — Picãozinho | Não existe |
+| Projeto Coral Brasil | Modelo preditivo de branqueamento — Costa Nordeste | Não existe |
+
+Atribuir dados ao NCBI e a um "Projeto Coral Brasil" que não os produziu é, num trabalho acadêmico, atribuição falsa de fonte. **Antes do go-live é obrigatório** substituir o seed por um inventário do que realmente existe no banco, ou marcar os registros como demonstração de forma visível na interface.
+
+A infraestrutura criada (`DatasetCatalogo`, `/api/datasets/`, `BancoDadosPage`) está correta e é exatamente o que a Fase D previa — o problema é só o conteúdo semeado.
 
 ### 6.15 DOIs dos produtos CMEMS não coletados
 Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
@@ -359,3 +379,4 @@ conforme a regra de governança daquele documento.
 |---|---|
 | 24/07/2026 | Criação do documento. Auditoria inicial de proveniência dos 19 CSVs, das imagens e das referências: 15 problemas registrados na §6. |
 | 24/07/2026 | Fase A do roadmap. Adicionadas coordenadas aos três locais de recife (§2.3) — duas delas aproximadas e pendentes de verificação. `django-environ` incluída na §5. |
+| 24/07/2026 | Merge do commit `34879bf` (react-router, split de componentes, `DatasetCatalogo`, serviço Neo4j). §6.14 **agravada**: os 8 datasets fictícios saíram do frontend e foram semeados no banco, passando a ser servidos por API real. `react-router-dom` 6.30.1 incluída na §5. |

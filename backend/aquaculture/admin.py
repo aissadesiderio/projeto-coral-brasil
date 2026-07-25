@@ -1,8 +1,9 @@
+from django.conf import settings
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from .code_sync import sync_project_code_from_db
-from .models import Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
 
 
 class SyncToCodeAdminMixin:
@@ -11,7 +12,12 @@ class SyncToCodeAdminMixin:
     Antes isto rodava automaticamente em `save_related`, `delete_model` e
     `delete_queryset`: cada edicao no admin reescrevia
     `frontend/src/recifeData.js` e `generated_admin_sync.py`, ou seja, editar
-    um dado sujava a arvore do git. Agora e uma acao explicita.
+    um dado sujava a arvore do git. Agora e uma acao explicita, e os hooks
+    automaticos foram removidos - mante-los, mesmo atras de
+    `ENABLE_CODE_SYNC`, reintroduziria o problema assim que a flag ligasse.
+
+    `ENABLE_CODE_SYNC` continua valendo como interruptor de seguranca: em
+    producao o admin nao deve escrever no sistema de arquivos de forma alguma.
 
     Alternativa em linha de comando: `python manage.py sync_admin_code`.
     """
@@ -21,6 +27,15 @@ class SyncToCodeAdminMixin:
     @admin.action(description='Sincronizar banco -> arquivos de codigo (recifeData.js)')
     def sincronizar_codigo(self, request, queryset):
         # A exportacao sempre cobre o banco inteiro; a selecao e ignorada.
+        if not getattr(settings, 'ENABLE_CODE_SYNC', False):
+            self.message_user(
+                request,
+                'Sincronizacao desativada (ENABLE_CODE_SYNC=False). Ative no '
+                '.env ou use "python manage.py sync_admin_code".',
+                level=messages.WARNING,
+            )
+            return
+
         try:
             result = sync_project_code_from_db()
         except Exception as exc:
@@ -270,4 +285,23 @@ class StatusPredicaoAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     search_fields = ('local_recife__nome',)
     date_hierarchy = 'data'
     autocomplete_fields = ('local_recife',)
+    save_on_top = True
+
+
+@admin.register(DatasetCatalogo)
+class DatasetCatalogoAdmin(admin.ModelAdmin):
+    list_display = (
+        'titulo',
+        'fonte',
+        'tipo_dado',
+        'localizacao',
+        'estado',
+        'formato',
+        'periodo_rotulo',
+        'ativo',
+    )
+    list_filter = ('fonte', 'tipo_dado', 'formato', 'estado', 'ativo')
+    search_fields = ('id', 'titulo', 'resumo', 'localizacao', 'cidade', 'estado', 'fonte')
+    ordering = ('ordem_exibicao', 'titulo')
+    list_editable = ('ativo',)
     save_on_top = True

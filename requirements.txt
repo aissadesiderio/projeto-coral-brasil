@@ -44,3 +44,14 @@ joblib==1.5.3
 # --- Midia e relatorios ---
 pillow==12.2.0
 matplotlib==3.10.8
+
+# ---------------------------------------------------------------------------
+# Neo4j - configuracao e comandos uteis
+# ---------------------------------------------------------------------------
+# As credenciais agora saem de backend/.env (ver .env.example), nao mais de
+# variaveis de sessao do PowerShell.
+#
+#   python backend/manage.py check
+#   Test-NetConnection 127.0.0.1 -Port 7687   # confere se o Neo4j responde
+#   python backend/manage.py neo4j_init
+#   python backend/manage.py neo4j_seed
