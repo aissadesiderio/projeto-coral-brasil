@@ -18,19 +18,45 @@ from ingestao.normalizacao import ColunaRecusada, normalizar, resolver_variavel
 from ingestao.persistencia import preparar_medicoes, ultima_data_ingerida
 from ingestao.qualidade import detectar_saltos, validar
 from ingestao.registro import ingerir
+from ingestao.retentativa import e_transitorio, executar_com_retentativa
+
+# Mensagem literal devolvida pelo ERDDAP do pfeg em 25/07/2026.
+ERRO_503_ERDDAP = (
+    'Error { code=503; message="Service Unavailable: There was a (temporary?) '
+    'problem. Wait a minute, then try again. (In a browser, click the Reload '
+    'button.)"; }'
+)
+
+
+class Relogio:
+    """Duble de `time.sleep`: registra as esperas sem gastar tempo real."""
+
+    def __init__(self):
+        self.esperas = []
+
+    def __call__(self, segundos):
+        self.esperas.append(segundos)
 
 
 class ClienteErddapFalso:
-    """Duble do cliente ERDDAP."""
+    """Duble do cliente ERDDAP.
 
-    def __init__(self, df=None, excecao=None):
+    Com `falhas_iniciais`, simula um servidor que se recupera: falha as N
+    primeiras chamadas e responde na seguinte.
+    """
+
+    def __init__(self, df=None, excecao=None, falhas_iniciais=0):
         self._df = df
         self._excecao = excecao
+        self._falhas_iniciais = falhas_iniciais
         self.chamadas = 0
 
     def to_pandas(self):
         self.chamadas += 1
-        if self._excecao:
+        if self._falhas_iniciais:
+            if self.chamadas <= self._falhas_iniciais:
+                raise self._excecao or ConnectionError('falha passageira')
+        elif self._excecao:
             raise self._excecao
         return self._df
 
@@ -164,7 +190,8 @@ class ConectorNoaaCrwTests(TestCase):
     def test_falha_de_rede_nao_levanta_excecao(self):
         """Uma fonte fora do ar nao pode derrubar o pipeline."""
         conector = ConectorNoaaCrw(
-            cliente=ClienteErddapFalso(excecao=ConnectionError('timeout'))
+            cliente=ClienteErddapFalso(excecao=ConnectionError('timeout')),
+            dormir=Relogio(),
         )
 
         resultado = conector.coletar(self.local, date(2026, 1, 1), date(2026, 1, 3))
@@ -207,7 +234,8 @@ class IngestaoTests(TestCase):
 
     def _conector(self, df=None, excecao=None):
         return ConectorNoaaCrw(
-            cliente=ClienteErddapFalso(df if df is not None else df_crw(), excecao)
+            cliente=ClienteErddapFalso(df if df is not None else df_crw(), excecao),
+            dormir=Relogio(),
         )
 
     def test_grava_medicoes_com_proveniencia(self):
@@ -365,12 +393,16 @@ class TratamentoDeErroTests(TestCase):
             def _montar_cliente(self, bbox, inicio, fim):
                 raise ConnectionError('403 Forbidden no .dds')
 
-        resultado = ConectorQueFalhaNoConstrutor().coletar(
+        relogio = Relogio()
+        resultado = ConectorQueFalhaNoConstrutor(dormir=relogio).coletar(
             self.local, date(2026, 1, 1), date(2026, 1, 3)
         )
 
         self.assertTrue(resultado.houve_falha)
         self.assertIn('403', resultado.erro)
+        self.assertEqual(
+            relogio.esperas, [], 'Um 403 nao melhora esperando - nao deve repetir'
+        )
 
     def test_execucao_registra_motivo_mesmo_com_excecao_nao_tratada(self):
         class ConectorQuebrado(ConectorNoaaCrw):
@@ -399,7 +431,10 @@ class TratamentoDeErroTests(TestCase):
                 raise OSError(html)
 
         execucao = ingerir(
-            self.local, date(2026, 1, 1), date(2026, 1, 3), ConectorComHtml()
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 1, 3),
+            ConectorComHtml(dormir=Relogio()),
         )
 
         self.assertEqual(execucao.status, 'falha')
@@ -458,3 +493,149 @@ class ResumoDeErroTests(TestCase):
         self.assertTrue(parece_documento_html('<body>erro</body>'))
         self.assertFalse(parece_documento_html('<urlopen error timed out>'))
         self.assertFalse(parece_documento_html('a < b and b > c'))
+
+
+class ClassificacaoDeFalhaTests(TestCase):
+    """Separar o que melhora esperando do que nao melhora nunca."""
+
+    def test_503_do_erddap_e_passageiro(self):
+        self.assertTrue(e_transitorio(OSError(ERRO_503_ERDDAP)))
+
+    def test_certificado_invalido_nao_e_passageiro(self):
+        import ssl
+        import urllib.error
+
+        exc = urllib.error.URLError(
+            ssl.SSLCertVerificationError(
+                '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed'
+            )
+        )
+
+        self.assertFalse(e_transitorio(exc))
+
+    def test_403_dentro_de_connectionerror_nao_e_passageiro(self):
+        """O tipo da excecao mente; o status manda."""
+        self.assertFalse(e_transitorio(ConnectionError('403 Forbidden no .dds')))
+
+    def test_timeout_e_passageiro(self):
+        self.assertTrue(e_transitorio(TimeoutError()))
+        self.assertTrue(e_transitorio(OSError('<urlopen error timed out>')))
+
+    def test_404_nao_e_passageiro(self):
+        self.assertFalse(e_transitorio(OSError('Error { code=404; }')))
+
+    def test_erro_de_programacao_nao_e_passageiro(self):
+        self.assertFalse(e_transitorio(KeyError('CRW_SST')))
+
+
+class RetentativaTests(TestCase):
+    def test_repete_ate_o_servidor_se_recuperar(self):
+        tentativas = []
+
+        def instavel():
+            tentativas.append(1)
+            if len(tentativas) < 3:
+                raise OSError(ERRO_503_ERDDAP)
+            return 'dados'
+
+        relogio = Relogio()
+        resultado = executar_com_retentativa(instavel, dormir=relogio)
+
+        self.assertEqual(resultado, 'dados')
+        self.assertEqual(len(tentativas), 3)
+        self.assertEqual(len(relogio.esperas), 2)
+
+    def test_espera_cresce_entre_as_tentativas(self):
+        relogio = Relogio()
+
+        with self.assertRaises(OSError):
+            executar_com_retentativa(
+                lambda: (_ for _ in ()).throw(OSError(ERRO_503_ERDDAP)),
+                dormir=relogio,
+            )
+
+        self.assertEqual(relogio.esperas, [10.0, 30.0])
+
+    def test_desiste_preservando_a_excecao_original(self):
+        """Quem chama precisa ver a causa real, nao um erro deste modulo."""
+        with self.assertRaises(OSError) as ctx:
+            executar_com_retentativa(
+                lambda: (_ for _ in ()).throw(OSError(ERRO_503_ERDDAP)),
+                dormir=Relogio(),
+            )
+
+        self.assertIn('503', str(ctx.exception))
+
+    def test_falha_definitiva_falha_de_primeira(self):
+        chamadas = []
+        relogio = Relogio()
+
+        def negado():
+            chamadas.append(1)
+            raise PermissionError('403 Forbidden')
+
+        with self.assertRaises(PermissionError):
+            executar_com_retentativa(negado, dormir=relogio)
+
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(relogio.esperas, [])
+
+    def test_sucesso_na_primeira_nao_espera(self):
+        relogio = Relogio()
+
+        self.assertEqual(
+            executar_com_retentativa(lambda: 'ok', dormir=relogio), 'ok'
+        )
+        self.assertEqual(relogio.esperas, [])
+
+
+class RetentativaNoConectorTests(TestCase):
+    """O 503 do ERDDAP visto de dentro do conector.
+
+    Caso real de 25/07/2026: a ingestao na rede da faculdade desistiu no
+    primeiro 503, apesar de o proprio servidor pedir para tentar de novo.
+    """
+
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='local-retentativa-teste',
+            nome='Local Retentativa',
+            estado='Bahia',
+            cidade='Caravelas',
+            latitude=-17.972,
+            longitude=-38.688,
+        )
+
+    def test_503_passageiro_nao_perde_a_coleta(self):
+        relogio = Relogio()
+        cliente = ClienteErddapFalso(
+            df_crw(dias=3),
+            excecao=OSError(ERRO_503_ERDDAP),
+            falhas_iniciais=2,
+        )
+
+        execucao = ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 1, 3),
+            ConectorNoaaCrw(cliente=cliente, dormir=relogio),
+        )
+
+        self.assertEqual(execucao.status, 'sucesso')
+        self.assertEqual(cliente.chamadas, 3)
+        self.assertEqual(MedicaoAmbiental.objects.count(), 15)
+
+    def test_503_persistente_registra_a_causa_completa(self):
+        cliente = ClienteErddapFalso(excecao=OSError(ERRO_503_ERDDAP))
+
+        execucao = ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 1, 3),
+            ConectorNoaaCrw(cliente=cliente, dormir=Relogio(), tentativas=2),
+        )
+
+        self.assertEqual(execucao.status, 'falha')
+        self.assertEqual(cliente.chamadas, 2)
+        self.assertIn('503', execucao.mensagem_erro)
+        self.assertIn('Service Unavailable', execucao.mensagem_erro)

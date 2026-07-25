@@ -18,6 +18,7 @@ from django.conf import settings
 
 from ..base import ConectorBase, Observacao, ResultadoColeta
 from ..erros import resumir_erro
+from ..retentativa import TENTATIVAS_PADRAO, executar_com_retentativa
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +59,22 @@ class ConectorNoaaCrw(ConectorBase):
     variaveis = ('sst', 'dhw', 'baa', 'hotspot', 'sst_anomalia')
     exige_credenciais = False
 
-    def __init__(self, servidor=None, dataset_id=None, cliente=None):
+    def __init__(
+        self, servidor=None, dataset_id=None, cliente=None, tentativas=None, dormir=None
+    ):
         self.servidor = servidor or getattr(
             settings, 'NOAA_ERDDAP_SERVER', SERVIDOR_PADRAO
         )
         self.dataset_id = dataset_id or getattr(
             settings, 'NOAA_ERDDAP_DATASET', DATASET_PADRAO
         )
-        # `cliente` existe para injetar um duble nos testes; em producao o
-        # conector monta o proprio ERDDAP.
+        self.tentativas = tentativas or getattr(
+            settings, 'INGESTAO_TENTATIVAS', TENTATIVAS_PADRAO
+        )
+        # `cliente` e `dormir` existem para injetar dubles nos testes; em
+        # producao o conector monta o proprio ERDDAP e espera de verdade.
         self._cliente = cliente
+        self._dormir = dormir
 
     def _montar_cliente(self, bbox, inicio, fim):
         from erddapy import ERDDAP
@@ -86,19 +93,35 @@ class ConectorNoaaCrw(ConectorBase):
         }
         return e
 
+    def _buscar(self, bbox, inicio, fim):
+        """Uma tentativa completa de busca.
+
+        Montar o cliente faz parte da tentativa, e nao de um passo anterior: o
+        erddapy em modo griddap ja faz HTTP no construtor (busca o `.dds` para
+        descobrir as dimensoes do dataset). Se o servidor devolver 503 nesse
+        momento, reaproveitar um cliente meio construido nao adiantaria.
+        """
+        cliente = self._cliente or self._montar_cliente(bbox, inicio, fim)
+        return cliente.to_pandas()
+
     def coletar(self, local, inicio, fim):
         try:
             bbox = self.verificar_local(local)
         except ValueError as exc:
             return ResultadoColeta(erro=str(exc), dataset_id=self.dataset_id)
 
-        # A construcao do cliente precisa estar dentro do try: o erddapy em
-        # modo griddap faz uma requisicao HTTP ja no construtor (busca o .dds
-        # para descobrir as dimensoes do dataset). Monta-la fora deixaria a
-        # falha de rede escapar sem virar ResultadoColeta.
+        # O try precisa envolver toda a busca, inclusive a montagem do cliente:
+        # deixar qualquer parte de fora faria a falha de rede escapar sem virar
+        # ResultadoColeta.
         try:
-            cliente = self._cliente or self._montar_cliente(bbox, inicio, fim)
-            df = cliente.to_pandas()
+            argumentos = {'rotulo': f'NOAA CRW ({self.dataset_id})',
+                          'tentativas': self.tentativas}
+            if self._dormir is not None:
+                argumentos['dormir'] = self._dormir
+
+            df = executar_com_retentativa(
+                lambda: self._buscar(bbox, inicio, fim), **argumentos
+            )
         except Exception as exc:
             # Falha de rede nunca sobe: viraria queda de todo o pipeline.
             resumo = resumir_erro(exc)

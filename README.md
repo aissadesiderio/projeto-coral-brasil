@@ -99,6 +99,21 @@ período não duplica nem apaga — a gravação é idempotente.
 Cada execução gera um registro em `ExecucaoIngestao` com status, contagem e
 motivo da falha. Uma fonte fora do ar não derruba as outras.
 
+### Falhas passageiras
+
+Servidores ERDDAP respondem `HTTP 503 — Service Unavailable` quando estão
+sobrecarregados, pedindo para tentar de novo em um minuto. O pipeline faz isso
+sozinho: **3 tentativas, esperando 10 s e 30 s**. Ajuste com
+`INGESTAO_TENTATIVAS` no `.env`.
+
+Só falhas passageiras são repetidas — 503, 504, timeout, conexão derrubada.
+Certificado inválido, 403 e 404 falham na primeira tentativa, porque esperar
+não muda a resposta. A regra está em [`backend/ingestao/retentativa.py`](backend/ingestao/retentativa.py).
+
+Se o 503 persistir depois das três tentativas, é sobrecarga real do servidor:
+espere alguns minutos e rode de novo. A ingestão é incremental e idempotente,
+então repetir o comando não custa nada.
+
 ### Diagnóstico de rede
 
 Antes da primeira ingestão numa máquina ou rede nova:
@@ -119,7 +134,7 @@ Situação verificada em 25/07/2026:
 
 | Espelho | Servidor | Dataset | Estado |
 |---|---|---|---|
-| pfeg (**padrão**) | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 variáveis |
+| pfeg (**padrão**) | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 variáveis — 503 intermitente |
 | NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
 | PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ⚠️ certificado inválido |
 

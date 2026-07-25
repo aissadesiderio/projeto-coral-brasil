@@ -39,6 +39,8 @@ Este documento registra **toda** fonte de informação usada na construção do 
 | PACIOOS | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ⚠️ `CERTIFICATE_VERIFY_FAILED` nas duas redes |
 
 O PACIOOS foi a origem dos CSVs que o projeto já possui, mas a falha de certificado nas duas redes indica problema no servidor, não bloqueio local — por isso o padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
+
+**Disponibilidade do pfeg (medida em 25/07/2026):** o espelho responde, mas devolve `HTTP 503 — Service Unavailable: There was a (temporary?) problem. Wait a minute, then try again.` de forma intermitente. É sobrecarga do servidor, não configuração do projeto: o `.das` do mesmo dataset respondia normalmente na mesma máquina e no mesmo minuto. Desde então o pipeline distingue falha passageira de falha definitiva e repete só a primeira — 3 tentativas, esperando 10 s e 30 s (`backend/ingestao/retentativa.py`, ajustável por `INGESTAO_TENTATIVAS`). Certificado inválido, 403 e 404 continuam falhando na primeira tentativa, porque não melhoram com espera.
 **Licença:** domínio público (obra do governo federal dos EUA); citação requerida por cortesia científica.
 
 | Arquivo local | Variáveis | Período | Como foi obtido |
@@ -427,5 +429,6 @@ conforme a regra de governança daquele documento.
 | 24/07/2026 | Merge do commit `34879bf` (react-router, split de componentes, `DatasetCatalogo`, serviço Neo4j). §6.14 **agravada**: os 8 datasets fictícios saíram do frontend e foram semeados no banco, passando a ser servidos por API real. `react-router-dom` 6.30.1 incluída na §5. |
 | 24/07/2026 | **§6.14 resolvida.** Seed fictício removido pela migration `0016`; catálogo reconstruído a partir dos 9 arquivos reais via `manage.py inventariar_datasets`, com tamanho e período lidos do disco. Exclusões de arquivos com problema de integridade documentadas em código. |
 | 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
+| 25/07/2026 | Primeira ingestão ao vivo tentada na rede da faculdade. **§1.1 atualizada:** o espelho pfeg devolve HTTP 503 intermitente por sobrecarga. Pipeline passou a repetir falhas passageiras (`ingestao/retentativa.py`) e a preservar a causa real do erro — o resumidor apagava mensagens que usavam `<...>`, como as do `URLError`, e gravava só o tipo da exceção. |
 | 25/07/2026 | Pipeline de ingestão (`backend/ingestao/`) com o conector NOAA CRW. §6.3 (alcalinidade como pH) e §6.5 (DHW fora da norma) ficam **neutralizadas no novo caminho**, ainda presentes no `carregar_historico.py` legado. |
 | 25/07/2026 | Espelho ERDDAP padrão definido por medição (`testar_fontes` em duas redes): **pfeg + `NOAA_DHW`**, único a responder com as 5 variáveis. PACIOOS com certificado inválido, CoastWatch com 403. Ver §1.1. |

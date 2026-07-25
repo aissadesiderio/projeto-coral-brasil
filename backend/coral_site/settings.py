@@ -193,6 +193,11 @@ NOAA_ERDDAP_SERVER = env(
 )
 NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='NOAA_DHW')
 
+# Quantas vezes tentar antes de desistir de uma fonte. Vale so para falhas
+# passageiras (503, timeout); certificado invalido ou 403 falham de primeira.
+# Ver backend/ingestao/retentativa.py.
+INGESTAO_TENTATIVAS = env.int('INGESTAO_TENTATIVAS', default=3)
+
 # Copernicus Marine. A biblioteca `copernicusmarine` le estas variaveis
 # direto do ambiente; como o django-environ exporta o que le do .env para
 # os.environ, basta declara-las la. Sao espelhadas aqui para que o comando
