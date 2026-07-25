@@ -174,6 +174,15 @@ SECURE_HSTS_PRELOAD = env.bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
 if env.bool('DJANGO_BEHIND_PROXY', default=False):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# --- Fontes externas de dados (pipeline de ingestao) ------------------------
+# Servidor e dataset andam em par: cada espelho ERDDAP publica o produto do
+# Coral Reef Watch sob um identificador proprio.
+NOAA_ERDDAP_SERVER = env(
+    'NOAA_ERDDAP_SERVER',
+    default='https://pae-paha.pacioos.hawaii.edu/erddap',
+)
+NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='dhw_5km')
+
 NEO4J_URI = env('NEO4J_URI', default='bolt://localhost:7687')
 NEO4J_USER = env('NEO4J_USER', default='neo4j')
 NEO4J_PASSWORD = env('NEO4J_PASSWORD', default='')

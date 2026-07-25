@@ -3,6 +3,7 @@ from io import StringIO
 from pathlib import Path
 import re
 import shutil
+import tempfile
 from unittest.mock import call, patch
 
 from django.contrib import admin
@@ -18,6 +19,11 @@ from .code_sync import (
     BACKEND_SYNC_PATH,
     FRONTEND_SYNC_PATH,
     sync_project_code_from_db,
+)
+from .inventario_datasets import (
+    DATASETS_REAIS,
+    EXCLUIDOS,
+    construir_inventario,
 )
 from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
 from .neo4j_schema import (
@@ -691,3 +697,118 @@ class AdminCodeSyncFlagTests(TestCase):
                 f'{hook} foi sobrescrito - risco de reintroduzir a escrita automatica',
             )
         sync_mock.assert_not_called()
+
+
+class InventarioDatasetsTests(TestCase):
+    """O catalogo publico so pode conter dados que existem de fato.
+
+    Contexto: a migration 0014 semeava 8 datasets inventados - dois atribuidos
+    ao NCBI, do qual o projeto nao tem nenhum dado - e o commit 34879bf passou
+    a servi-los por uma API real. A 0016 removeu o seed e o catalogo agora e
+    construido a partir dos arquivos reais. Ver docs/FONTES.md secao 6.14.
+    """
+
+    IDS_FICTICIOS = [
+        'copernicus_sst_abrolhos_2026_03',
+        'noaa_dhw_abrolhos_2026_03',
+        'inventario_biodiversidade_abrolhos_2026_q1',
+        'microbioma_picaozinho_2026_03',
+        'genetico_abrolhos_2026_q1',
+        'imagem_porto_2026_04',
+        'relatorio_picaozinho_2026_04',
+        'modelo_branqueamento_nordeste_2026_q2',
+    ]
+
+    def test_seed_ficticio_nao_sobrevive_as_migrations(self):
+        encontrados = list(
+            DatasetCatalogo.objects.filter(id__in=self.IDS_FICTICIOS).values_list(
+                'id', flat=True
+            )
+        )
+
+        self.assertEqual(encontrados, [], f'Datasets ficticios ainda no banco: {encontrados}')
+
+    def test_nenhuma_fonte_declarada_e_o_ncbi(self):
+        """O projeto nao possui nenhum dado do NCBI."""
+        fontes = set(DatasetCatalogo.objects.values_list('fonte', flat=True))
+
+        self.assertNotIn('NCBI', fontes)
+
+    def test_inventario_le_tamanho_e_periodo_do_arquivo_real(self):
+        registros, ausentes = construir_inventario()
+
+        self.assertEqual(ausentes, [], 'Arquivos de dados esperados nao encontrados')
+        for registro in registros:
+            with self.subTest(dataset=registro['id']):
+                d = registro['defaults']
+                self.assertTrue(d['ativo'])
+                self.assertGreater(d['tamanho_mb'], 0)
+                self.assertIsNotNone(d['data_inicio'])
+                self.assertIsNotNone(d['data_fim'])
+                self.assertLessEqual(d['data_inicio'], d['data_fim'])
+
+    def test_nenhum_registro_promete_download_inexistente(self):
+        registros, _ = construir_inventario()
+
+        for registro in registros:
+            with self.subTest(dataset=registro['id']):
+                self.assertEqual(
+                    registro['defaults']['url_download'],
+                    '',
+                    'O projeto nao serve esses arquivos - nao pode oferecer download',
+                )
+
+    def test_arquivo_ausente_vira_registro_desativado_e_nao_dado_inventado(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vazio = Path(tmp)
+            (vazio / 'dados').mkdir()
+            with override_settings(BASE_DIR=vazio):
+                registros, ausentes = construir_inventario()
+
+        self.assertEqual(len(ausentes), len(DATASETS_REAIS))
+        for registro in registros:
+            with self.subTest(dataset=registro['id']):
+                d = registro['defaults']
+                self.assertFalse(d['ativo'])
+                self.assertIsNone(d['tamanho_mb'])
+                self.assertIsNone(d['data_inicio'])
+                self.assertIn('AUSENTE', d['resumo'])
+
+    def test_arquivos_com_problema_de_integridade_ficam_fora(self):
+        """Arquivos que existem no disco mas nao sao publicaveis."""
+        inventariados = {f.arquivo for f in DATASETS_REAIS}
+
+        for arquivo, motivo in EXCLUIDOS.items():
+            with self.subTest(arquivo=arquivo):
+                self.assertNotIn(arquivo, inventariados)
+                self.assertTrue(motivo, 'Toda exclusao precisa de um motivo registrado')
+
+        # ph.csv contem alcalinidade; o pH real vem de outro arquivo.
+        self.assertIn('ph.csv', EXCLUIDOS)
+        ph = next(f for f in DATASETS_REAIS if f.id == 'cmems_ph_abrolhos')
+        self.assertNotEqual(ph.arquivo, 'ph.csv')
+        self.assertEqual(ph.variavel, 'ph')
+
+    def test_comando_popula_o_catalogo_a_partir_dos_arquivos(self):
+        DatasetCatalogo.objects.all().delete()
+        saida = StringIO()
+
+        call_command('inventariar_datasets', stdout=saida)
+
+        self.assertEqual(DatasetCatalogo.objects.count(), len(DATASETS_REAIS))
+        self.assertTrue(DatasetCatalogo.objects.filter(ativo=True).exists())
+        self.assertIn('Catalogo atualizado', saida.getvalue())
+
+    def test_comando_remove_registros_ficticios_remanescentes(self):
+        DatasetCatalogo.objects.create(
+            id='dataset_inventado_qualquer',
+            titulo='Dataset que nao existe',
+            fonte='NCBI',
+            tipo_dado='Genetico',
+        )
+
+        call_command('inventariar_datasets', stdout=StringIO())
+
+        self.assertFalse(
+            DatasetCatalogo.objects.filter(id='dataset_inventado_qualquer').exists()
+        )

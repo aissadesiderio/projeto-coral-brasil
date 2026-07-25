@@ -96,6 +96,135 @@ class LocalRecife(models.Model):
         return f'{self.nome} ({self.estado})'
 
 
+class MedicaoAmbiental(models.Model):
+    """Uma medicao de uma variavel canonica, num local, numa data, de uma fonte.
+
+    Formato longo (uma linha por variavel) e nao largo, por tres razoes:
+
+    1. **Proveniencia por valor.** O contrato canonico exige registrar fonte,
+       dataset e flag de qualidade de cada medicao - impossivel numa tabela
+       larga onde a linha inteira compartilha uma unica origem.
+    2. **Coberturas diferentes.** As variaveis comecam em anos diferentes
+       (Kd490 em 2023, oxigenio em 1993). Em formato largo isso vira uma
+       matriz cheia de buracos.
+    3. **Mesma variavel de fontes distintas.** SST vem do CRW e do Copernicus;
+       as duas convivem e a escolha e feita na leitura, pelo quality_flag.
+
+    Ver backend/docs/contrato_canonico_variaveis.md e docs/VARIAVEIS.md.
+    """
+
+    VARIAVEL_CHOICES = [
+        ('sst', 'Temperatura da superficie do mar (°C)'),
+        ('dhw', 'Degree Heating Week (°C·semana)'),
+        ('baa', 'Bleaching Alert Area (0-5)'),
+        ('hotspot', 'Coral Bleaching HotSpot (°C)'),
+        ('sst_anomalia', 'Anomalia de SST (°C)'),
+        ('salinidade', 'Salinidade (PSU)'),
+        ('oxigenio', 'Oxigenio dissolvido (mmol/m³)'),
+        ('kd490', 'Atenuacao da luz (m⁻¹)'),
+        ('clorofila', 'Clorofila-a (mg/m³)'),
+        ('par', 'Radiacao fotossinteticamente ativa (µmol/m²/s)'),
+    ]
+
+    QUALIDADE_CHOICES = [
+        ('ok', 'Aprovada'),
+        ('degradado', 'Aprovada com ressalva'),
+        ('invalido', 'Reprovada na validacao fisica'),
+    ]
+
+    local_recife = models.ForeignKey(
+        LocalRecife,
+        related_name='medicoes',
+        on_delete=models.CASCADE,
+    )
+    data = models.DateField(help_text='Data da medicao (UTC)')
+    variavel = models.CharField(max_length=20, choices=VARIAVEL_CHOICES)
+    valor = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Nulo quando reprovado na validacao - jamais preencher com 0',
+    )
+    unidade = models.CharField(max_length=40)
+
+    # Proveniencia - exigida pelo contrato canonico.
+    fonte = models.CharField(max_length=60, help_text='Slug do conector. Ex: noaa_crw')
+    dataset_id = models.CharField(max_length=160, blank=True)
+    quality_flag = models.CharField(
+        max_length=12,
+        choices=QUALIDADE_CHOICES,
+        default='ok',
+    )
+    observacao = models.TextField(
+        blank=True,
+        help_text='Motivo do flag quando nao for "ok"',
+    )
+    data_coleta = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-data', 'variavel']
+        verbose_name = 'Medicao ambiental'
+        verbose_name_plural = 'Medicoes ambientais'
+        constraints = [
+            # Permite a mesma variavel vinda de fontes diferentes no mesmo dia;
+            # a escolha entre elas e feita na leitura, pelo quality_flag.
+            models.UniqueConstraint(
+                fields=['local_recife', 'data', 'variavel', 'fonte'],
+                name='aquaculture_unique_medicao_local_data_variavel_fonte',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['local_recife', 'data']),
+            models.Index(fields=['variavel', 'data']),
+        ]
+
+    def __str__(self):
+        return f'{self.local_recife.slug} {self.data} {self.variavel}={self.valor}'
+
+
+class ExecucaoIngestao(models.Model):
+    """Registro de cada execucao de ingestao - o "com logs e tratamento de
+    falha" exigido pelo checklist de go-live.
+
+    Uma fonte fora do ar nao derruba as outras: cada par (fonte, local) gera
+    seu proprio registro, com status independente.
+    """
+
+    STATUS_CHOICES = [
+        ('sucesso', 'Sucesso'),
+        ('parcial', 'Parcial'),
+        ('falha', 'Falha'),
+    ]
+
+    fonte = models.CharField(max_length=60)
+    local_recife = models.ForeignKey(
+        LocalRecife,
+        related_name='execucoes_ingestao',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+    inicio_periodo = models.DateField(null=True, blank=True)
+    fim_periodo = models.DateField(null=True, blank=True)
+    iniciado_em = models.DateTimeField(auto_now_add=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    registros_gravados = models.PositiveIntegerField(default=0)
+    registros_rejeitados = models.PositiveIntegerField(default=0)
+    mensagem_erro = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-iniciado_em']
+        verbose_name = 'Execucao de ingestao'
+        verbose_name_plural = 'Execucoes de ingestao'
+        indexes = [
+            models.Index(fields=['fonte', '-iniciado_em']),
+        ]
+
+    def __str__(self):
+        local = self.local_recife.slug if self.local_recife else 'global'
+        return f'{self.fonte}/{local} {self.iniciado_em:%Y-%m-%d %H:%M} -> {self.status}'
+
+
 class Especie(models.Model):
     TIPO_FAUNA_CHOICES = [
         ('CORAL', 'Coral'),

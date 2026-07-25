@@ -6,6 +6,8 @@
 
 Este documento registra **toda** fonte de informação usada na construção do Coral Brasil: de onde veio cada dado, como foi obtido, onde é usado no código, sob qual licença e como deve ser citado. Serve tanto para reprodutibilidade acadêmica quanto para atribuição legal.
 
+> **Documento irmão:** [VARIAVEIS.md](VARIAVEIS.md) explica *por que* cada variável entra ou fica de fora do modelo. Este aqui trata de *de onde os dados vêm*; aquele, de *quais deles são usados e por quê*.
+
 ---
 
 ## Índice
@@ -301,10 +303,43 @@ Os arquivos vêm de pontos diferentes: −38,710/−17,976 (maioria), −38,716/
 ### 6.12 Campo de erro usado como medida
 `par_recente.csv` traz `PAR_error` — o campo de incerteza, não o PAR. O contrato canônico já marca isso como `quality=degradado`, mas o código o consome como valor.
 
-### 6.13 `par.csv` corrompido
-As coordenadas aparecem como `-17.187.504` e `-3.952.083` (separador de milhar aplicado indevidamente na exportação) e a coluna `par` está preenchida com `NaN` nas primeiras linhas. 58 MB provavelmente inúteis.
+### 6.13 `par.csv` com coordenadas irrecuperáveis
+*(Corrigido em 25/07/2026 — a descrição anterior dizia que a coluna `par` era majoritariamente nula, o que estava errado. Medição real abaixo.)*
 
-### 6.14 Catálogo público fictício — agora dentro do banco de dados 🚨
+O arquivo tem 1.146.600 linhas e a coluna `par` está **63,3% preenchida** — os valores existem. O problema está nas coordenadas: `latitude` e `longitude` foram exportadas como `-17.187.504` e `-3.952.083`, com separador de milhar aplicado sobre o número decimal. Nenhuma linha converte para float, então **não há como saber a que pixel cada medição pertence**. Os valores são reais, mas não georreferenciáveis.
+
+Consequência prática: **o projeto não tem PAR de superfície utilizável.** `par_recente.csv` também não serve — tem 1.331 valores da variável `PAR_error`, o campo de incerteza. Isso bloqueia o cálculo de `PAR_fundo = PAR × e^(−Kd × z)`, que depende de PAR na superfície. Resolver exige rebaixar o PAR (NOAA ERDDAP ou NASA OceanColor) com a exportação correta.
+
+### 6.14 Catálogo público fictício — ✅ RESOLVIDO em 24/07/2026
+**Resolução:** a migration `0016_remove_seed_ficticio_datasetcatalogo` apagou os 8 registros inventados, e o catálogo passou a ser construído a partir dos arquivos que existem de fato, por `python backend/manage.py inventariar_datasets`.
+
+O inventário atual tem **9 datasets reais**, todos com tamanho e período **lidos do arquivo** e não digitados:
+
+| Fonte | Dataset | Período real | Tamanho real |
+|---|---|---|---|
+| NOAA | Estresse térmico coralino (CoralTemp/DHW) | 2020–2025 | 75,17 MB |
+| Met Office / Copernicus | SST série histórica | 1981–2023 | 0,65 MB |
+| Copernicus | Temperatura potencial (`thetao`) | 2022–2025 | 0,06 MB |
+| Copernicus | Salinidade (`so`) | 2022–2025 | 0,22 MB |
+| Copernicus | Clorofila-a (`chl`) | 2021–2025 | 0,07 MB |
+| Copernicus | pH (`ph`) | 2021–2025 | 0,06 MB |
+| Copernicus | Oxigênio dissolvido (`o2`) | 1993–2025 | 0,51 MB |
+| Copernicus | Nitrato (`no3`) | 1993–2025 | 0,54 MB |
+| Copernicus | Atenuação da luz (`kd`) | 2023–2025 | 0,03 MB |
+
+Garantias implementadas em `backend/aquaculture/inventario_datasets.py`:
+
+- **Nada é digitado à mão:** tamanho e intervalo temporal vêm de `ler_metadados_arquivo()`.
+- **`url_download` fica vazio** — o projeto não serve esses arquivos, então o card não exibe botão de download. Quando existir endpoint real (Fase D), o campo passa a ser preenchido.
+- **Arquivo ausente vira registro desativado**, nunca um registro com números inventados. Como os CSVs não são versionados, um clone novo começa com o catálogo vazio — que é a descrição correta do seu estado.
+- **Arquivos com problema de integridade ficam fora**, com motivo registrado em `EXCLUIDOS`: `ph.csv` (contém alcalinidade), `NOAA_DHW_monthly` (hemisfério errado), `par.csv` (corrompido), `par_recente.csv` (campo de erro), as duas duplicatas e `salinidade_recente.csv` (salinidade de fundo).
+- Picãozinho e Porto de Galinhas aparecem com **zero datasets**, que é a verdade: o acervo só cobre Abrolhos.
+
+Oito testes em `InventarioDatasetsTests` travam isso — incluindo um que falha se qualquer registro voltar a declarar o NCBI como fonte.
+
+<details>
+<summary>Registro histórico do problema</summary>
+
 **Status agravado em 24/07/2026** (commit `34879bf`).
 
 Originalmente os 8 datasets inventados viviam num array `DADOS_GERAIS` hardcoded em `frontend/src/App.js`. A refatoração moveu **os mesmos 8 registros fictícios** para o modelo `DatasetCatalogo`, semeados pela migration `0014_seed_datasetcatalogo` e servidos pelo endpoint real `/api/datasets/`.
@@ -324,7 +359,9 @@ Isso **piora** o problema de integridade: o que antes era claramente um mock de 
 
 Atribuir dados ao NCBI e a um "Projeto Coral Brasil" que não os produziu é, num trabalho acadêmico, atribuição falsa de fonte. **Antes do go-live é obrigatório** substituir o seed por um inventário do que realmente existe no banco, ou marcar os registros como demonstração de forma visível na interface.
 
-A infraestrutura criada (`DatasetCatalogo`, `/api/datasets/`, `BancoDadosPage`) está correta e é exatamente o que a Fase D previa — o problema é só o conteúdo semeado.
+A infraestrutura criada (`DatasetCatalogo`, `/api/datasets/`, `BancoDadosPage`) está correta e é exatamente o que a Fase D previa — o problema era só o conteúdo semeado.
+
+</details>
 
 ### 6.15 DOIs dos produtos CMEMS não coletados
 Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
@@ -380,3 +417,6 @@ conforme a regra de governança daquele documento.
 | 24/07/2026 | Criação do documento. Auditoria inicial de proveniência dos 19 CSVs, das imagens e das referências: 15 problemas registrados na §6. |
 | 24/07/2026 | Fase A do roadmap. Adicionadas coordenadas aos três locais de recife (§2.3) — duas delas aproximadas e pendentes de verificação. `django-environ` incluída na §5. |
 | 24/07/2026 | Merge do commit `34879bf` (react-router, split de componentes, `DatasetCatalogo`, serviço Neo4j). §6.14 **agravada**: os 8 datasets fictícios saíram do frontend e foram semeados no banco, passando a ser servidos por API real. `react-router-dom` 6.30.1 incluída na §5. |
+| 24/07/2026 | **§6.14 resolvida.** Seed fictício removido pela migration `0016`; catálogo reconstruído a partir dos 9 arquivos reais via `manage.py inventariar_datasets`, com tamanho e período lidos do disco. Exclusões de arquivos com problema de integridade documentadas em código. |
+| 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
+| 25/07/2026 | Pipeline de ingestão (`backend/ingestao/`) com o conector NOAA CRW. Servidor e dataset padrão passam a ser **PACIOOS `dhw_5km`** — o par que comprovadamente gerou `dhw_5km_6006_cdf9_04d9.csv`. §6.3 (alcalinidade como pH) e §6.5 (DHW fora da norma) ficam **neutralizadas no novo caminho**, ainda presentes no `carregar_historico.py` legado. |
