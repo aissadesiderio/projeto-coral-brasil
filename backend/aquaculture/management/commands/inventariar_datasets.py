@@ -15,6 +15,7 @@ from aquaculture.inventario_datasets import (
     EXCLUIDOS,
     construir_inventario,
 )
+from aquaculture.management.utils import exigir_migrations_aplicadas
 from aquaculture.models import DatasetCatalogo, LocalRecife
 
 
@@ -35,6 +36,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        exigir_migrations_aplicadas()
+
         dry_run = options['dry_run']
         local = LocalRecife.objects.filter(slug='abrolhos-ba').first()
 

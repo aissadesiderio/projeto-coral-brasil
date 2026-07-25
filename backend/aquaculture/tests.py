@@ -10,11 +10,13 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.admin.sites import AdminSite
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from db import setup_graph
 from .admin import LocalRecifeAdmin
+from .management.utils import exigir_migrations_aplicadas, migrations_pendentes
 from .code_sync import (
     BACKEND_SYNC_PATH,
     FRONTEND_SYNC_PATH,
@@ -812,3 +814,58 @@ class InventarioDatasetsTests(TestCase):
         self.assertFalse(
             DatasetCatalogo.objects.filter(id='dataset_inventado_qualquer').exists()
         )
+
+
+class GuardaDeMigrationsTests(TestCase):
+    """Comandos precisam avisar sobre banco desatualizado, nao estourar SQL cru.
+
+    Regressao: rodar `ingerir` numa maquina que puxou codigo novo sem migrar
+    produzia `OperationalError: no such column: aquaculture_localrecife.latitude`
+    com dezenas de linhas de traceback. O banco e local e nao vem no
+    repositorio, entao isso acontece em toda maquina nova.
+    """
+
+    def test_banco_em_dia_nao_bloqueia(self):
+        self.assertEqual(migrations_pendentes(), [])
+        exigir_migrations_aplicadas()  # nao deve levantar
+
+    def test_migrations_pendentes_viram_erro_acionavel(self):
+        pendentes = ['aquaculture.0013_alguma', 'aquaculture.0014_outra']
+
+        with patch(
+            'aquaculture.management.utils.migrations_pendentes',
+            return_value=pendentes,
+        ):
+            with self.assertRaises(CommandError) as ctx:
+                exigir_migrations_aplicadas()
+
+        mensagem = str(ctx.exception)
+        self.assertIn('2 migration(s) pendente(s)', mensagem)
+        self.assertIn('manage.py migrate', mensagem)
+        self.assertIn('aquaculture.0013_alguma', mensagem)
+
+    def test_lista_longa_de_pendentes_e_resumida(self):
+        pendentes = [f'app.{i:04d}_migration' for i in range(37)]
+
+        with patch(
+            'aquaculture.management.utils.migrations_pendentes',
+            return_value=pendentes,
+        ):
+            with self.assertRaises(CommandError) as ctx:
+                exigir_migrations_aplicadas()
+
+        mensagem = str(ctx.exception)
+        self.assertIn('37 migration(s)', mensagem)
+        self.assertIn('e mais 32', mensagem)
+
+    def test_comandos_de_dados_usam_a_guarda(self):
+        for comando in ('ingerir', 'inventariar_datasets'):
+            with self.subTest(comando=comando):
+                with patch(
+                    'aquaculture.management.utils.migrations_pendentes',
+                    return_value=['aquaculture.9999_falsa'],
+                ):
+                    with self.assertRaises(CommandError) as ctx:
+                        call_command(comando, stdout=StringIO())
+
+                self.assertIn('migrate', str(ctx.exception))

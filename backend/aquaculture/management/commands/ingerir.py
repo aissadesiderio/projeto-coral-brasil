@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 
+from aquaculture.management.utils import exigir_migrations_aplicadas
 from aquaculture.models import LocalRecife
 from ingestao.registro import CONECTORES, ingerir, obter_conector
 
@@ -48,6 +49,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        exigir_migrations_aplicadas()
+
         inicio = _parse_data(options['desde'])
         fim = _parse_data(options['ate'])
 

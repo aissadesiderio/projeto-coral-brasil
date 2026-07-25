@@ -59,6 +59,10 @@ python backend\manage.py migrate
 python backend\manage.py createsuperuser
 ```
 
+⚠️ **O banco é local e não vem no repositório.** Toda máquina que puxa código
+novo precisa rodar `migrate` de novo — inclusive quando você já tinha o projeto
+funcionando ali antes. Os comandos de dados avisam se o banco está atrasado.
+
 SQLite é o padrão local. Para PostgreSQL, defina `DATABASE_URL` no `.env` e
 descomente `psycopg` no `requirements.txt` — nenhuma mudança de código é
 necessária.
