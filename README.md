@@ -237,14 +237,29 @@ Havaí e redistribui o mesmo produto, então funciona de qualquer rede. Se a
 ingestão for rodar por cron, em deploy ou fora da universidade, use o par
 PACIOOS.
 
-Situação verificada em 25/07/2026 — as duas primeiras linhas medidas **na rede
-da UFF**, a terceira de fora:
+Situação verificada em 25/07/2026, com `testar_fontes` nas duas redes:
 
-| Espelho | Servidor | Dataset | Estado |
-|---|---|---|---|
-| pfeg (**padrão**) | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 variáveis — 503 intermitente |
-| NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
-| PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ entregou dado real (115 medições) |
+| Espelho | Servidor | Dataset | Na UFF | Fora da UFF |
+|---|---|---|---|---|
+| **PACIOOS** (**padrão**) | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | não medido | ✅ 5/5 |
+| pfeg | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 — 503 intermitente | ❌ `WinError 10060` (timeout) |
+| NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 | ⚠️ HTTP 403 |
+
+**Você não precisa configurar nada** — o PACIOOS é o padrão do código desde
+25/07/2026. As linhas acima só são necessárias para *forçar* outro espelho.
+
+Ele não é um plano B degradado: os dois espelhos foram comparados bloco a bloco
+no backfill de 2020–2026 e deram **resultado idêntico**. Foi pelo PACIOOS que os
+43.038 registros atuais do CRW foram ingeridos.
+
+O espelho oficial da NOAA seria o pfeg, mas **um padrão que só funciona numa
+rede específica não é padrão** — é uma armadilha para quem clonar o projeto.
+Quem estiver na UFF e quiser o servidor da própria NOAA descomenta as duas
+linhas de `NOAA_ERDDAP_*` no `.env`.
+
+⚠️ "Não medido" na tabela é literal: o PACIOOS nunca foi testado de dentro da
+UFF. Não há motivo conhecido para falhar lá, mas isso é inferência. Se você
+rodar `testar_fontes` na universidade, atualize a tabela.
 
 O PACIOOS chegou a ser marcado aqui como "certificado inválido". Estava errado:
 `testar_fontes --ssl` mostra o mesmo host verificando normalmente sob o bundle

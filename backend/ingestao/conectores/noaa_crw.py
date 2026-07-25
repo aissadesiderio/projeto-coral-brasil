@@ -67,29 +67,36 @@ LIMIAR_ALERTA = 3.0
 COLUNA_FRACAO_ALERTA = 'CRW_BAA_FRACAO_ALERTA'
 
 
-# Servidor e dataset padrao. Escolhidos por evidencia, nao por preferencia:
+# Servidor e dataset padrao. Escolhidos por evidencia, nao por preferencia.
 #
-# - `coastwatch.pfeg.noaa.gov` + `NOAA_DHW` foi verificado respondendo com as
-#   cinco variaveis (incluindo CRW_BAA, o target) em 25/07/2026. E tambem o
-#   servidor que o `coleta_de_dados.py` original usava.
-# - PACIOOS (`pae-paha.pacioos.hawaii.edu` + `dhw_5km`) gerou os CSVs que o
-#   projeto ja tem. Ja foi marcado aqui como "certificado invalido"; era
-#   diagnostico errado - o `testar_fontes --ssl` mostra o mesmo host
-#   verificando normalmente sob o bundle do certifi. A falha era de montagem de
-#   cadeia no cliente. Ver ingestao/certificados.py.
-# - `coastwatch.noaa.gov` + `noaacrwdhwDaily` respondeu 403 na mesma rede.
-#   403 e bloqueio de aplicacao, nao de TLS: o handshake com esse host verifica.
+# **PACIOOS** (`pae-paha.pacioos.hawaii.edu` + `dhw_5km`) e o padrao desde
+# 25/07/2026, por tres medidas:
 #
-# RESTRICAO DE REDE: os servidores da propria NOAA so respondem de dentro de
-# rede com dominio federal (aqui, a UFF). O PACIOOS e da Universidade do Havai,
-# nao da NOAA, e redistribui o mesmo produto - por isso funciona de qualquer
-# rede. Para cron ou deploy fora da universidade, use o par PACIOOS.
+# 1. E o unico que funciona **fora** de rede com dominio federal. Os servidores
+#    da propria NOAA nao: o pfeg da timeout (WinError 10060) e o
+#    coastwatch.noaa.gov da 403. O PACIOOS e da Universidade do Havai, nao da
+#    NOAA, e redistribui o mesmo produto - por isso a restricao nao se aplica.
+#    (Dentro da UFF ele nunca foi medido; nao ha motivo conhecido para falhar,
+#    mas isso e inferencia e esta registrado como tal em docs/FONTES.md 1.1.)
+# 2. Nao e versao degradada. O backfill 2020-2026 foi rodado nos dois espelhos
+#    e deu **resultado identico bloco a bloco** - as mesmas 35.850 medicoes na
+#    epoca das 5 variaveis. As lacunas sao do produto CRW, nao do espelho.
+# 3. O pfeg devolve 503 intermitente por sobrecarga mesmo quando alcancavel.
+#
+# Um padrao que so funciona numa rede especifica nao e padrao: e uma pegadinha
+# para quem clonar o projeto. Quem estiver na UFF e quiser o espelho oficial da
+# NOAA sobrescreve NOAA_ERDDAP_SERVER/DATASET no .env.
+#
+# O PACIOOS ja foi marcado aqui como "certificado invalido"; era diagnostico
+# errado - o `testar_fontes --ssl` mostra o mesmo host verificando normalmente
+# sob o bundle do certifi. A falha era de montagem de cadeia no cliente. Ver
+# ingestao/certificados.py.
 #
 # Servidor e dataset SEMPRE andam em par: cada espelho publica o mesmo produto
 # sob um id proprio. Use `manage.py testar_fontes` para descobrir o par que
 # funciona numa rede nova.
-SERVIDOR_PADRAO = 'https://coastwatch.pfeg.noaa.gov/erddap'
-DATASET_PADRAO = 'NOAA_DHW'
+SERVIDOR_PADRAO = 'https://pae-paha.pacioos.hawaii.edu/erddap'
+DATASET_PADRAO = 'dhw_5km'
 
 # Como cada espelho pode nomear as dimensoes de um jeito.
 ALIASES_DIMENSAO = {

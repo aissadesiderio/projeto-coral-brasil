@@ -21,6 +21,9 @@ Este documento registra **toda** fonte de informação usada na construção do 
 7. [Como citar](#7-como-citar)
 8. [Modelo para registrar uma nova fonte](#8-modelo-para-registrar-uma-nova-fonte)
 
+> 📊 **Para saber o que está no banco agora**, sem ler o documento inteiro:
+> [§1.5 Estado da base ingerida](#15-estado-da-base-ingerida--25072026).
+
 ---
 
 ## 1. Fontes de dados ambientais
@@ -30,15 +33,25 @@ Este documento registra **toda** fonte de informação usada na construção do 
 **Instituição:** National Oceanic and Atmospheric Administration / NESDIS / STAR — Coral Reef Watch Program (EUA)
 **Produto:** Daily Global 5 km (0,05°) Satellite Coral Bleaching Heat Stress Monitoring Product Suite, versão 3.1
 **Página oficial:** https://coralreefwatch.noaa.gov/product/5km/
-**Acesso programático:** ERDDAP. Três espelhos publicam o mesmo produto, cada um sob um identificador próprio — servidor e dataset **sempre andam em par**. Disponibilidade medida em 25/07/2026 com `manage.py testar_fontes`, **na rede da UFF**:
+**Acesso programático:** ERDDAP. Três espelhos publicam o mesmo produto, cada um sob um identificador próprio — servidor e dataset **sempre andam em par**. Disponibilidade medida em 25/07/2026 com `manage.py testar_fontes`, nas duas redes:
 
-| Espelho | Servidor | Dataset | Estado |
-|---|---|---|---|
-| pfeg (**padrão do projeto**) | `coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ responde com as 5 variáveis |
-| NOAA CoastWatch | `coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
-| PACIOOS | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ **entregou dado real** — 115 medições em 25/07/2026 |
+| Espelho | Servidor | Dataset | Na UFF | Fora da UFF |
+|---|---|---|---|---|
+| **PACIOOS** (**padrão do projeto**) | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | não medido | ✅ 5/5 |
+| pfeg | `coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5, com 503 intermitente | ❌ timeout (`WinError 10060`) |
+| NOAA CoastWatch | `coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 | ⚠️ HTTP 403 |
 
-O PACIOOS foi a origem dos CSVs que o projeto já possui. O padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
+⚠️ "Não medido" é literal: nenhuma execução do `testar_fontes` na UFF chegou a testar o PACIOOS antes de ele virar padrão. Não há motivo conhecido para falhar lá — a restrição documentada abaixo é dos servidores da NOAA, e o PACIOOS não é da NOAA —, mas **isso é inferência, não medição**, e fica assim registrado até alguém rodar `testar_fontes` na universidade.
+
+**Por que o PACIOOS é o padrão** (decidido em 25/07/2026, depois de o pfeg ter ocupado esse lugar por alguns dias):
+
+1. **É o único que funciona fora da rede federal**, onde os dois servidores da NOAA falham. A recíproca não vale: não há indício de que ele falhe dentro dela.
+2. **Não é versão degradada.** O backfill 2020–2026 foi rodado nos dois espelhos e deu resultado idêntico bloco a bloco. As 6 datas ausentes são do produto CRW, não do espelho.
+3. O pfeg devolve **503 intermitente** por sobrecarga mesmo quando alcançável.
+
+O argumento a favor do pfeg era ser o espelho oficial da NOAA — e é o servidor que o `coleta_de_dados.py` original usava. Mas **um padrão que só funciona numa rede específica não é padrão**: é uma armadilha para quem clonar o repositório, e foi exatamente o que aconteceu na primeira tentativa de rodar fora da universidade. Quem estiver na UFF e quiser o servidor oficial descomenta `NOAA_ERDDAP_SERVER`/`NOAA_ERDDAP_DATASET` no `.env`.
+
+O PACIOOS também foi a origem dos CSVs que o projeto já possuía, e é por ele que estão os 43.038 registros atuais (§1.5).
 
 #### Cobertura obtida e lacunas do produto (backfill de 25/07/2026)
 
@@ -73,7 +86,7 @@ Os espelhos da própria NOAA **só respondem de dentro de uma rede com domínio 
 
 **O PACIOOS não é da NOAA** — é do Pacific Islands Ocean Observing System, na Universidade do Havaí, e redistribui o mesmo produto Coral Reef Watch 5 km v3.1. Por isso não está sujeito à restrição, e foi por ele que a primeira ingestão bem-sucedida fora da rede federal aconteceu.
 
-Consequência para a operação: **o par padrão do projeto (pfeg) só funciona na UFF.** Agendamento automático, deploy ou trabalho de casa precisam do par PACIOOS. Como o estado de cada espelho depende da rede, rode `manage.py testar_fontes` na máquina que vai ingerir.
+Consequência para a operação, e a razão de o padrão ter mudado: **o pfeg só funciona na UFF**, então agendamento automático, deploy ou trabalho de casa não podiam depender dele. Desde 25/07/2026 o padrão do projeto é o PACIOOS. Como o estado de cada espelho depende da rede, rode `manage.py testar_fontes` na máquina que vai ingerir.
 
 #### ❌ Correção: o PACIOOS **não** tem certificado inválido
 
@@ -216,6 +229,27 @@ return {'vento': 6.5, 'turbidez': 0.05, 'origem': 'SIMULADO'}
 Esta função **inventa** valores de vento e turbidez para contornar a falta de credenciais Copernicus. É a origem da constante `vento_velocidade=6.5` gravada em todos os registros de `StatusPredicao` por `carregar_historico.py:182`.
 
 🚨 **Nenhum valor de vento no banco de dados é observado.** Deve ser removido ou substituído por ERA5 antes de qualquer uso científico ou publicação.
+
+---
+
+### 1.5 Estado da base ingerida — 25/07/2026
+
+O que está de fato em `MedicaoAmbiental`, gravado pelo pipeline de `backend/ingestao/`. Não inclui os CSVs legados nem o `StatusPredicao`, que vêm do caminho antigo.
+
+| Fonte | Espelho / produto | Medições | Variáveis | Período |
+|---|---|---|---|---|
+| `noaa_crw` | PACIOOS `dhw_5km` | 43.038 | `sst`, `dhw`, `baa`, `baa_area_alerta`, `hotspot`, `sst_anomalia` | 2020-01-01 → 2026-07-24 |
+| `copernicus` | CMEMS (reanálise + análise) | 14.382 | `salinidade`, `oxigenio` | 2020-01-01 → 2026-07-24 |
+| **Total** | | **57.420** | 8 | |
+
+Três locais em todas as séries: Abrolhos (BA), Porto de Galinhas (PE) e Picãozinho (PB).
+
+**As duas fontes cobrem exatamente a mesma janela**, o que era pré-requisito para montar as janelas com defasagem sem cortar amostra por desalinhamento de cobertura.
+
+Duas diferenças estruturais entre elas continuam valendo e não devem ser confundidas com qualidade:
+
+- O **NOAA tem 6 datas ausentes** (§1.1) porque é produto observacional de satélite. O **Copernicus não tem nenhuma** porque é saída de modelo, que produz valor para todo dia e todo pixel — inclusive onde não houve observação assimilada.
+- O NOAA vem de um único produto; o Copernicus **emenda reanálise e análise**, com a costura registrada em `dataset_id` valor a valor (§1.2).
 
 ---
 
@@ -494,15 +528,39 @@ Em 17/05/2024 a nova regra grava BAA 4 e `baa_area_alerta` = 115/121 = **0,950**
 
 📖 **A explicação completa — por que média de categoria ordinal é errada, por que máximo e não moda, e por que a fração de área precisa acompanhar o máximo — está em [VARIAVEIS.md](VARIAVEIS.md) §4.5**, com exemplo trabalhado. Aqui fica o registro de proveniência; lá, o raciocínio.
 
-⚠️ **As medições de BAA já gravadas foram calculadas pela regra antiga.** A tabela abaixo é o estado do banco em 25/07/2026, antes da correção — os 7.170 registros vêm da média arredondada e **subestimam o alerta**. O upsert é idempotente por `(local, data, variável, fonte)`, então reexecutar o backfill do NOAA corrige em lugar, sem duplicar; até que isso seja feito, a série de `baa` não deve ser usada como alvo.
+#### Efeito medido — backfill reexecutado em 25/07/2026
 
-| Nível gravado (regra antiga) | n |
-|---|---|
-| 0 | 4.509 |
-| 1 | 2.010 |
-| 2 | 344 |
-| 3 | 147 |
-| 4 | 160 |
+43.038 medições, três locais, 2020-01-01 a 2026-07-24, pelo espelho PACIOOS. São 7.173 por variável = (2.397 dias − 6 datas ausentes do produto) × 6 variáveis, o que fecha com as lacunas já documentadas na §1.1.
+
+| Nível | Antes (média) | Depois (máximo) | Δ |
+|---|---|---|---|
+| 0 | 4.509 | 3.961 | −548 |
+| 1 | 2.010 | 2.241 | +231 |
+| 2 | 344 | 373 | +29 |
+| 3 | 147 | 229 | +82 |
+| 4 | 160 | **369** | **+209** |
+
+**O Alerta Nível 2 mais que dobrou** — é precisamente a classe que a média apagava, e a que mais importa, por ser onde a NOAA prevê mortalidade e não só branqueamento.
+
+`baa_area_alerta`: 7.173 valores, nenhum nulo, faixa 0–1, média 0,048; 312 dias com mais de metade do recife em Alerta Nível 1 ou acima.
+
+**Verificação de consistência interna.** Em 17/05/2024 em Abrolhos o banco agora grava BAA 4 com DHW 8,02. A regra da NOAA define Alerta Nível 2 a partir de DHW ≥ 8: os dois campos **voltaram a concordar**. Sob a média, o BAA dizia 3 e contradizia o DHW do próprio registro — o efeito colateral descrito acima. A concordância se explica pela `baa_area_alerta` de 0,950: com o recife quase todo no mesmo estado, máximo e média espacial convergem.
+
+**Padrão anual em Abrolhos** (dias em Alerta Nível 1 ou acima / fração máxima da área):
+
+| Ano | Dias | Área máx. |
+|---|---|---|
+| 2020 | 7 | 0,157 |
+| 2021 | 0 | 0,000 |
+| 2022 | 15 | 0,347 |
+| 2023 | 0 | 0,000 |
+| **2024** | **71** | **0,950** |
+| **2025** | **51** | **1,000** |
+| 2026 (até 24/07) | 0 | 0,000 |
+
+2024 e 2025 reproduzem o evento global de branqueamento; 2021 e 2023 ficam zerados. Em 2025 a fração chega a **1,000** — recife inteiro em alerta —, informação que a série agregada por média não conseguia representar.
+
+A ingestão sofreu 10 `ReadTimeout` do PACIOOS, todos absorvidos pela retentativa. Nenhum bloco perdido.
 
 ### 6.15 DOIs dos produtos CMEMS não coletados
 Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
@@ -562,7 +620,10 @@ conforme a regra de governança daquele documento.
 | 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
 | 25/07/2026 | Primeira ingestão ao vivo tentada na rede da faculdade. **§1.1 atualizada:** o espelho pfeg devolve HTTP 503 intermitente por sobrecarga. Pipeline passou a repetir falhas passageiras (`ingestao/retentativa.py`) e a preservar a causa real do erro — o resumidor apagava mensagens que usavam `<...>`, como as do `URLError`, e gravava só o tipo da exceção. |
 | 25/07/2026 | **Backfill histórico concluído: 35.850 medições.** 2020-01-01 a 2026-07-23, três locais, 5 variáveis, em 14 blocos por local. Executado **duas vezes de forma independente** — pfeg `NOAA_DHW` na rede da UFF e PACIOOS `dhw_5km` fora dela — com resultado idêntico bloco a bloco, o que valida cruzadamente os dois espelhos. Cobertura e as 6 datas ausentes do produto documentadas na §1.1. |
-| 25/07/2026 | **§6.16 resolvida — BAA passa a ser agregado por máximo.** A regra de agregação espacial deixou de ser uniforme: `ConectorNoaaCrw.AGREGACAO` a declara por variável, e média ficou restrita a grandeza contínua. Nova variável canônica **`baa_area_alerta`** (fração dos pixels válidos em Alerta Nível 1 ou acima) grava a extensão do evento, que nem média nem máximo preservam sozinhos. Contrato canônico ganhou a tabela de tipo/agregação e a regra 5: variável ordinal ou categórica precisa declarar sua agregação, e usar média fora de variável contínua é defeito, não escolha. ⚠️ Os 7.170 registros de `baa` já gravados vêm da regra antiga e subestimam o alerta — exigem reexecução do backfill do NOAA. |
+| 25/07/2026 | **§6.16 resolvida — BAA passa a ser agregado por máximo.** A regra de agregação espacial deixou de ser uniforme: `ConectorNoaaCrw.AGREGACAO` a declara por variável, e média ficou restrita a grandeza contínua. Nova variável canônica **`baa_area_alerta`** (fração dos pixels válidos em Alerta Nível 1 ou acima) grava a extensão do evento, que nem média nem máximo preservam sozinhos. Contrato canônico ganhou a tabela de tipo/agregação e a regra 5: variável ordinal ou categórica precisa declarar sua agregação, e usar média fora de variável contínua é defeito, não escolha. |
+| 25/07/2026 | **PACIOOS vira o espelho padrão do projeto**, no lugar do pfeg — `SERVIDOR_PADRAO`/`DATASET_PADRAO` no conector, defaults em `settings.py` e `.env.example` (onde as linhas `NOAA_ERDDAP_*` passam a vir comentadas). Razão: o pfeg exige rede com domínio federal, e um padrão que só funciona numa rede específica é armadilha para quem clona o repositório — foi exatamente o que travou a primeira tentativa de rodar fora da universidade. O PACIOOS não é versão degradada: os dois espelhos deram resultado idêntico bloco a bloco no backfill de 2020–2026. ⚠️ Registrado também o que **não** se sabe: o PACIOOS nunca foi testado de dentro da UFF, e a tabela da §1.1 diz "não medido" em vez de presumir sucesso. |
+| 25/07/2026 | **§1.5 criada — estado da base ingerida.** Tabela consolidada do que está de fato em `MedicaoAmbiental`: 57.420 medições, 8 variáveis, três locais, **as duas fontes cobrindo exatamente a mesma janela** (2020-01-01 a 2026-07-24), pré-requisito para montar janelas com defasagem sem perder amostra. README: tabela de espelhos passa a registrar o comportamento nas **duas redes**, e o PACIOOS deixa de ser plano B — é o único que responde dentro e fora da UFF, foi por ele que os 43.038 registros entraram, e os dois espelhos já haviam sido comparados bloco a bloco com resultado idêntico. O padrão do código segue no pfeg, por ser o espelho oficial; quem roda fora da universidade sobrescreve no `.env`. |
+| 25/07/2026 | **Backfill do NOAA reexecutado com a regra nova: 43.038 medições** (7.173 × 6 variáveis, PACIOOS, 2020-01-01 a 2026-07-24). O Alerta Nível 2 passou de 160 para 369 registros — a média escondia 209 dias de estresse máximo. `baa_area_alerta` mostra 2025 chegando a 1,000 em Abrolhos, recife inteiro em alerta. BAA e DHW voltaram a ser internamente consistentes sob a regra da NOAA (DHW ≥ 8 ⇒ Alerta Nível 2), o que a média espacial quebrava. Medições completas na §6.16. |
 | 25/07/2026 | **Backfill do Copernicus concluído: 14.382 medições.** 2020-01-01 a 2026-07-24, três locais, salinidade e oxigênio, em 14 blocos por local (~13 min). Cobertura **completa**: 2.397 dias por local e variável, zero lacunas e zero nulos. A emenda reanálise→análise caiu em datas distintas por variável (salinidade 23/06, oxigênio 31/05), conforme o eixo de tempo de cada dataset — 99% da série vem da reanálise. Faixas e gradiente latitudinal registrados na §1.2, com a ressalva de que ausência de lacunas aqui é propriedade de saída de modelo, não indicador de qualidade. Nenhuma data futura gravada. |
 | 25/07/2026 | **Conector Copernicus em produção.** Primeira ingestão ao vivo: 80 medições de Abrolhos (15/06–24/07/2026), salinidade 37,07–37,49 PSU e oxigênio 205,8–209,1 mmol·m⁻³ — coerentes com a Água Tropical do Atlântico Sul e com a saturação de superfície a 25 °C. A emenda caiu onde o catálogo previa: 9 dias de reanálise até 23/06 e 31 de análise a partir de 24/06, com `dataset_id` gravado por valor. O período foi cortado em 24/07 para impedir que previsão entrasse como medição — a §6.11 deixa de ser risco em aberto para o caminho novo. `Observacao` ganhou `dataset_id` próprio para tornar a costura rastreável. |
 | 25/07/2026 | **Cobertura real do CMEMS medida no catálogo**, com credenciais criadas e `copernicusmarine.describe()`. Salinidade e O₂ têm reanálise de 1993 em diante (`cmems_mod_glo_phy_my_0.083deg_P1D-m` até 2026-06-23; `cmems_mod_glo_bgc_my_0.25deg_P1D-m` até 2026-05-31), cobrindo com folga a série 2020–2026 do NOAA. **KD490 só existe de 2023-11-15 em diante e não tem reanálise** — ver [VARIAVEIS.md](VARIAVEIS.md) §3.5, que passa a recomendar sua saída do baseline. Registrado também que os produtos *analysis and forecast* publicam datas futuras (até 2026-08-04, com hoje em 25/07), o que torna a §6.11 um risco ativo para a ingestão, não só para os CSVs antigos. |

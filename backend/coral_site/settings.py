@@ -203,11 +203,15 @@ if env.bool('DJANGO_BEHIND_PROXY', default=False):
 # --- Fontes externas de dados (pipeline de ingestao) ------------------------
 # Servidor e dataset andam em par: cada espelho ERDDAP publica o produto do
 # Coral Reef Watch sob um identificador proprio.
+#
+# Padrao PACIOOS: e o unico espelho que responde dentro e fora de rede com
+# dominio federal, e o backfill nos dois espelhos deu resultado identico bloco
+# a bloco. Ver ingestao/conectores/noaa_crw.py para a evidencia completa.
 NOAA_ERDDAP_SERVER = env(
     'NOAA_ERDDAP_SERVER',
-    default='https://coastwatch.pfeg.noaa.gov/erddap',
+    default='https://pae-paha.pacioos.hawaii.edu/erddap',
 )
-NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='NOAA_DHW')
+NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='dhw_5km')
 
 # Quantas vezes tentar antes de desistir de uma fonte. Vale so para falhas
 # passageiras (503, timeout); certificado invalido ou 403 falham de primeira.

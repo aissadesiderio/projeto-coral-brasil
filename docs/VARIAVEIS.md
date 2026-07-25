@@ -178,7 +178,7 @@ A fração conta apenas pixels com valor válido. Dividir pelo total da grade mi
 
 #### O que isso muda para o experimento
 
-1. **A distribuição do alvo muda.** As classes altas deixam de ser raras por artefato de agregação. Qualquer balanceamento de classe calibrado na distribuição antiga precisa ser refeito.
+1. **A distribuição do alvo muda** — e mudou de fato. Reingerido em 25/07/2026, o Alerta Nível 2 passou de 160 para **369** registros e o Alerta Nível 1 de 147 para 229. As classes altas deixam de ser raras por artefato de agregação. Qualquer balanceamento de classe calibrado na distribuição antiga precisa ser refeito.
 2. **`baa_area_alerta` é uma segunda variável resposta candidata** — contínua em [0, 1]. Prever *extensão* é pergunta diferente de prever *severidade*, e possivelmente mais útil para manejo. Não entra na entrega 1; fica registrada para não se perder.
 3. **A medição de circularidade da §4.2 não é afetada.** Ela foi feita no dado por pixel, onde a relação BAA = f(HotSpot, DHW) vale exatamente. O defeito era da agregação, não da relação.
 
@@ -242,7 +242,7 @@ Aplica-se o princípio 2.2: o O₂ mede o elo final dessa cadeia.
 | 4 | ~~`carregar_historico.py` lê `talk` como `ph`~~ | ✅ **Neutralizado no novo pipeline**: `normalizacao.resolver_variavel('talk')` levanta `ColunaRecusada`, com teste. O script antigo segue com o bug até ser aposentado. |
 | 5 | ~~DHW recalculado fora da norma NOAA~~ | ✅ **Resolvido no novo pipeline**: o conector lê a coluna `CRW_DHW` oficial, sem recalcular. |
 | 6 | **6 datas ausentes na série do CRW** | Janelas e defasagens que as atravessem ficam mais curtas do que declaram — ver §7.1 |
-| 7 | ~~Target agregado por média espacial~~ | ✅ **Resolvido**: BAA passa a ser agregado por máximo, com `baa_area_alerta` ao lado (§4.5). **Pendente de reexecução do backfill** — os 7.170 registros de `baa` em banco ainda vêm da regra antiga. |
+| 7 | ~~Target agregado por média espacial~~ | ✅ **Resolvido e reingerido** em 25/07/2026: BAA agregado por máximo, com `baa_area_alerta` ao lado (§4.5). Banco reconstruído — 43.038 medições, Alerta Nível 2 de 160 para 369 registros. |
 
 ### 7.1 Lacunas na série do CRW (medido em 25/07/2026)
 
