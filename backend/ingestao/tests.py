@@ -91,6 +91,29 @@ def df_crw(dias=3, sst=28.0, dhw=2.0, baa=1.0):
     return pd.DataFrame(linhas)
 
 
+# Grade real de Abrolhos em 17/05/2024, medida no ERDDAP: 121 pixels, nenhum
+# NaN. E o caso que motivou trocar a media pelo maximo - ver FONTES.md 6.16.
+ABROLHOS_2024_05_17 = [3] * 70 + [4] * 45 + [2] * 6
+
+
+def df_grade_baa(baa_por_pixel, data='2026-03-17'):
+    """Uma data, um pixel por valor de BAA em `baa_por_pixel`.
+
+    Serve para montar o caso que motivou a mudanca: uma grade heterogenea, em
+    que media e maximo dao respostas diferentes.
+    """
+    return pd.DataFrame(
+        [
+            {
+                'time (UTC)': f'{data}T12:00:00Z',
+                'CRW_SST (degree_C)': 29.0,
+                'CRW_BAA (1)': valor,
+            }
+            for valor in baa_por_pixel
+        ]
+    )
+
+
 class NormalizacaoTests(TestCase):
     def test_traduz_nomes_de_fonte_para_canonicos(self):
         self.assertEqual(resolver_variavel('CRW_SST'), 'sst')
@@ -192,11 +215,17 @@ class ConectorNoaaCrwTests(TestCase):
 
         self.assertFalse(resultado.houve_falha)
         datas = {o.data for o in resultado.observacoes}
-        self.assertEqual(len(datas), 3, 'Os 2 pixels por data deviam virar 1 media')
+        self.assertEqual(len(datas), 3, 'Os 2 pixels por data deviam virar 1 valor')
         colunas = {o.coluna for o in resultado.observacoes}
-        self.assertEqual(colunas, set(ConectorNoaaCrw.variaveis and
-                                      ['CRW_SST', 'CRW_DHW', 'CRW_BAA',
-                                       'CRW_HOTSPOT', 'CRW_SSTANOMALY']))
+        self.assertEqual(
+            colunas,
+            {
+                'CRW_SST', 'CRW_DHW', 'CRW_BAA',
+                'CRW_HOTSPOT', 'CRW_SSTANOMALY',
+                # Derivada do BAA pelo proprio conector.
+                'CRW_BAA_FRACAO_ALERTA',
+            },
+        )
 
     def test_falha_de_rede_nao_levanta_excecao(self):
         """Uma fonte fora do ar nao pode derrubar o pipeline."""
@@ -232,6 +261,139 @@ class ConectorNoaaCrwTests(TestCase):
         self.assertEqual(resultado.observacoes, [])
 
 
+class AgregacaoEspacialTests(TestCase):
+    """A regra de agregacao e por variavel - ver docs/FONTES.md secao 6.16.
+
+    Media de categoria ordinal nao e categoria, e subestima o alerta. Estes
+    testes travam o maximo para o BAA e a media para o resto.
+    """
+
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='local-agregacao', nome='Agregacao', estado='Bahia',
+            cidade='Caravelas', latitude=-17.972, longitude=-38.688,
+        )
+
+    def _coletar(self, df):
+        conector = ConectorNoaaCrw(cliente=ClienteErddapFalso(df))
+        return conector.coletar(self.local, date(2026, 3, 17), date(2026, 3, 17))
+
+    def _valor(self, resultado, coluna):
+        return next(o.valor for o in resultado.observacoes if o.coluna == coluna)
+
+    def test_baa_usa_o_maximo_e_nao_a_media(self):
+        """Reproduz a grade medida em Abrolhos, 17/05/2024.
+
+        A media dava 3,32 -> arredondada para 3 (Alerta Nivel 1), enquanto 45
+        dos 121 pixels estavam em Alerta Nivel 2.
+        """
+        resultado = self._coletar(df_grade_baa(ABROLHOS_2024_05_17))
+
+        self.assertEqual(self._valor(resultado, 'CRW_BAA'), 4)
+
+    def test_media_desta_grade_daria_um_nivel_a_menos(self):
+        """Guarda a premissa do teste acima: sem isso ele passaria a toa."""
+        media = sum(ABROLHOS_2024_05_17) / len(ABROLHOS_2024_05_17)
+
+        self.assertAlmostEqual(media, 3.3223, places=4)
+        self.assertEqual(round(media), 3)
+        self.assertEqual(max(ABROLHOS_2024_05_17), 4)
+
+    def test_sst_continua_por_media(self):
+        """Grandeza continua nao muda de regra."""
+        conector = ConectorNoaaCrw(cliente=ClienteErddapFalso(df_crw(dias=1, sst=28.0)))
+
+        resultado = conector.coletar(self.local, date(2026, 1, 1), date(2026, 1, 1))
+
+        # Os dois pixels sao 27,99 e 28,01.
+        self.assertAlmostEqual(self._valor(resultado, 'CRW_SST'), 28.0, places=6)
+
+    def test_fracao_de_area_mede_a_extensao_do_alerta(self):
+        """Em 17/05/2024, 115 dos 121 pixels estavam em Alerta Nivel 1+."""
+        resultado = self._coletar(df_grade_baa(ABROLHOS_2024_05_17))
+
+        self.assertAlmostEqual(
+            self._valor(resultado, 'CRW_BAA_FRACAO_ALERTA'), 115 / 121, places=6
+        )
+
+    def test_fracao_distingue_pixel_isolado_de_recife_inteiro(self):
+        """O maximo sozinho nao faz essa distincao - e por isso ela existe."""
+        um_pixel = self._coletar(df_grade_baa([4] + [0] * 120))
+        recife_todo = self._coletar(df_grade_baa([4] * 121))
+
+        self.assertEqual(
+            self._valor(um_pixel, 'CRW_BAA'),
+            self._valor(recife_todo, 'CRW_BAA'),
+        )
+        self.assertAlmostEqual(
+            self._valor(um_pixel, 'CRW_BAA_FRACAO_ALERTA'), 1 / 121, places=6
+        )
+        self.assertEqual(self._valor(recife_todo, 'CRW_BAA_FRACAO_ALERTA'), 1.0)
+
+    def test_fracao_conta_do_alerta_nivel_1_para_cima(self):
+        """BAA 2 e "Aviso", ainda nao e alerta: nao entra na fracao."""
+        resultado = self._coletar(df_grade_baa([2] * 60 + [3] * 40 + [0] * 21))
+
+        self.assertAlmostEqual(
+            self._valor(resultado, 'CRW_BAA_FRACAO_ALERTA'), 40 / 121, places=6
+        )
+
+    def test_fracao_ignora_pixel_sem_dado_em_vez_de_conta_lo_como_calmo(self):
+        """Dividir pelo total da grade diluiria o alerta no dia de pior
+        cobertura, que e justamente quando ele mais importa."""
+        resultado = self._coletar(df_grade_baa([4] * 10 + [None] * 90 + [0] * 10))
+
+        self.assertAlmostEqual(
+            self._valor(resultado, 'CRW_BAA_FRACAO_ALERTA'), 10 / 20, places=6
+        )
+
+    def test_fracao_chega_ao_banco_como_variavel_propria(self):
+        conector = ConectorNoaaCrw(
+            cliente=ClienteErddapFalso(df_grade_baa(ABROLHOS_2024_05_17))
+        )
+
+        ingerir(self.local, date(2026, 3, 17), date(2026, 3, 17), conector)
+
+        medicao = MedicaoAmbiental.objects.get(
+            local_recife=self.local, variavel='baa_area_alerta'
+        )
+        self.assertAlmostEqual(medicao.valor, 115 / 121, places=6)
+        self.assertEqual(medicao.unidade, 'fração')
+        self.assertEqual(medicao.quality_flag, 'ok')
+
+    def test_fracao_nao_e_arredondada_como_o_baa(self):
+        """`normalizar` arredonda o BAA por ser ordinal. A fracao e continua."""
+        normalizado = normalizar('CRW_BAA_FRACAO_ALERTA', 45 / 121)
+
+        self.assertEqual(normalizado.variavel, 'baa_area_alerta')
+        self.assertNotEqual(normalizado.valor, 0.0, 'arredondar zeraria a fracao')
+        self.assertEqual(normalizado.valor, 45 / 121)
+
+    def test_fracao_fora_de_zero_a_um_e_reprovada(self):
+        self.assertFalse(validar('baa_area_alerta', 1.4).aprovado)
+        self.assertTrue(validar('baa_area_alerta', 1.0).aprovado)
+        self.assertTrue(validar('baa_area_alerta', 0.0).aprovado)
+
+    def test_dia_sem_baa_valido_nao_inventa_fracao(self):
+        resultado = self._coletar(df_grade_baa([None] * 5))
+
+        fracoes = [
+            o for o in resultado.observacoes if o.coluna == 'CRW_BAA_FRACAO_ALERTA'
+        ]
+        self.assertTrue(all(o.valor is None for o in fracoes))
+
+    def test_dataset_sem_baa_nao_gera_fracao(self):
+        """Um espelho que nao publique CRW_BAA nao pode quebrar a extracao."""
+        df = pd.DataFrame(
+            [{'time (UTC)': '2026-03-17T12:00:00Z', 'CRW_SST (degree_C)': 29.0}]
+        )
+
+        resultado = self._coletar(df)
+
+        colunas = {o.coluna for o in resultado.observacoes}
+        self.assertEqual(colunas, {'CRW_SST'})
+
+
 class IngestaoTests(TestCase):
     def setUp(self):
         self.local = LocalRecife.objects.create(
@@ -255,7 +417,8 @@ class IngestaoTests(TestCase):
         )
 
         self.assertEqual(execucao.status, 'sucesso')
-        self.assertEqual(MedicaoAmbiental.objects.count(), 15)  # 3 datas x 5 variaveis
+        # 3 datas x 6 variaveis: as 5 do ERDDAP mais a fracao de area derivada.
+        self.assertEqual(MedicaoAmbiental.objects.count(), 18)
 
         sst = MedicaoAmbiental.objects.get(data=date(2026, 1, 1), variavel='sst')
         self.assertEqual(sst.fonte, 'noaa_crw')
@@ -1170,7 +1333,7 @@ class RetentativaNoConectorTests(TestCase):
 
         self.assertEqual(execucao.status, 'sucesso')
         self.assertEqual(cliente.chamadas, 3)
-        self.assertEqual(MedicaoAmbiental.objects.count(), 15)
+        self.assertEqual(MedicaoAmbiental.objects.count(), 18)
 
     def test_503_persistente_registra_a_causa_completa(self):
         cliente = ClienteErddapFalso(excecao=OSError(ERRO_503_ERDDAP))

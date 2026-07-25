@@ -16,6 +16,7 @@ from django.urls import reverse
 
 from db import setup_graph
 from .admin import LocalRecifeAdmin
+from .management.commands.testar_fontes import _origem_das_credenciais
 from .management.utils import exigir_migrations_aplicadas, migrations_pendentes
 from .code_sync import (
     BACKEND_SYNC_PATH,
@@ -869,3 +870,51 @@ class GuardaDeMigrationsTests(TestCase):
                         call_command(comando, stdout=StringIO())
 
                 self.assertIn('migrate', str(ctx.exception))
+
+
+class CredenciaisCopernicusTests(TestCase):
+    """De onde o `testar_fontes` diz que as credenciais vem.
+
+    O caminho recomendado e `copernicusmarine login`, que grava fora do
+    projeto. Checar so o .env faria o diagnostico dizer "sem credenciais" a
+    quem seguiu a recomendacao - empurrando de volta para guardar senha dentro
+    do repositorio.
+    """
+
+    def _com_arquivo(self, existe):
+        arquivo = Path(tempfile.gettempdir()) / '.copernicusmarine-credentials-teste'
+        if existe:
+            arquivo.touch()
+        elif arquivo.exists():
+            arquivo.unlink()
+        return patch(
+            'aquaculture.management.commands.testar_fontes.'
+            'ARQUIVO_CREDENCIAIS_COPERNICUS',
+            arquivo,
+        )
+
+    @override_settings(COPERNICUSMARINE_SERVICE_USERNAME='alguem@exemplo.org')
+    def test_variavel_no_env_e_reconhecida(self):
+        with self._com_arquivo(existe=False):
+            self.assertIn('.env', _origem_das_credenciais())
+
+    @override_settings(COPERNICUSMARINE_SERVICE_USERNAME='')
+    def test_arquivo_do_login_e_reconhecido(self):
+        with self._com_arquivo(existe=True):
+            origem = _origem_das_credenciais()
+
+        self.assertIsNotNone(origem, 'quem rodou "copernicusmarine login" tem credencial')
+        self.assertIn('copernicusmarine-credentials', origem)
+
+    @override_settings(COPERNICUSMARINE_SERVICE_USERNAME='')
+    def test_sem_nenhum_dos_dois_devolve_none(self):
+        with self._com_arquivo(existe=False):
+            self.assertIsNone(_origem_das_credenciais())
+
+    @override_settings(COPERNICUSMARINE_SERVICE_USERNAME='alguem@exemplo.org')
+    def test_nenhuma_credencial_e_lida_ou_exposta(self):
+        """O diagnostico diz a origem, nunca o valor."""
+        with self._com_arquivo(existe=False):
+            origem = _origem_das_credenciais()
+
+        self.assertNotIn('alguem@exemplo.org', origem)

@@ -62,7 +62,9 @@ def preparar_medicoes(local, resultado, fonte):
                 valor=checado.valor,
                 unidade=normalizado.unidade,
                 fonte=fonte,
-                dataset_id=resultado.dataset_id,
+                # A observacao pode declarar o proprio dataset: numa serie
+                # emendada, cada valor sabe de onde veio.
+                dataset_id=obs.dataset_id or resultado.dataset_id,
                 quality_flag=checado.quality_flag,
                 observacao=checado.observacao,
             )

@@ -40,6 +40,27 @@ Este documento registra **toda** fonte de informação usada na construção do 
 
 O PACIOOS foi a origem dos CSVs que o projeto já possui. O padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
 
+#### Cobertura obtida e lacunas do produto (backfill de 25/07/2026)
+
+Série ingerida: **2020-01-01 a 2026-07-23**, três locais, 5 variáveis — **35.850 medições** (11.950 por local).
+
+Cobertura: **2.390 de 2.396 dias (99,75%)**. Seis datas não existem no produto:
+
+| Data ausente | Observação |
+|---|---|
+| 2024-01-30 | isolada |
+| 2024-07-04, 07-05, 07-06 | **três dias consecutivos** |
+| 2024-07-25 | isolada |
+| 2026-04-25 | isolada |
+
+Três propriedades verificadas que sustentam a conclusão de que a lacuna é **do produto CRW**, e não do pipeline nem de um servidor específico:
+
+1. **As seis datas são exatamente as mesmas nos três locais** (Abrolhos-BA, Picãozinho-PB, Porto de Galinhas-PE), que ficam a mais de 1.500 km um do outro.
+2. **Os dois espelhos concordam.** O backfill foi feito duas vezes de forma independente — pfeg `NOAA_DHW` na rede da UFF e PACIOOS `dhw_5km` fora dela — e produziu contagem idêntica bloco a bloco, incluindo os blocos deficitários (895, 880, 895 nas mesmas posições).
+3. **Não há dia parcial.** Todos os 7.170 pares (data, local) gravados têm exatamente 5 variáveis. Ou o dia veio inteiro, ou não veio.
+
+⚠️ **Consequência para a modelagem:** janelas e defasagens precisam tratar essas datas explicitamente. Uma janela de 30 dias que contenha 04–06/07/2024 tem 27 dias, não 30. Interpolar ou não é decisão do modelo, mas ignorar silenciosamente produziria uma feature com significado diferente do declarado. O pipeline ainda **não** emite relatório de lacunas — estas foram encontradas conferindo contagem à mão.
+
 #### 🔒 Restrição de rede: os servidores da NOAA exigem domínio federal
 
 Os espelhos da própria NOAA **só respondem de dentro de uma rede com domínio federal** — no caso deste projeto, a UFF. Medido em 25/07/2026, comparando uma máquina dentro da UFF com outra fora:
@@ -137,6 +158,34 @@ Vários arquivos trazem também o crédito do **Projeto NECCTON (EU)** — https
 - `backend/ml_models/treinar_modelo.py` — `FILES_CONFIG`.
 - `backend/aquaculture/management/commands/coleta_de_dados.py` — chamada ao vivo a `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m` com `variables=["chl","o2","so"]`.
 - `backend/db/setup_graph.py` — nó `FonteDados {id: "copernicus_marine"}`.
+- `backend/ingestao/conectores/copernicus.py` — **caminho novo**, por API, com proveniência por valor. Só ele alimenta `MedicaoAmbiental` com `fonte='copernicus'`.
+
+#### Cobertura ingerida pelo pipeline
+
+Backfill de 25/07/2026, `2020-01-01` a `2026-07-24`, três locais, em 14 blocos de 180 dias por local. **14.382 medições, 2.397 dias por local e variável, nenhuma data faltando e nenhum valor nulo.**
+
+| Variável | Dataset | Tipo | Período gravado | n (3 locais) |
+|---|---|---|---|---|
+| salinidade | `cmems_mod_glo_phy_my_0.083deg_P1D-m` | reanálise | 2020-01-01 → 2026-06-23 | 7.098 |
+| salinidade | `cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m` | análise | 2026-06-24 → 2026-07-24 | 93 |
+| oxigênio | `cmems_mod_glo_bgc_my_0.25deg_P1D-m` | reanálise | 2020-01-01 → 2026-05-31 | 7.029 |
+| oxigênio | `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m` | análise | 2026-06-01 → 2026-07-24 | 162 |
+
+A emenda cai em data **diferente por variável** — a reanálise física vai três semanas mais longe que a biogeoquímica. Por isso a data de corte não é constante no código: é lida do eixo de tempo de cada dataset aberto.
+
+⚠️ **Série sem lacunas não é sinal de qualidade superior à do NOAA.** O CMEMS é saída de modelo: produz valor para todo dia e todo pixel, inclusive onde não houve observação assimilada. O produto do NOAA tem 6 datas ausentes justamente por ser observacional. Comparar as duas séries pela completude inverteria o que cada uma vale como evidência.
+
+**Faixas medidas (2020–2026, média espacial da bbox, camada de ~0,494 m):**
+
+| Local | Salinidade (PSU) | Oxigênio (mmol·m⁻³) |
+|---|---|---|
+| Abrolhos (BA, −18°) | 35,75 – 37,69 (méd. 37,12) | 199,9 – 214,2 (méd. 207,8) |
+| Porto de Galinhas (PE, −8°) | 35,39 – 37,35 (méd. 36,74) | 194,4 – 207,0 (méd. 201,6) |
+| Picãozinho (PB, −7°) | 35,32 – 37,19 (méd. 36,65) | 195,8 – 206,6 (méd. 201,6) |
+
+O gradiente latitudinal está fisicamente correto nos dois sentidos: Abrolhos, mais ao sul e mais frio, tem mais O₂ dissolvido (a solubilidade cai com a temperatura) e salinidade mais alta.
+
+**Profundidade:** o pipeline pede de 0 a 1 m, e a toolbox emite um `WARNING` a cada abertura dizendo que a seleção excede as coordenadas do dataset (`[0.494, 5727.9]`). É esperado e não é erro: o primeiro nível dos produtos globais fica em ~0,494 m, e o intervalo pedido seleciona esse nível e só ele. Pedir exatamente 0,494 deixaria o código preso a uma constante que muda entre produtos (o BGC usa 0,506 m).
 
 **Citação obrigatória:**
 > E.U. Copernicus Marine Service Information (CMEMS). Produto [ID DO PRODUTO], DOI [DOI DO PRODUTO]. Dados acessados em [DATA]. https://marine.copernicus.eu
@@ -410,6 +459,51 @@ A infraestrutura criada (`DatasetCatalogo`, `/api/datasets/`, `BancoDadosPage`) 
 
 </details>
 
+### 6.16 ✅ RESOLVIDO em 25/07/2026 — o BAA estava sendo tratado como número contínuo na agregação espacial
+
+Detectado em 25/07/2026, ao conferir por que Abrolhos aparecia com DHW 8,38 em 2024 e mesmo assim BAA máximo 3.
+
+O conector pede uma bbox (0,5° × 0,5° ≈ **121 pixels**) e agrega por média diária. Isso é razoável para SST, DHW e HotSpot, que são contínuos. **Para o BAA, não é** — ele é uma categoria ordinal de 0 a 4 (0 sem estresse, 1 vigilância, 2 alerta, 3 Alerta Nível 1, 4 Alerta Nível 2).
+
+Medição em Abrolhos, 2024-05-17 (todos os 121 pixels com valor, sem NaN):
+
+| | Valor |
+|---|---|
+| BAA por pixel | 70 pixels em **3**, 45 em **4**, 6 em **2** |
+| Média dos pixels | 3,3223 |
+| Gravado no banco | **3,000** |
+
+Dois problemas encadeados:
+
+1. **A média de uma categoria não é uma categoria.** 3,32 não corresponde a nenhum nível de alerta definido pela NOAA.
+2. **O valor gravado perde o evento.** 37% da área estava em Alerta Nível 2 — o nível em que a NOAA prevê mortalidade, não só branqueamento — e o registro diz Alerta Nível 1. Os sumários regionais da própria NOAA reportam o **nível máximo** da área, não a média.
+
+Efeito colateral: a média espacial também quebra a relação determinística entre BAA e (HotSpot, DHW). Nesse mesmo dia, HotSpot médio 1,214 e DHW médio 8,022 satisfazem a regra de BAA 4, mas o BAA agregado diz 3 — porque a média de uma função não linear não é a função das médias. Isso **não** invalida a análise de circularidade da [VARIAVEIS.md](VARIAVEIS.md) §4, que foi feita no dado por pixel, onde a relação vale exatamente.
+
+**Consequência para o modelo:** o BAA é o alvo da entrega 1. Um alvo que subestima sistematicamente o pico de estresse ensina o modelo a subestimar também.
+
+**Correção aplicada em 25/07/2026.** A regra de agregação deixou de ser uniforme: `ConectorNoaaCrw.AGREGACAO` declara a regra por variável, e só as contínuas caem no padrão (média).
+
+| | Antes | Depois |
+|---|---|---|
+| SST, DHW, HotSpot, anomalia | média | média *(inalterado)* |
+| **BAA** | média | **máximo** |
+| extensão do alerta | — | **`baa_area_alerta`**, nova variável |
+
+Em 17/05/2024 a nova regra grava BAA 4 e `baa_area_alerta` = 115/121 = **0,950**, o que confirma que o Alerta Nível 2 daquele dia era evento de recife inteiro e não artefato de um pixel.
+
+📖 **A explicação completa — por que média de categoria ordinal é errada, por que máximo e não moda, e por que a fração de área precisa acompanhar o máximo — está em [VARIAVEIS.md](VARIAVEIS.md) §4.5**, com exemplo trabalhado. Aqui fica o registro de proveniência; lá, o raciocínio.
+
+⚠️ **As medições de BAA já gravadas foram calculadas pela regra antiga.** A tabela abaixo é o estado do banco em 25/07/2026, antes da correção — os 7.170 registros vêm da média arredondada e **subestimam o alerta**. O upsert é idempotente por `(local, data, variável, fonte)`, então reexecutar o backfill do NOAA corrige em lugar, sem duplicar; até que isso seja feito, a série de `baa` não deve ser usada como alvo.
+
+| Nível gravado (regra antiga) | n |
+|---|---|
+| 0 | 4.509 |
+| 1 | 2.010 |
+| 2 | 344 |
+| 3 | 147 |
+| 4 | 160 |
+
 ### 6.15 DOIs dos produtos CMEMS não coletados
 Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
 
@@ -467,6 +561,11 @@ conforme a regra de governança daquele documento.
 | 24/07/2026 | **§6.14 resolvida.** Seed fictício removido pela migration `0016`; catálogo reconstruído a partir dos 9 arquivos reais via `manage.py inventariar_datasets`, com tamanho e período lidos do disco. Exclusões de arquivos com problema de integridade documentadas em código. |
 | 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
 | 25/07/2026 | Primeira ingestão ao vivo tentada na rede da faculdade. **§1.1 atualizada:** o espelho pfeg devolve HTTP 503 intermitente por sobrecarga. Pipeline passou a repetir falhas passageiras (`ingestao/retentativa.py`) e a preservar a causa real do erro — o resumidor apagava mensagens que usavam `<...>`, como as do `URLError`, e gravava só o tipo da exceção. |
+| 25/07/2026 | **Backfill histórico concluído: 35.850 medições.** 2020-01-01 a 2026-07-23, três locais, 5 variáveis, em 14 blocos por local. Executado **duas vezes de forma independente** — pfeg `NOAA_DHW` na rede da UFF e PACIOOS `dhw_5km` fora dela — com resultado idêntico bloco a bloco, o que valida cruzadamente os dois espelhos. Cobertura e as 6 datas ausentes do produto documentadas na §1.1. |
+| 25/07/2026 | **§6.16 resolvida — BAA passa a ser agregado por máximo.** A regra de agregação espacial deixou de ser uniforme: `ConectorNoaaCrw.AGREGACAO` a declara por variável, e média ficou restrita a grandeza contínua. Nova variável canônica **`baa_area_alerta`** (fração dos pixels válidos em Alerta Nível 1 ou acima) grava a extensão do evento, que nem média nem máximo preservam sozinhos. Contrato canônico ganhou a tabela de tipo/agregação e a regra 5: variável ordinal ou categórica precisa declarar sua agregação, e usar média fora de variável contínua é defeito, não escolha. ⚠️ Os 7.170 registros de `baa` já gravados vêm da regra antiga e subestimam o alerta — exigem reexecução do backfill do NOAA. |
+| 25/07/2026 | **Backfill do Copernicus concluído: 14.382 medições.** 2020-01-01 a 2026-07-24, três locais, salinidade e oxigênio, em 14 blocos por local (~13 min). Cobertura **completa**: 2.397 dias por local e variável, zero lacunas e zero nulos. A emenda reanálise→análise caiu em datas distintas por variável (salinidade 23/06, oxigênio 31/05), conforme o eixo de tempo de cada dataset — 99% da série vem da reanálise. Faixas e gradiente latitudinal registrados na §1.2, com a ressalva de que ausência de lacunas aqui é propriedade de saída de modelo, não indicador de qualidade. Nenhuma data futura gravada. |
+| 25/07/2026 | **Conector Copernicus em produção.** Primeira ingestão ao vivo: 80 medições de Abrolhos (15/06–24/07/2026), salinidade 37,07–37,49 PSU e oxigênio 205,8–209,1 mmol·m⁻³ — coerentes com a Água Tropical do Atlântico Sul e com a saturação de superfície a 25 °C. A emenda caiu onde o catálogo previa: 9 dias de reanálise até 23/06 e 31 de análise a partir de 24/06, com `dataset_id` gravado por valor. O período foi cortado em 24/07 para impedir que previsão entrasse como medição — a §6.11 deixa de ser risco em aberto para o caminho novo. `Observacao` ganhou `dataset_id` próprio para tornar a costura rastreável. |
+| 25/07/2026 | **Cobertura real do CMEMS medida no catálogo**, com credenciais criadas e `copernicusmarine.describe()`. Salinidade e O₂ têm reanálise de 1993 em diante (`cmems_mod_glo_phy_my_0.083deg_P1D-m` até 2026-06-23; `cmems_mod_glo_bgc_my_0.25deg_P1D-m` até 2026-05-31), cobrindo com folga a série 2020–2026 do NOAA. **KD490 só existe de 2023-11-15 em diante e não tem reanálise** — ver [VARIAVEIS.md](VARIAVEIS.md) §3.5, que passa a recomendar sua saída do baseline. Registrado também que os produtos *analysis and forecast* publicam datas futuras (até 2026-08-04, com hoje em 25/07), o que torna a §6.11 um risco ativo para a ingestão, não só para os CSVs antigos. |
 | 25/07/2026 | **Limite de tamanho de requisição do ERDDAP medido.** O backfill 2020–2026 num único pedido (~2.400 dias × 5 variáveis × ~121 pixels) falhou com `ReadTimeout` e `HTTP 408` nos três locais, gravando zero. O pipeline passou a fatiar o período em blocos de 180 dias (`INGESTAO_JANELA_DIAS`), gravando bloco a bloco — o que também torna o backfill retomável e faz um bloco com falha não descartar os demais. O cliente ERDDAP passou a ser inicializado uma vez por conector, e não por bloco: o `griddap_initialize()` baixa o eixo de tempo inteiro do dataset a cada chamada. |
 | 25/07/2026 | **§1.1 — restrição de rede registrada.** Os servidores da própria NOAA só respondem de dentro de rede com domínio federal (UFF); fora dela o pfeg dá timeout e o coastwatch.noaa.gov dá 403. O PACIOOS, por ser da Universidade do Havaí e não da NOAA, não tem essa restrição — foi por ele que a ingestão rodou fora da rede federal. Isso condiciona onde a ingestão pode ser agendada. |
 | 25/07/2026 | **Primeira ingestão ao vivo bem-sucedida.** 115 medições de Abrolhos (01–23/07/2026, 5 variáveis) vindas do PACIOOS `dhw_5km` por ERDDAP, gravadas com proveniência por valor. Duas correções foram necessárias: o conector substituía `e.constraints` em vez de atualizá-lo (o erddapy exige as chaves criadas por `griddap_initialize()`, inclusive `*_step`), e o período pedido ia além do eixo de tempo do dataset — produto de satélite publica com 1–3 dias de atraso e o ERDDAP responde 404 à janela inteira. **Validação física:** SST 24,8–25,7 °C e HotSpot −2,19 a −1,30 °C dão MMM implícita de **26,975 °C**, coerente com a MMM conhecida de Abrolhos (~27 °C); DHW e BAA zerados no inverno austral, como esperado. Idempotência confirmada com dado real: 115 medições após três execuções. |

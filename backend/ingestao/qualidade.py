@@ -16,6 +16,7 @@ FAIXAS_VALIDAS = {
     'sst': (-2.0, 45.0),
     'dhw': (0.0, 40.0),
     'baa': (0.0, 5.0),
+    'baa_area_alerta': (0.0, 1.0),
     'hotspot': (-10.0, 10.0),
     'sst_anomalia': (-8.0, 8.0),
     'salinidade': (0.0, 45.0),

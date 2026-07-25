@@ -44,12 +44,43 @@ Ele transforma cada registro de `StatusPredicao` do Django em:
 | `risco_integrado` | `risco_integrado` | `Predicao` | saida de risco consolidada |
 | `nivel_alerta` | `nivel_alerta` | `Predicao` | classificacao de alerta |
 
+## Variaveis da pipeline NOAA/Copernicus
+
+Estas ja sao gravadas em `MedicaoAmbiental` pelo pipeline de `backend/ingestao/`.
+
+| Coluna na fonte | Propriedade canonica | Unidade | Tipo | Agregacao espacial |
+|---|---|---|---|---|
+| `CRW_SST` | `sst` | °C | continua | media |
+| `CRW_DHW` | `dhw` | °C·semana | continua | media |
+| `CRW_HOTSPOT` | `hotspot` | °C | continua | media |
+| `CRW_SSTANOMALY` | `sst_anomalia` | °C | continua | media |
+| `CRW_BAA` | `baa` | categoria | **ordinal (0-4)** | **maximo** |
+| *(derivada)* | `baa_area_alerta` | fração | continua | fracao de pixels com BAA >= 3 |
+| `so` | `salinidade` | PSU | continua | media |
+| `o2` | `oxigenio` | mmol·m⁻³ | continua | media |
+| `kd` | `kd490` | m⁻¹ | continua | media |
+
+### Regra de agregacao por tipo
+
+**Variavel ordinal nao pode ser agregada por media.** A media de categorias nao
+e uma categoria: metade dos pixels em 0 e metade em 4 da 2, que nao descreve
+pixel nenhum e subestima o alerta. Toda variavel ordinal declara sua agregacao
+explicitamente em `AGREGACAO`, no conector; continuas caem no padrao (media).
+
+`baa_area_alerta` nao existe em nenhuma fonte: e derivada no conector como a
+fracao dos pixels validos do recife em Alerta Nivel 1 ou acima. Ela acompanha
+`baa` porque o maximo diz **o quao grave** e o estresse, e so ela diz **o quanto
+do recife** esta sob ele. Origem: `noaa_crw:v1`, a mesma do `baa`.
+
 ## Regras obrigatorias
 
 1. Nenhuma nova ingestao deve gravar variaveis ambientais fora de `MedicaoAmbiental`.
 2. `Predicao` deve guardar apenas a parte preditiva e de classificacao, nao o pacote inteiro de medidas.
 3. Toda origem nova deve mapear suas colunas para os nomes canonicos desta tabela antes de gravar no Neo4j.
 4. Toda origem nova deve registrar `FonteDados.id` no formato `fonte_slug:versao`.
+5. Toda variavel **ordinal ou categorica** deve declarar sua regra de agregacao
+   espacial junto com o mapeamento. Media e o padrao apenas para variavel
+   continua, e usa-la fora disso e defeito, nao escolha.
 
 ## Relacao com NOAA e Copernicus
 

@@ -6,6 +6,10 @@ features, e `baa` como target. Acesso publico via ERDDAP, sem credenciais.
 Produto: Daily Global 5 km Coral Bleaching Heat Stress v3.1
 https://coralreefwatch.noaa.gov/product/5km/
 
+Nota sobre o BAA: ele e **categoria ordinal**, e por isso e agregado por
+maximo, nao por media - com a fracao da area em alerta gravada ao lado. Ver
+`AGREGACAO` abaixo e docs/FONTES.md secao 6.16.
+
 Nota sobre o DHW: usar a coluna `CRW_DHW` oficial, nunca recalcular. O
 `carregar_historico.py` calculava um DHW proprio com limiar fixo de 27 °C
 somando todos os hotspots positivos - a norma NOAA usa a MMM por pixel e so
@@ -33,6 +37,34 @@ VARIAVEIS_ERDDAP = (
     'CRW_HOTSPOT',
     'CRW_SSTANOMALY',
 )
+
+# Como cada variavel e reduzida dos ~121 pixels da bbox para um valor diario.
+#
+# Media so faz sentido para grandeza continua. O **BAA e categoria ordinal**
+# (0 = sem estresse, 1 = Vigilancia, 2 = Aviso, 3 = Alerta Nivel 1,
+# 4 = Alerta Nivel 2), e media de categoria nao e uma categoria: um recife com
+# metade dos pixels em 0 e metade em 4 vira 2, que nao e o estado de pixel
+# nenhum e ainda por cima **subestima** o alerta. Medido em Abrolhos,
+# 17/05/2024: 70 pixels em 3, 45 em 4 e 6 em 2 dao media 3,32 - gravada como
+# Alerta Nivel 1, enquanto 37% da area estava em Alerta Nivel 2, o patamar em
+# que a NOAA preve mortalidade e nao so branqueamento.
+#
+# Explicacao com exemplo trabalhado: docs/VARIAVEIS.md secao 4.5.
+#
+# Para um sistema de aviso, o valor representativo do recife e o **pior estado
+# observado nele**, nao o estado do pixel medio. Ver docs/FONTES.md secao 6.16.
+AGREGACAO = {'CRW_BAA': 'max'}
+AGREGACAO_PADRAO = 'mean'
+
+# BAA >= 3 e "Alerta Nivel 1", o patamar em que a NOAA passa a esperar
+# branqueamento - e por isso o corte que a fracao de area mede.
+LIMIAR_ALERTA = 3.0
+
+# Variavel derivada, sem equivalente no ERDDAP: o maximo diz o pior estado mas
+# nao distingue um pixel isolado de um recife inteiro em alerta. Sao coisas
+# diferentes para quem le o aviso, e a diferenca some em qualquer agregacao de
+# um numero so - por isso ela e gravada como segunda serie, e nao como nota.
+COLUNA_FRACAO_ALERTA = 'CRW_BAA_FRACAO_ALERTA'
 
 
 # Servidor e dataset padrao. Escolhidos por evidencia, nao por preferencia:
@@ -167,6 +199,22 @@ def limitar_periodo(inicio, fim, limite_do_eixo):
     )
 
 
+def fracao_em_alerta(df, coluna_data='__data', coluna_baa='CRW_BAA'):
+    """Fracao dos pixels do recife em Alerta Nivel 1 ou acima, por data.
+
+    Conta so os pixels com BAA valido: dividir pelo total da grade misturaria
+    "sem estresse" com "sem dado" e diluiria o alerta exatamente nos dias de
+    cobertura ruim, que sao os que mais importam.
+
+    Retorna uma Series indexada por data, ou None se nao houver BAA valido.
+    """
+    valido = df[[coluna_data, coluna_baa]].dropna(subset=[coluna_baa])
+    if valido.empty:
+        return None
+
+    return (valido[coluna_baa] >= LIMIAR_ALERTA).groupby(valido[coluna_data]).mean()
+
+
 def montar_constraints(constraints_do_dataset, dim_names, bbox, inicio, fim):
     """Traduz a bbox e o periodo para as constraints que este dataset aceita.
 
@@ -210,7 +258,7 @@ class ConectorNoaaCrw(ConectorBase):
     slug = 'noaa_crw'
     nome = 'NOAA Coral Reef Watch 5 km v3.1'
     url_fonte = 'https://coralreefwatch.noaa.gov/product/5km/'
-    variaveis = ('sst', 'dhw', 'baa', 'hotspot', 'sst_anomalia')
+    variaveis = ('sst', 'dhw', 'baa', 'hotspot', 'sst_anomalia', 'baa_area_alerta')
     exige_credenciais = False
 
     def __init__(
@@ -350,9 +398,10 @@ class ConectorNoaaCrw(ConectorBase):
     def _extrair(self, df):
         """Converte o DataFrame do ERDDAP em observacoes brutas.
 
-        O produto e uma grade: varios pixels por data dentro da bbox. Agregamos
-        por media diaria, que e o valor representativo do recife - a alternativa
-        (escolher um pixel) descartaria informacao sem criterio.
+        O produto e uma grade: varios pixels por data dentro da bbox, que
+        precisam virar um valor diario por variavel. **A regra de agregacao e
+        por variavel**, nao uniforme - ver `AGREGACAO`. Escolher um unico pixel
+        seria a outra saida, e descartaria informacao sem criterio.
         """
         import pandas as pd
 
@@ -389,11 +438,22 @@ class ConectorNoaaCrw(ConectorBase):
         for coluna in presentes:
             df[coluna] = pd.to_numeric(df[coluna], errors='coerce')
 
-        agregado = df.groupby('__data')[presentes].mean()
+        agregado = df.groupby('__data')[presentes].agg(
+            {c: AGREGACAO.get(c, AGREGACAO_PADRAO) for c in presentes}
+        )
+        colunas_saida = list(presentes)
+
+        if 'CRW_BAA' in presentes:
+            fracao = fracao_em_alerta(df)
+            if fracao is not None:
+                # Alinhado pelo indice de data: um dia sem BAA valido fica NaN
+                # aqui e vira observacao nula adiante, como qualquer lacuna.
+                agregado[COLUNA_FRACAO_ALERTA] = fracao
+                colunas_saida.append(COLUNA_FRACAO_ALERTA)
 
         observacoes = []
         for data, linha in agregado.iterrows():
-            for coluna in presentes:
+            for coluna in colunas_saida:
                 valor = linha[coluna]
                 observacoes.append(
                     Observacao(

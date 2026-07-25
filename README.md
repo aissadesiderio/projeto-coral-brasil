@@ -253,8 +253,51 @@ do `certifi`. A falha era de montagem de cadeia **no cliente**, não no servidor
 ⚠️ O estado de cada espelho depende da máquina e da rede tanto quanto do
 servidor. Rode `testar_fontes` na máquina que vai ingerir.
 
-**Copernicus** exige conta gratuita — preencha
-`COPERNICUSMARINE_SERVICE_USERNAME` e `..._PASSWORD` no `.env`.
+### Credenciais do Copernicus
+
+Exige conta gratuita em
+[data.marine.copernicus.eu/register](https://data.marine.copernicus.eu/register).
+
+⚠️ **Não** é o cadastro de `www.copernicus.eu` (portal do programa, hoje
+arquivado) nem do Climate Data Store. São três serviços distintos, com contas
+que não se conversam. Use o **username** do cadastro, não o e-mail.
+
+Autentique pelo próprio cliente:
+
+```bash
+copernicusmarine login
+```
+
+Ele **pergunta** usuário e senha e guarda em `~/.copernicusmarine`, fora do
+projeto. Digite no prompt — não passe `--username`/`--password` na linha de
+comando, que isso deixa a senha no histórico do shell.
+
+Existem também `COPERNICUSMARINE_SERVICE_USERNAME` e `..._PASSWORD` no `.env`,
+mas prefira o login: senha em arquivo dentro do projeto é senha que uma hora
+vaza num commit ou num print. O `testar_fontes` reconhece as duas formas e diz
+qual está em uso.
+
+### O que o conector Copernicus coleta
+
+**Salinidade** e **oxigênio**. Cada série emenda dois produtos: reanálise
+(`*_my_*`, 1993 até cerca de um mês atrás) no histórico, análise (`*_anfc_*`)
+no período recente. Cada medição grava o `dataset_id` de onde saiu — a costura
+fica rastreável valor a valor.
+
+⚠️ **Previsão nunca entra no banco.** Os produtos `anfc` publicam dias no
+futuro: em 25/07/2026 o catálogo ia até 04/08. São valores previstos, não
+medidos, e gravá-los como medição seria vazamento direto num modelo com
+horizonte de N dias. O corte é sempre em ontem.
+
+**KD490 fica fora do padrão** — só existe de 2023-11-15 em diante e não tem
+reanálise, o que cortaria o treino de 6,5 para 2,7 anos e apagaria o evento de
+branqueamento de 2020. Continua disponível para o experimento no subperíodo:
+
+```
+COPERNICUS_SERIES=salinidade,oxigenio,kd490
+```
+
+A justificativa está em [docs/VARIAVEIS.md](docs/VARIAVEIS.md) §3.5.
 
 ### Catálogo de datasets
 

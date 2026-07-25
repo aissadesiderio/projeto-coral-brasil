@@ -11,6 +11,7 @@ Uso:
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -42,6 +43,26 @@ CANDIDATOS_NOAA = [
 ]
 
 TIMEOUT = 25
+
+# Onde o `copernicusmarine login` guarda as credenciais. Esse caminho e
+# preferivel ao .env: fica fora do projeto, entao a senha nao corre risco de ir
+# junto num commit nem de aparecer num print da pasta.
+ARQUIVO_CREDENCIAIS_COPERNICUS = (
+    Path.home() / '.copernicusmarine' / '.copernicusmarine-credentials'
+)
+
+
+def _origem_das_credenciais():
+    """Diz de onde o Copernicus vai tirar as credenciais, sem le-las.
+
+    Checar so o .env daria "sem credenciais" para quem fez `copernicusmarine
+    login`, que e justamente o caminho recomendado.
+    """
+    if getattr(settings, 'COPERNICUSMARINE_SERVICE_USERNAME', ''):
+        return '.env (COPERNICUSMARINE_SERVICE_USERNAME)'
+    if ARQUIVO_CREDENCIAIS_COPERNICUS.exists():
+        return str(ARQUIVO_CREDENCIAIS_COPERNICUS)
+    return None
 
 
 def _buscar(url):
@@ -122,14 +143,18 @@ class Command(BaseCommand):
         self.stdout.write('Copernicus Marine...')
         status, corpo = _buscar('https://marine.copernicus.eu')
         if status == 200:
-            usuario = getattr(settings, 'COPERNICUSMARINE_SERVICE_USERNAME', '') or ''
-            if usuario:
-                self.stdout.write(self.style.SUCCESS('  [OK] alcancavel, credenciais definidas'))
+            origem = _origem_das_credenciais()
+            if origem:
+                self.stdout.write(
+                    self.style.SUCCESS(f'  [OK] alcancavel, credenciais em {origem}')
+                )
             else:
                 self.stdout.write(
                     self.style.WARNING(
-                        '  [PARCIAL] alcancavel, mas sem credenciais no .env '
-                        '(COPERNICUSMARINE_SERVICE_USERNAME)'
+                        '  [PARCIAL] alcancavel, mas sem credenciais.\n'
+                        '            Rode "copernicusmarine login" e digite quando '
+                        'ele pedir.\n'
+                        '            Guarda em ~/.copernicusmarine, fora do projeto.'
                     )
                 )
         else:

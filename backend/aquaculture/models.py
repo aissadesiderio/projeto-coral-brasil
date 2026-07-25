@@ -117,6 +117,7 @@ class MedicaoAmbiental(models.Model):
         ('sst', 'Temperatura da superficie do mar (°C)'),
         ('dhw', 'Degree Heating Week (°C·semana)'),
         ('baa', 'Bleaching Alert Area (0-5)'),
+        ('baa_area_alerta', 'Fracao da area em Alerta Nivel 1+ (0-1)'),
         ('hotspot', 'Coral Bleaching HotSpot (°C)'),
         ('sst_anomalia', 'Anomalia de SST (°C)'),
         ('salinidade', 'Salinidade (PSU)'),

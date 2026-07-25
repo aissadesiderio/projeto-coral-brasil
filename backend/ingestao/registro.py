@@ -20,6 +20,7 @@ from django.utils import timezone
 from aquaculture.models import ExecucaoIngestao
 
 from .base import ResultadoColeta
+from .conectores.copernicus import ConectorCopernicus
 from .conectores.noaa_crw import ConectorNoaaCrw
 from .erros import resumir_erro
 from .persistencia import gravar, preparar_medicoes, ultima_data_ingerida
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 CONECTORES = {
     ConectorNoaaCrw.slug: ConectorNoaaCrw,
+    ConectorCopernicus.slug: ConectorCopernicus,
 }
 
 # Tamanho do bloco. 180 dias deixa cada requisicao em torno de 22 mil linhas

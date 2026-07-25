@@ -229,6 +229,13 @@ COPERNICUSMARINE_SERVICE_PASSWORD = env(
     'COPERNICUSMARINE_SERVICE_PASSWORD', default=''
 )
 
+# Series coletadas do Copernicus. `kd490` fica de fora do padrao: so existe de
+# 2023-11-15 em diante e nao tem reanalise, o que cortaria o treino de 6,5 para
+# 2,7 anos. Ver docs/VARIAVEIS.md secao 3.5.
+COPERNICUS_SERIES = env.list(
+    'COPERNICUS_SERIES', default=['salinidade', 'oxigenio']
+)
+
 NEO4J_URI = env('NEO4J_URI', default='bolt://localhost:7687')
 NEO4J_USER = env('NEO4J_USER', default='neo4j')
 NEO4J_PASSWORD = env('NEO4J_PASSWORD', default='')

@@ -12,6 +12,7 @@ UNIDADES = {
     'sst': '°C',
     'dhw': '°C·semana',
     'baa': 'categoria',
+    'baa_area_alerta': 'fração',
     'hotspot': '°C',
     'sst_anomalia': '°C',
     'salinidade': 'PSU',
@@ -27,6 +28,9 @@ MAPA_COLUNAS = {
     'crw_sst': 'sst',
     'crw_dhw': 'dhw',
     'crw_baa': 'baa',
+    # Derivada pelo conector, nao publicada pelo ERDDAP: fracao dos pixels do
+    # recife em Alerta Nivel 1 ou acima. Ver conectores/noaa_crw.py.
+    'crw_baa_fracao_alerta': 'baa_area_alerta',
     'crw_hotspot': 'hotspot',
     'crw_sstanomaly': 'sst_anomalia',
     'sst_anomaly': 'sst_anomalia',
@@ -116,7 +120,10 @@ def normalizar(nome_coluna, valor):
         valor = valor - 273.15
         observacao = (observacao + ' Convertido de Kelvin para °C.').strip()
 
-    # BAA e ordinal - normaliza para inteiro sem alterar a escala.
+    # BAA e ordinal - normaliza para inteiro sem alterar a escala. Desde que a
+    # agregacao espacial passou a ser por maximo o valor ja chega inteiro; isto
+    # fica como rede para fontes que entreguem 3.0000001. Comparacao exata: a
+    # fracao de area (`baa_area_alerta`) e continua e nao pode ser arredondada.
     if variavel == 'baa':
         valor = float(int(round(valor)))
 

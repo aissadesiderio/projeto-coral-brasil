@@ -16,6 +16,11 @@ class Observacao:
     data: date
     coluna: str
     valor: float | None
+    # Preenchido quando a coleta emenda datasets diferentes na mesma serie -
+    # o Copernicus usa reanalise no historico e analise no periodo recente, e
+    # a costura precisa ficar rastreavel valor a valor. Vazio significa "use o
+    # dataset_id do ResultadoColeta".
+    dataset_id: str = ''
 
 
 class PeriodoIndisponivel(Exception):
