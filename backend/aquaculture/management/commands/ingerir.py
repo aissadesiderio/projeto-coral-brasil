@@ -138,6 +138,11 @@ class Command(BaseCommand):
                         f'  [ok]      {slug}/{local.slug}: '
                         f'{execucao.registros_gravados} medicoes'
                     )
+                    # Sem isto, "0 medicoes" com status de sucesso ficaria sem
+                    # explicacao - e o motivo (fonte ainda nao publicou o
+                    # periodo) so apareceria consultando o banco.
+                    for linha in filter(None, execucao.mensagem_erro.splitlines()):
+                        self.stdout.write(f'            {linha}')
 
         self.stdout.write('')
         estilo = self.style.WARNING if houve_falha else self.style.SUCCESS

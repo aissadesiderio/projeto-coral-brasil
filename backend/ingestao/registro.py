@@ -89,10 +89,15 @@ def ingerir(local, inicio, fim, conector, incremental=True):
     medicoes, rejeitadas, recusas = preparar_medicoes(local, resultado, conector.slug)
     gravadas = gravar(medicoes)
 
+    # A nota nao e falha - registra algo que o operador precisa saber, como o
+    # periodo ter sido encolhido ate onde a fonte publica. Vai junto das
+    # recusas, mas sem rebaixar o status.
+    anotacoes = ([resultado.nota] if resultado.nota else []) + list(recusas)
+
     execucao.registros_gravados = gravadas
     execucao.registros_rejeitados = rejeitadas
     execucao.status = 'parcial' if (rejeitadas or recusas) else 'sucesso'
-    execucao.mensagem_erro = '\n'.join(recusas)
+    execucao.mensagem_erro = '\n'.join(anotacoes)
     execucao.concluido_em = timezone.now()
     execucao.save()
 

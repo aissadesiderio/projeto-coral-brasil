@@ -13,10 +13,11 @@ acumula hotspots >= 1 °C. Ver docs/VARIAVEIS.md secao 3.2.
 """
 
 import logging
+from datetime import datetime, timezone
 
 from django.conf import settings
 
-from ..base import ConectorBase, Observacao, ResultadoColeta
+from ..base import ConectorBase, Observacao, PeriodoIndisponivel, ResultadoColeta
 from ..erros import resumir_erro
 from ..retentativa import TENTATIVAS_PADRAO, executar_com_retentativa
 
@@ -53,6 +54,152 @@ VARIAVEIS_ERDDAP = (
 SERVIDOR_PADRAO = 'https://coastwatch.pfeg.noaa.gov/erddap'
 DATASET_PADRAO = 'NOAA_DHW'
 
+# Como cada espelho pode nomear as dimensoes de um jeito.
+ALIASES_DIMENSAO = {
+    'tempo': ('time',),
+    'latitude': ('latitude', 'lat'),
+    'longitude': ('longitude', 'lon'),
+}
+
+
+def _resolver_dimensoes(dim_names):
+    """Descobre como este dataset chama tempo, latitude e longitude.
+
+    Falhar aqui com o nome real das dimensoes e muito melhor que um KeyError
+    seco la na frente, quando ninguem mais lembra que o problema era o espelho
+    chamar a dimensao de `lat`.
+    """
+    encontradas = {}
+    for canonico, aliases in ALIASES_DIMENSAO.items():
+        nome = next((d for d in dim_names if d.lower() in aliases), None)
+        if nome is None:
+            raise ValueError(
+                f'O dataset nao tem a dimensao "{canonico}". '
+                f'Dimensoes publicadas: {list(dim_names)}.'
+            )
+        encontradas[canonico] = nome
+    return encontradas
+
+
+def _eixo_e_descendente(inicio_eixo, fim_eixo):
+    """O eixo esta gravado do maior para o menor?
+
+    O erddapy monta a URL griddap como `[(a):passo:(b)]`, e o ERDDAP espera que
+    `a` e `b` sigam a ordem em que o eixo foi gravado - nao a ordem numerica.
+    Num dataset com latitude descendente, pedir `(-18):(−17)` devolve vazio.
+    """
+    try:
+        return float(inicio_eixo) > float(fim_eixo)
+    except (TypeError, ValueError):
+        # Eixo nao numerico (tempo vem como texto): assume ordem crescente.
+        return False
+
+
+def _ajustar_longitude(valor, inicio_eixo, fim_eixo):
+    """Converte para 0..360 se for essa a convencao do dataset.
+
+    Metade dos produtos de grade global usa −180..180 e a outra metade 0..360.
+    Pedir −38,7 num dataset 0..360 nao da erro: devolve vazio, que e pior.
+    """
+    try:
+        menor_do_eixo = min(float(inicio_eixo), float(fim_eixo))
+    except (TypeError, ValueError):
+        return valor
+
+    if menor_do_eixo >= 0 and valor < 0:
+        return valor + 360
+    return valor
+
+
+def _ultima_data_do_eixo(valor):
+    """Converte o limite superior do eixo de tempo em `date`, se der.
+
+    O erddapy devolve esse limite como o ERDDAP o publica: quase sempre texto
+    ISO, as vezes epoch em segundos. Nao conseguir ler nao e motivo para travar
+    a coleta - so significa que nao da para encolher o periodo.
+    """
+    if isinstance(valor, str):
+        try:
+            return datetime.fromisoformat(valor.strip().replace('Z', '+00:00')).date()
+        except ValueError:
+            pass
+
+    try:
+        return datetime.fromtimestamp(float(valor), tz=timezone.utc).date()
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
+def limitar_periodo(inicio, fim, limite_do_eixo):
+    """Encolhe o periodo pedido ate onde o dataset realmente tem dado.
+
+    Produtos de satelite publicam com um a tres dias de atraso, e o padrao do
+    comando `ingerir` e `--ate=hoje`. Sem isto, o caso mais comum de todos -
+    pedir ate hoje - derruba a coleta inteira com um 404, em vez de trazer o
+    que existe:
+
+        Query error: ... "Stop" is greater than the axis maximum=2026-07-25
+        (and even 2026-07-23T12:00:00Z)
+
+    Retorna `(inicio, fim, nota)`.
+    """
+    ultima = _ultima_data_do_eixo(limite_do_eixo)
+
+    if ultima is None or fim <= ultima:
+        return inicio, fim, ''
+
+    if inicio > ultima:
+        raise PeriodoIndisponivel(
+            f'O dataset vai ate {ultima.isoformat()}; o periodo pedido comeca em '
+            f'{inicio.isoformat()}. Nada novo publicado ainda.'
+        )
+
+    return (
+        inicio,
+        ultima,
+        f'Periodo encolhido de {fim.isoformat()} para {ultima.isoformat()}: '
+        'e ate onde o dataset publica.',
+    )
+
+
+def montar_constraints(constraints_do_dataset, dim_names, bbox, inicio, fim):
+    """Traduz a bbox e o periodo para as constraints que este dataset aceita.
+
+    O erddapy exige que `e.constraints` mantenha **exatamente** as chaves que
+    `griddap_initialize()` criou - inclusive as `*_step`. Substituir o
+    dicionario levanta "keys in e.constraints have changed", que foi como esta
+    funcao nasceu. Por isso devolvemos apenas os valores a atualizar.
+    """
+    dims = _resolver_dimensoes(dim_names)
+    tempo, lat, lon = dims['tempo'], dims['latitude'], dims['longitude']
+
+    lon_min, lat_min, lon_max, lat_max = bbox
+    lon_min = _ajustar_longitude(
+        lon_min, constraints_do_dataset[f'{lon}>='], constraints_do_dataset[f'{lon}<=']
+    )
+    lon_max = _ajustar_longitude(
+        lon_max, constraints_do_dataset[f'{lon}>='], constraints_do_dataset[f'{lon}<=']
+    )
+
+    def na_ordem_do_eixo(dimensao, menor, maior):
+        descendente = _eixo_e_descendente(
+            constraints_do_dataset[f'{dimensao}>='],
+            constraints_do_dataset[f'{dimensao}<='],
+        )
+        return (maior, menor) if descendente else (menor, maior)
+
+    lat_a, lat_b = na_ordem_do_eixo(lat, lat_min, lat_max)
+    lon_a, lon_b = na_ordem_do_eixo(lon, lon_min, lon_max)
+
+    return {
+        f'{tempo}>=': inicio.isoformat(),
+        f'{tempo}<=': fim.isoformat(),
+        f'{lat}>=': lat_a,
+        f'{lat}<=': lat_b,
+        f'{lon}>=': lon_a,
+        f'{lon}<=': lon_b,
+    }
+
 
 class ConectorNoaaCrw(ConectorBase):
     slug = 'noaa_crw'
@@ -81,19 +228,53 @@ class ConectorNoaaCrw(ConectorBase):
     def _montar_cliente(self, bbox, inicio, fim):
         from erddapy import ERDDAP
 
-        lon_min, lat_min, lon_max, lat_max = bbox
         e = ERDDAP(server=self.servidor, protocol='griddap')
+
+        # Atribuir o dataset_id ja dispara `griddap_initialize()`, que busca o
+        # `.dds` e os eixos do dataset. E dai que saem as chaves validas de
+        # `e.constraints` e a lista real de variaveis publicadas.
         e.dataset_id = self.dataset_id
-        e.variables = list(VARIAVEIS_ERDDAP)
-        e.constraints = {
-            'time>=': inicio.isoformat(),
-            'time<=': fim.isoformat(),
-            'latitude>=': lat_min,
-            'latitude<=': lat_max,
-            'longitude>=': lon_min,
-            'longitude<=': lon_max,
-        }
-        return e
+
+        e.variables = self._variaveis_publicadas(e.variables)
+
+        # O eixo de tempo so e conhecido depois do initialize - por isso o
+        # periodo e encolhido aqui, e nao antes da chamada de rede.
+        inicio, fim, nota = limitar_periodo(inicio, fim, e.constraints.get('time<='))
+        if nota:
+            logger.warning('%s: %s', self.dataset_id, nota)
+
+        e.constraints.update(
+            montar_constraints(e.constraints, e.dim_names, bbox, inicio, fim)
+        )
+        return e, nota
+
+    def _variaveis_publicadas(self, disponiveis):
+        """Pede so o que este espelho publica.
+
+        O erddapy recusa a consulta inteira se uma variavel nao existir no
+        dataset. Trocar de espelho passaria a derrubar a coleta em vez de
+        trazer menos colunas - e melhor trazer o que ha e dizer o que faltou.
+        """
+        disponiveis = list(disponiveis or [])
+        pedidas = [v for v in VARIAVEIS_ERDDAP if v in disponiveis]
+
+        if not pedidas:
+            raise ValueError(
+                f'O dataset "{self.dataset_id}" nao publica nenhuma das '
+                f'variaveis esperadas {list(VARIAVEIS_ERDDAP)}. '
+                f'Publica: {disponiveis[:15]}. '
+                'Rode "manage.py testar_fontes" para achar o espelho certo.'
+            )
+
+        faltando = [v for v in VARIAVEIS_ERDDAP if v not in disponiveis]
+        if faltando:
+            logger.warning(
+                'O dataset %s nao publica %s - seguindo sem essas variaveis.',
+                self.dataset_id,
+                ', '.join(faltando),
+            )
+
+        return pedidas
 
     def _buscar(self, bbox, inicio, fim):
         """Uma tentativa completa de busca.
@@ -103,8 +284,11 @@ class ConectorNoaaCrw(ConectorBase):
         descobrir as dimensoes do dataset). Se o servidor devolver 503 nesse
         momento, reaproveitar um cliente meio construido nao adiantaria.
         """
-        cliente = self._cliente or self._montar_cliente(bbox, inicio, fim)
-        return cliente.to_pandas()
+        if self._cliente is not None:
+            return self._cliente.to_pandas(), ''
+
+        cliente, nota = self._montar_cliente(bbox, inicio, fim)
+        return cliente.to_pandas(), nota
 
     def coletar(self, local, inicio, fim):
         try:
@@ -121,9 +305,13 @@ class ConectorNoaaCrw(ConectorBase):
             if self._dormir is not None:
                 argumentos['dormir'] = self._dormir
 
-            df = executar_com_retentativa(
+            df, nota = executar_com_retentativa(
                 lambda: self._buscar(bbox, inicio, fim), **argumentos
             )
+        except PeriodoIndisponivel as exc:
+            # Nao e falha: a fonte so ainda nao publicou o periodo pedido.
+            logger.info('NOAA CRW sem dado novo: %s', exc)
+            return ResultadoColeta(dataset_id=self.dataset_id, nota=str(exc))
         except Exception as exc:
             # Falha de rede nunca sobe: viraria queda de todo o pipeline.
             resumo = resumir_erro(exc)
@@ -131,7 +319,10 @@ class ConectorNoaaCrw(ConectorBase):
             logger.debug('Detalhe completo da falha do NOAA CRW', exc_info=exc)
             return ResultadoColeta(erro=resumo, dataset_id=self.dataset_id)
 
-        return self._extrair(df)
+        resultado = self._extrair(df)
+        if nota and not resultado.nota:
+            resultado.nota = nota
+        return resultado
 
     def _extrair(self, df):
         """Converte o DataFrame do ERDDAP em observacoes brutas.

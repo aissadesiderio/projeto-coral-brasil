@@ -7,7 +7,7 @@ precisa ser verificada na maquina do usuario.
 """
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 from django.test import TestCase
@@ -18,7 +18,12 @@ from ingestao.certificados import (
     garantir_bundle_ca,
     interpretar,
 )
-from ingestao.conectores.noaa_crw import ConectorNoaaCrw
+from ingestao.base import PeriodoIndisponivel
+from ingestao.conectores.noaa_crw import (
+    ConectorNoaaCrw,
+    limitar_periodo,
+    montar_constraints,
+)
 from ingestao.erros import parece_documento_html, resumir_erro
 from ingestao.normalizacao import ColunaRecusada, normalizar, resolver_variavel
 from ingestao.persistencia import preparar_medicoes, ultima_data_ingerida
@@ -499,6 +504,256 @@ class ResumoDeErroTests(TestCase):
         self.assertTrue(parece_documento_html('<body>erro</body>'))
         self.assertFalse(parece_documento_html('<urlopen error timed out>'))
         self.assertFalse(parece_documento_html('a < b and b > c'))
+
+
+class ConstraintsGriddapTests(TestCase):
+    """Traducao da bbox para o vocabulario do griddap.
+
+    Regressao de 25/07/2026: o conector substituia `e.constraints` por um
+    dicionario proprio, e o erddapy recusava com "keys in e.constraints have
+    changed" - ele exige exatamente as chaves que `griddap_initialize()` criou,
+    inclusive as `*_step`, que o codigo nao conhecia.
+    """
+
+    BBOX = (-38.94, -18.22, -38.44, -17.72)  # lon_min, lat_min, lon_max, lat_max
+
+    def _dataset(self, lat=(-89.975, 89.975), lon=(-179.975, 179.975), passo=1):
+        """Constraints como o erddapy as monta apos griddap_initialize()."""
+        return {
+            'time>=': '2026-07-24T12:00:00Z',
+            'time<=': '2026-07-24T12:00:00Z',
+            'time_step': passo,
+            'latitude>=': lat[0],
+            'latitude<=': lat[1],
+            'latitude_step': passo,
+            'longitude>=': lon[0],
+            'longitude<=': lon[1],
+            'longitude_step': passo,
+        }
+
+    def _dims(self):
+        return ['time', 'latitude', 'longitude']
+
+    def test_atualizar_preserva_o_conjunto_de_chaves(self):
+        """A regressao em si: o erddapy compara `keys()`, nao valores."""
+        original = self._dataset()
+        antes = set(original.keys())
+
+        atualizacao = montar_constraints(
+            original, self._dims(), self.BBOX, date(2026, 7, 1), date(2026, 7, 25)
+        )
+        original.update(atualizacao)
+
+        self.assertEqual(set(original.keys()), antes)
+        self.assertEqual(original['latitude_step'], 1, 'o passo nao pode sumir')
+
+    def test_periodo_vira_texto_iso(self):
+        constraints = montar_constraints(
+            self._dataset(),
+            self._dims(),
+            self.BBOX,
+            date(2026, 7, 1),
+            date(2026, 7, 25),
+        )
+
+        self.assertEqual(constraints['time>='], '2026-07-01')
+        self.assertEqual(constraints['time<='], '2026-07-25')
+
+    def test_eixo_crescente_mantem_a_ordem_numerica(self):
+        constraints = montar_constraints(
+            self._dataset(),
+            self._dims(),
+            self.BBOX,
+            date(2026, 7, 1),
+            date(2026, 7, 25),
+        )
+
+        self.assertAlmostEqual(constraints['latitude>='], -18.22)
+        self.assertAlmostEqual(constraints['latitude<='], -17.72)
+
+    def test_eixo_descendente_inverte_a_faixa(self):
+        """Latitude gravada de 90 para -90: pedir na ordem numerica da vazio."""
+        constraints = montar_constraints(
+            self._dataset(lat=(89.975, -89.975)),
+            self._dims(),
+            self.BBOX,
+            date(2026, 7, 1),
+            date(2026, 7, 25),
+        )
+
+        self.assertAlmostEqual(constraints['latitude>='], -17.72)
+        self.assertAlmostEqual(constraints['latitude<='], -18.22)
+
+    def test_dataset_em_0_360_converte_a_longitude(self):
+        """Pedir -38,7 num dataset 0..360 nao da erro - devolve vazio."""
+        constraints = montar_constraints(
+            self._dataset(lon=(0.025, 359.975)),
+            self._dims(),
+            self.BBOX,
+            date(2026, 7, 1),
+            date(2026, 7, 25),
+        )
+
+        self.assertAlmostEqual(constraints['longitude>='], 321.06)
+        self.assertAlmostEqual(constraints['longitude<='], 321.56)
+
+    def test_dataset_em_menos180_180_nao_mexe_na_longitude(self):
+        constraints = montar_constraints(
+            self._dataset(),
+            self._dims(),
+            self.BBOX,
+            date(2026, 7, 1),
+            date(2026, 7, 25),
+        )
+
+        self.assertAlmostEqual(constraints['longitude>='], -38.94)
+
+    def test_dimensoes_com_nome_curto_sao_reconhecidas(self):
+        dataset = {
+            'time>=': 'x', 'time<=': 'x', 'time_step': 1,
+            'lat>=': -89.9, 'lat<=': 89.9, 'lat_step': 1,
+            'lon>=': -179.9, 'lon<=': 179.9, 'lon_step': 1,
+        }
+
+        constraints = montar_constraints(
+            dataset,
+            ['time', 'lat', 'lon'],
+            self.BBOX,
+            date(2026, 7, 1),
+            date(2026, 7, 25),
+        )
+
+        self.assertIn('lat>=', constraints)
+        self.assertNotIn('latitude>=', constraints)
+
+    def test_dimensao_ausente_diz_o_que_o_dataset_publica(self):
+        with self.assertRaises(ValueError) as ctx:
+            montar_constraints(
+                {'time>=': 'x', 'time<=': 'x', 'time_step': 1},
+                ['time', 'depth'],
+                self.BBOX,
+                date(2026, 7, 1),
+                date(2026, 7, 25),
+            )
+
+        self.assertIn('latitude', str(ctx.exception))
+        self.assertIn('depth', str(ctx.exception))
+
+
+class LimitarPeriodoTests(TestCase):
+    """Atraso de publicacao do satelite.
+
+    Regressao de 25/07/2026: o dataset ia ate 23/07, o comando pediu ate hoje
+    (25/07) e o ERDDAP respondeu 404 - a coleta inteira caiu por causa de dois
+    dias que ainda nao existiam.
+    """
+
+    def test_encolhe_ate_o_fim_do_eixo(self):
+        inicio, fim, nota = limitar_periodo(
+            date(2026, 7, 1), date(2026, 7, 25), '2026-07-23T12:00:00Z'
+        )
+
+        self.assertEqual(inicio, date(2026, 7, 1))
+        self.assertEqual(fim, date(2026, 7, 23))
+        self.assertIn('2026-07-23', nota)
+
+    def test_periodo_dentro_do_eixo_passa_intacto(self):
+        inicio, fim, nota = limitar_periodo(
+            date(2026, 7, 1), date(2026, 7, 20), '2026-07-23T12:00:00Z'
+        )
+
+        self.assertEqual(fim, date(2026, 7, 20))
+        self.assertEqual(nota, '')
+
+    def test_janela_inteira_no_futuro_nao_e_falha(self):
+        with self.assertRaises(PeriodoIndisponivel) as ctx:
+            limitar_periodo(
+                date(2026, 7, 24), date(2026, 7, 25), '2026-07-23T12:00:00Z'
+            )
+
+        self.assertIn('2026-07-23', str(ctx.exception))
+
+    def test_eixo_em_epoch_tambem_e_lido(self):
+        """Alguns servidores ERDDAP publicam o tempo como epoch em segundos."""
+        epoch = datetime(2026, 7, 23, 12, tzinfo=timezone.utc).timestamp()
+
+        _inicio, fim, _nota = limitar_periodo(
+            date(2026, 7, 1), date(2026, 7, 25), epoch
+        )
+
+        self.assertEqual(fim, date(2026, 7, 23))
+
+    def test_eixo_ilegivel_nao_trava_a_coleta(self):
+        inicio, fim, nota = limitar_periodo(
+            date(2026, 7, 1), date(2026, 7, 25), 'formato inesperado'
+        )
+
+        self.assertEqual((inicio, fim), (date(2026, 7, 1), date(2026, 7, 25)))
+        self.assertEqual(nota, '')
+
+
+class NotaDeColetaTests(TestCase):
+    """A nota chega ao banco sem rebaixar o status da execucao."""
+
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='local-nota-teste',
+            nome='Local Nota',
+            estado='Bahia',
+            cidade='Caravelas',
+            latitude=-17.972,
+            longitude=-38.688,
+        )
+
+    def test_periodo_indisponivel_grava_sucesso_com_explicacao(self):
+        class ConectorSemDadoNovo(ConectorNoaaCrw):
+            def _montar_cliente(self, bbox, inicio, fim):
+                raise PeriodoIndisponivel('O dataset vai ate 2026-07-23.')
+
+        execucao = ingerir(
+            self.local,
+            date(2026, 7, 24),
+            date(2026, 7, 25),
+            ConectorSemDadoNovo(dormir=Relogio()),
+        )
+
+        self.assertEqual(execucao.status, 'sucesso')
+        self.assertEqual(execucao.registros_gravados, 0)
+        self.assertIn('2026-07-23', execucao.mensagem_erro)
+
+    def test_periodo_indisponivel_nao_gasta_retentativa(self):
+        relogio = Relogio()
+
+        class ConectorSemDadoNovo(ConectorNoaaCrw):
+            def _montar_cliente(self, bbox, inicio, fim):
+                raise PeriodoIndisponivel('sem dado novo')
+
+        ConectorSemDadoNovo(dormir=relogio).coletar(
+            self.local, date(2026, 7, 24), date(2026, 7, 25)
+        )
+
+        self.assertEqual(relogio.esperas, [])
+
+
+class VariaveisPublicadasTests(TestCase):
+    """O erddapy recusa a consulta inteira se pedirmos algo que nao existe."""
+
+    def test_pede_apenas_o_que_o_espelho_publica(self):
+        conector = ConectorNoaaCrw()
+
+        pedidas = conector._variaveis_publicadas(
+            ['CRW_SST', 'CRW_DHW', 'CRW_BAA', 'mask', 'CRW_SEAICE']
+        )
+
+        self.assertEqual(pedidas, ['CRW_SST', 'CRW_DHW', 'CRW_BAA'])
+
+    def test_dataset_sem_nenhuma_variavel_esperada_falha_com_orientacao(self):
+        conector = ConectorNoaaCrw()
+
+        with self.assertRaises(ValueError) as ctx:
+            conector._variaveis_publicadas(['analysed_sst', 'mask'])
+
+        self.assertIn('testar_fontes', str(ctx.exception))
 
 
 class BundleDeCertificadosTests(TestCase):

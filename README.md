@@ -96,6 +96,25 @@ Por padrão a ingestão é **incremental**: retoma da última data já gravada.
 Use `--completo` para rebaixar o período inteiro. Rodar duas vezes o mesmo
 período não duplica nem apaga — a gravação é idempotente.
 
+### Atraso de publicação
+
+Produtos de satélite saem com 1 a 3 dias de atraso. Como o padrão é
+`--ate=hoje`, pedir dados até hoje é o caso normal — e o ERDDAP responde **404
+à janela inteira** se ela passar do fim do eixo de tempo, em vez de devolver o
+que existe.
+
+O pipeline encolhe o período sozinho até onde a fonte publica e registra o que
+fez:
+
+```
+[ok]  noaa_crw/abrolhos-ba: 115 medicoes
+      Periodo encolhido de 2026-07-25 para 2026-07-23: e ate onde o dataset publica.
+```
+
+Se a janela inteira estiver além do que existe, a execução termina como
+**sucesso com 0 medições** e a explicação junto — não é falha, a fonte só ainda
+não publicou.
+
 Cada execução gera um registro em `ExecucaoIngestao` com status, contagem e
 motivo da falha. Uma fonte fora do ar não derruba as outras.
 
@@ -181,7 +200,7 @@ Situação verificada em 25/07/2026:
 |---|---|---|---|
 | pfeg (**padrão**) | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 variáveis — 503 intermitente |
 | NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
-| PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ TLS ok com `certifi` |
+| PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ entregou dado real (115 medições) |
 
 O PACIOOS chegou a ser marcado aqui como "certificado inválido". Estava errado:
 `testar_fontes --ssl` mostra o mesmo host verificando normalmente sob o bundle

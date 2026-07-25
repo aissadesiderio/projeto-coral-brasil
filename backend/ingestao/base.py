@@ -18,6 +18,14 @@ class Observacao:
     valor: float | None
 
 
+class PeriodoIndisponivel(Exception):
+    """A janela pedida esta fora do que a fonte publica.
+
+    Nao e falha: um produto de satelite com dois dias de atraso simplesmente
+    ainda nao tem o dia de hoje. Merece registro, nao status de erro.
+    """
+
+
 @dataclass
 class ResultadoColeta:
     """O que um conector devolve para uma janela (local, periodo)."""
@@ -25,6 +33,10 @@ class ResultadoColeta:
     observacoes: list = field(default_factory=list)
     dataset_id: str = ''
     erro: str = ''
+    # Observacao nao-fatal sobre a coleta - periodo encolhido, variavel que o
+    # espelho nao publica. Vai para `ExecucaoIngestao.mensagem_erro` sem
+    # marcar a execucao como falha.
+    nota: str = ''
 
     @property
     def houve_falha(self):
