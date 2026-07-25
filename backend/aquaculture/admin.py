@@ -6,39 +6,43 @@ from .models import Especie, LocalRecife, StatusPredicao
 
 
 class SyncToCodeAdminMixin:
-    sync_success_message = 'Banco salvo e arquivos de codigo sincronizados.'
-    sync_error_message = 'O banco foi salvo, mas a sincronizacao de arquivos falhou.'
+    """Exporta o banco para arquivos de codigo **sob demanda**.
 
-    def _sync_code(self, request):
+    Antes isto rodava automaticamente em `save_related`, `delete_model` e
+    `delete_queryset`: cada edicao no admin reescrevia
+    `frontend/src/recifeData.js` e `generated_admin_sync.py`, ou seja, editar
+    um dado sujava a arvore do git. Agora e uma acao explicita.
+
+    Alternativa em linha de comando: `python manage.py sync_admin_code`.
+    """
+
+    actions = ['sincronizar_codigo']
+
+    @admin.action(description='Sincronizar banco -> arquivos de codigo (recifeData.js)')
+    def sincronizar_codigo(self, request, queryset):
+        # A exportacao sempre cobre o banco inteiro; a selecao e ignorada.
         try:
             result = sync_project_code_from_db()
-            changed = result['backend_changed'] or result['frontend_changed']
-            if changed:
-                self.message_user(request, self.sync_success_message, level=messages.SUCCESS)
-            else:
-                self.message_user(
-                    request,
-                    'Banco salvo. Os arquivos de codigo ja estavam atualizados.',
-                    level=messages.INFO,
-                )
         except Exception as exc:
             self.message_user(
                 request,
-                f'{self.sync_error_message} Detalhe: {exc}',
-                level=messages.WARNING,
+                f'Falha ao sincronizar os arquivos de codigo: {exc}',
+                level=messages.ERROR,
             )
+            return
 
-    def save_related(self, request, form, formsets, change):
-        super().save_related(request, form, formsets, change)
-        self._sync_code(request)
-
-    def delete_model(self, request, obj):
-        super().delete_model(request, obj)
-        self._sync_code(request)
-
-    def delete_queryset(self, request, queryset):
-        super().delete_queryset(request, queryset)
-        self._sync_code(request)
+        if result['backend_changed'] or result['frontend_changed']:
+            self.message_user(
+                request,
+                'Arquivos de codigo sincronizados a partir do banco.',
+                level=messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                'Nada a fazer: os arquivos de codigo ja estavam atualizados.',
+                level=messages.INFO,
+            )
 
 
 class EspecieLocalInline(admin.TabularInline):
@@ -69,6 +73,7 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         'nome',
         'estado',
         'cidade',
+        'tem_coordenadas',
         'quantidade_especies',
         'quantidade_monitoramentos',
         'ultima_atualizacao',
@@ -90,12 +95,33 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
             },
         ),
         (
+            'Geolocalizacao',
+            {
+                'fields': (
+                    'latitude',
+                    'longitude',
+                    'profundidade_media_m',
+                    'area_km2',
+                    'fonte_coordenadas',
+                ),
+                'description': (
+                    'Define de onde os conectores de ingestao extraem dados. '
+                    'Sem latitude e longitude, o local fica fora do pipeline. '
+                    'Registre sempre a origem das coordenadas.'
+                ),
+            },
+        ),
+        (
             'Conteudo',
             {
                 'fields': ('descricao', 'imagem', 'mostrar_imagem_grande', 'ultima_atualizacao'),
             },
         ),
     )
+
+    @admin.display(boolean=True, description='Geo')
+    def tem_coordenadas(self, obj):
+        return obj.tem_coordenadas
 
     def quantidade_especies(self, obj):
         return obj.especies.count()

@@ -10,36 +10,42 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import os
 from pathlib import Path
 
-
-def env_bool(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}
-
+import environ
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-(d_7#2p8#ut+9ig647u(@@2-*8y&j0(1j-hp#(0+v8d#v&2w3%',
+env = environ.Env()
+
+# Le backend/.env quando existir. Variaveis reais de processo tem precedencia.
+environ.Env.read_env(BASE_DIR / '.env')
+
+DEBUG = env.bool('DJANGO_DEBUG', default=False)
+
+# Fail fast: fora de DEBUG, rodar sem SECRET_KEY explicita e um erro de
+# configuracao, nao algo para silenciar com um fallback inseguro.
+if DEBUG:
+    SECRET_KEY = env(
+        'DJANGO_SECRET_KEY',
+        default='django-insecure-apenas-para-desenvolvimento-local',
+    )
+else:
+    try:
+        SECRET_KEY = env('DJANGO_SECRET_KEY')
+    except environ.ImproperlyConfigured as exc:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY e obrigatoria quando DJANGO_DEBUG=False. '
+            'Defina-a em backend/.env ou no ambiente antes de subir o servico.'
+        ) from exc
+
+ALLOWED_HOSTS = env.list(
+    'DJANGO_ALLOWED_HOSTS',
+    default=['localhost', '127.0.0.1'],
 )
 
-DEBUG = env_bool('DJANGO_DEBUG', True)
-
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get(
-        'DJANGO_ALLOWED_HOSTS',
-        'localhost,127.0.0.1',
-    ).split(',')
-    if host.strip()
-]
-
-OFFLINE_MODE = env_bool('OFFLINE_MODE', False)
+OFFLINE_MODE = env.bool('OFFLINE_MODE', default=False)
 
 # Integracoes externas desativadas por padrao durante a reestruturacao local.
 USE_S3_STORAGE = False
@@ -88,11 +94,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'coral_site.wsgi.application'
 
+# Banco configurado por URL, para que a troca SQLite -> PostgreSQL seja uma
+# mudanca de ambiente e nao de codigo. Ex.:
+#   DATABASE_URL=postgres://usuario:senha@localhost:5432/coral_brasil
+# Para PostgreSQL, descomente psycopg no requirements.txt.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db_url(
+        'DATABASE_URL',
+        default=f'sqlite:///{(BASE_DIR / "db.sqlite3").as_posix()}',
+    )
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -110,14 +120,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get(
-        'CORS_ALLOWED_ORIGINS',
-        'http://localhost:3000',
-    ).split(',')
-    if origin.strip()
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=['http://localhost:3000'],
+)
 
 LANGUAGE_CODE = 'en-us'
 
@@ -135,6 +141,27 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
-NEO4J_USER = os.environ.get('NEO4J_USER', 'neo4j')
-NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', '')
+# --- Seguranca de transporte -----------------------------------------------
+# Ativas por padrao fora de DEBUG. Podem ser desligadas por ambiente quando o
+# TLS e terminado num proxy reverso ou num teste local com DEBUG=False.
+SECURE_SSL_REDIRECT = env.bool('DJANGO_SECURE_SSL_REDIRECT', default=not DEBUG)
+SESSION_COOKIE_SECURE = env.bool('DJANGO_SESSION_COOKIE_SECURE', default=not DEBUG)
+CSRF_COOKIE_SECURE = env.bool('DJANGO_CSRF_COOKIE_SECURE', default=not DEBUG)
+
+# HSTS: comeca em 0 de proposito. So aumente (ex.: 31536000 = 1 ano) depois de
+# confirmar que todo o dominio, incluindo subdominios, serve HTTPS - o header
+# e praticamente irreversivel do lado do navegador.
+SECURE_HSTS_SECONDS = env.int('DJANGO_SECURE_HSTS_SECONDS', default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
+    'DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False
+)
+SECURE_HSTS_PRELOAD = env.bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
+
+# Confia no cabecalho do proxy reverso para detectar HTTPS (Heroku, Render,
+# nginx). Sem isto, SECURE_SSL_REDIRECT entra em loop atras de um proxy.
+if env.bool('DJANGO_BEHIND_PROXY', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+NEO4J_URI = env('NEO4J_URI', default='bolt://localhost:7687')
+NEO4J_USER = env('NEO4J_USER', default='neo4j')
+NEO4J_PASSWORD = env('NEO4J_PASSWORD', default='')

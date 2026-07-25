@@ -1,10 +1,49 @@
+# --- Segredos e configuracao local ---
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.local
 
-dados/dhw_5km_e218_f17f_46a9.csv
+# --- Python ---
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- Django ---
+staticfiles/
+db.sqlite3
+*.sqlite3
+
+# --- Node / frontend ---
+node_modules/
+frontend/build/
+
+# --- Dados brutos ---
+# Os CSVs sao regenerados pelo pipeline de ingestao e documentados em
+# docs/FONTES.md. Sao ~260 MB, nao devem ser versionados.
+# ATENCAO: os arquivos ja rastreados continuam no indice ate rodar:
+#   git rm --cached backend/dados/*.csv
+backend/dados/*.csv
+dados/*.csv
 calcular_dhw.py
 aquaculture/management/calcular_dhw.py
 
-venv/
-staticfiles/
-db.sqlite3
-__pycache__/
-*.pyc
+# --- Saidas geradas ---
+relatorios_gerados/*.png
+relatorios_gerados/*.csv
+
+# --- Editores e SO ---
+.vs/
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,49 @@
+# Configuracao de ferramentas de qualidade do Coral Brasil.
+# As dependencias do projeto ficam em requirements.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [
+    "venv",
+    "*/migrations/*",
+    "backend/aquaculture/generated_admin_sync.py",  # arquivo gerado
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "DJ",   # flake8-django
+    "C4",   # comprehensions
+    "SIM",  # simplify
+]
+ignore = [
+    "E501",  # comprimento de linha ja e tratado pelo formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/aquaculture/tests.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "coral_site.settings"
+python_files = ["test_*.py", "tests.py"]
+testpaths = ["backend"]
+pythonpath = ["backend"]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "*/migrations/*",
+    "*/tests.py",
+    "backend/manage.py",
+    "backend/coral_site/wsgi.py",
+    "backend/coral_site/asgi.py",
+]

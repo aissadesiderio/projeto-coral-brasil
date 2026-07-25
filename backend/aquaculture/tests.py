@@ -1,12 +1,17 @@
 from datetime import date
 from pathlib import Path
+import re
 import shutil
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .code_sync import sync_project_code_from_db
+from .code_sync import (
+    BACKEND_SYNC_PATH,
+    FRONTEND_SYNC_PATH,
+    sync_project_code_from_db,
+)
 from .models import Especie, LocalRecife, StatusPredicao
 
 
@@ -69,6 +74,51 @@ class LocalRecifeApiTests(TestCase):
         self.assertIn('Mussismilia braziliensis', nomes)
 
 
+@override_settings(OFFLINE_MODE=True)
+class OfflineModeTests(TestCase):
+    """O portao de manutencao precisa devolver 503, nao estourar 500.
+
+    Regressao: `OfflineModeMixin.dispatch` devolvia um `Response` do DRF sem
+    renderizador, o que levantava AssertionError antes de chegar ao cliente.
+    """
+
+    def setUp(self):
+        # Slug e nome proprios para nao colidir com os seeds das migrations.
+        self.local = LocalRecife.objects.create(
+            slug='recife-offline-teste',
+            nome='Recife de Teste Offline',
+            estado='Bahia',
+            cidade='Caravelas',
+        )
+        self.especie = Especie.objects.create(
+            nome_cientifico='Testus offlinus',
+            nome_comum='Especie de teste offline',
+        )
+
+    def test_todas_as_rotas_publicas_respondem_503(self):
+        rotas = [
+            reverse('local_recife_list'),
+            reverse('local_recife_detail', kwargs={'slug': self.local.slug}),
+            reverse('especie_list'),
+            reverse('especie_detail', kwargs={'pk': self.especie.pk}),
+            reverse('monitoramento_list'),
+        ]
+
+        for rota in rotas:
+            with self.subTest(rota=rota):
+                response = self.client.get(rota)
+
+                self.assertEqual(response.status_code, 503)
+                self.assertIn('offline', response.json()['detail'].lower())
+
+    def test_endpoint_de_status_continua_acessivel(self):
+        """O frontend precisa conseguir detectar o modo offline."""
+        response = self.client.get(reverse('api_status'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['offline_mode'])
+
+
 @override_settings(OFFLINE_MODE=False)
 class DjangoAdminTests(TestCase):
     def setUp(self):
@@ -87,6 +137,74 @@ class DjangoAdminTests(TestCase):
 
         self.assertEqual(admin_index.status_code, 200)
         self.assertEqual(local_changelist.status_code, 200)
+
+    def test_salvar_no_admin_nao_reescreve_arquivos_de_codigo(self):
+        """Regressao: editar dados nao pode sujar a arvore do git.
+
+        `SyncToCodeAdminMixin` disparava `sync_project_code_from_db()` em
+        `save_related`, entao qualquer save no admin reescrevia
+        `frontend/src/recifeData.js`. Agora isso so acontece pela acao
+        explicita ou por `manage.py sync_admin_code`.
+        """
+        antes_frontend = (
+            FRONTEND_SYNC_PATH.read_text(encoding='utf-8')
+            if FRONTEND_SYNC_PATH.exists()
+            else None
+        )
+        antes_backend = (
+            BACKEND_SYNC_PATH.read_text(encoding='utf-8')
+            if BACKEND_SYNC_PATH.exists()
+            else None
+        )
+
+        self.client.login(username='admin', password='senha-forte-123')
+        local = LocalRecife.objects.create(
+            slug='recife-admin-teste',
+            nome='Recife Admin Teste',
+            estado='Bahia',
+            cidade='Caravelas',
+        )
+        url = f'/admin/aquaculture/localrecife/{local.pk}/change/'
+
+        # Os prefixos dos inlines sao lidos do formulario renderizado para o
+        # teste nao quebrar caso os inlines mudem.
+        html = self.client.get(url).content.decode()
+        dados = {
+            'slug': local.slug,
+            'nome': 'Recife Admin Teste Editado',
+            'estado': 'Bahia',
+            'cidade': 'Caravelas',
+            'descricao': 'Alteracao feita pelo teste.',
+            'ativo': 'on',
+        }
+        for prefixo in set(re.findall(r'name="([\w\-]+)-TOTAL_FORMS"', html)):
+            dados[f'{prefixo}-TOTAL_FORMS'] = '0'
+            dados[f'{prefixo}-INITIAL_FORMS'] = '0'
+            dados[f'{prefixo}-MIN_NUM_FORMS'] = '0'
+            dados[f'{prefixo}-MAX_NUM_FORMS'] = '1000'
+
+        response = self.client.post(url, dados, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        local.refresh_from_db()
+        self.assertEqual(
+            local.nome,
+            'Recife Admin Teste Editado',
+            'O formulario do admin nao salvou - o teste nao chegou a exercitar o sync.',
+        )
+
+        depois_frontend = (
+            FRONTEND_SYNC_PATH.read_text(encoding='utf-8')
+            if FRONTEND_SYNC_PATH.exists()
+            else None
+        )
+        depois_backend = (
+            BACKEND_SYNC_PATH.read_text(encoding='utf-8')
+            if BACKEND_SYNC_PATH.exists()
+            else None
+        )
+        self.assertEqual(antes_frontend, depois_frontend, 'recifeData.js foi reescrito')
+        self.assertEqual(antes_backend, depois_backend, 'generated_admin_sync.py foi reescrito')
 
 
 @override_settings(OFFLINE_MODE=False)

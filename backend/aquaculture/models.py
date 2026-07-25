@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -12,10 +13,79 @@ class LocalRecife(models.Model):
     ultima_atualizacao = models.DateField(blank=True, null=True)
     ativo = models.BooleanField(default=True)
 
+    # Geolocalizacao: define de onde os conectores de ingestao extraem dados.
+    # Sem coordenadas, o local nao entra no pipeline (ver `tem_coordenadas`).
+    latitude = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-90.0), MaxValueValidator(90.0)],
+        help_text='Graus decimais, negativo no hemisferio sul. Ex: -17.972',
+    )
+    longitude = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-180.0), MaxValueValidator(180.0)],
+        help_text='Graus decimais, negativo a oeste de Greenwich. Ex: -38.688',
+    )
+    profundidade_media_m = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0)],
+        help_text='Profundidade media do recife em metros',
+    )
+    area_km2 = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0)],
+        help_text='Area aproximada da zona recifal em km2',
+    )
+    fonte_coordenadas = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text='De onde vieram as coordenadas (rastreabilidade). Ex: ICMBio, Allen Coral Atlas',
+    )
+
     class Meta:
         ordering = ['nome']
         verbose_name = 'Local de recife'
         verbose_name_plural = 'Locais de recife'
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(latitude__isnull=True)
+                    | models.Q(latitude__gte=-90.0, latitude__lte=90.0)
+                ),
+                name='aquaculture_localrecife_latitude_valida',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(longitude__isnull=True)
+                    | models.Q(longitude__gte=-180.0, longitude__lte=180.0)
+                ),
+                name='aquaculture_localrecife_longitude_valida',
+            ),
+        ]
+
+    @property
+    def tem_coordenadas(self):
+        """Indica se o local pode ser usado pelos conectores de ingestao."""
+        return self.latitude is not None and self.longitude is not None
+
+    def bbox(self, margem_graus=0.25):
+        """Caixa delimitadora para consultas a NOAA/Copernicus.
+
+        Retorna (lon_min, lat_min, lon_max, lat_max) ou None sem coordenadas.
+        A margem padrao de 0.25 grau (~28 km) cobre a celula de 5 km do CRW e
+        a de 0.25 grau dos produtos biogeoquimicos do Copernicus.
+        """
+        if not self.tem_coordenadas:
+            return None
+        return (
+            self.longitude - margem_graus,
+            self.latitude - margem_graus,
+            self.longitude + margem_graus,
+            self.latitude + margem_graus,
+        )
 
     def save(self, *args, **kwargs):
         if not self.slug:

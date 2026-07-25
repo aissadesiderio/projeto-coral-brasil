@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db.models import Q
+from django.http import JsonResponse
 from rest_framework import generics, status
 from rest_framework.response import Response
 
@@ -11,19 +12,24 @@ from .serializers import (
     StatusPredicaoSerializer,
 )
 
+MENSAGEM_OFFLINE = (
+    'Site temporariamente offline para reestruturacao de backend e banco de dados.'
+)
+
 
 class OfflineModeMixin:
-    """Bloqueia endpoints publicos quando o site esta em manutencao/offline."""
+    """Bloqueia endpoints publicos quando o site esta em manutencao/offline.
+
+    Usa `JsonResponse` e nao `rest_framework.Response`: o dispatch acontece
+    antes de `finalize_response`, entao um Response do DRF sairia daqui sem
+    `accepted_renderer` e estouraria um AssertionError (HTTP 500) em vez de
+    devolver o 503 pretendido.
+    """
 
     def dispatch(self, request, *args, **kwargs):
         if request.method.lower() == 'get' and getattr(settings, 'OFFLINE_MODE', False):
-            return Response(
-                {
-                    'detail': (
-                        'Site temporariamente offline para reestruturacao de backend '
-                        'e banco de dados.'
-                    )
-                },
+            return JsonResponse(
+                {'detail': MENSAGEM_OFFLINE},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return super().dispatch(request, *args, **kwargs)
@@ -40,7 +46,7 @@ class EspecieList(OfflineModeMixin, generics.ListAPIView):
         return queryset.order_by('nome_comum', 'nome_cientifico')
 
 
-class EspecieDetail(generics.RetrieveAPIView):
+class EspecieDetail(OfflineModeMixin, generics.RetrieveAPIView):
     queryset = Especie.objects.all().prefetch_related('locais')
     serializer_class = EspecieSerializer
 
