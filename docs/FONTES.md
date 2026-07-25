@@ -30,19 +30,33 @@ Este documento registra **toda** fonte de informação usada na construção do 
 **Instituição:** National Oceanic and Atmospheric Administration / NESDIS / STAR — Coral Reef Watch Program (EUA)
 **Produto:** Daily Global 5 km (0,05°) Satellite Coral Bleaching Heat Stress Monitoring Product Suite, versão 3.1
 **Página oficial:** https://coralreefwatch.noaa.gov/product/5km/
-**Acesso programático:** ERDDAP. Três espelhos publicam o mesmo produto, cada um sob um identificador próprio — servidor e dataset **sempre andam em par**. Disponibilidade medida em 25/07/2026 com `manage.py testar_fontes`, em duas redes independentes:
+**Acesso programático:** ERDDAP. Três espelhos publicam o mesmo produto, cada um sob um identificador próprio — servidor e dataset **sempre andam em par**. Disponibilidade medida em 25/07/2026 com `manage.py testar_fontes`, **na rede da UFF**:
 
 | Espelho | Servidor | Dataset | Estado |
 |---|---|---|---|
 | pfeg (**padrão do projeto**) | `coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ responde com as 5 variáveis |
-| NOAA CoastWatch | `coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 nas duas redes |
+| NOAA CoastWatch | `coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
 | PACIOOS | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ **entregou dado real** — 115 medições em 25/07/2026 |
 
 O PACIOOS foi a origem dos CSVs que o projeto já possui. O padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
 
+#### 🔒 Restrição de rede: os servidores da NOAA exigem domínio federal
+
+Os espelhos da própria NOAA **só respondem de dentro de uma rede com domínio federal** — no caso deste projeto, a UFF. Medido em 25/07/2026, comparando uma máquina dentro da UFF com outra fora:
+
+| Host | Dentro da UFF | Fora |
+|---|---|---|
+| `coastwatch.pfeg.noaa.gov` | ✅ responde (com 503 intermitente) | ❌ timeout |
+| `coastwatch.noaa.gov` | ⚠️ HTTP 403 | TLS conecta; HTTP não medido de fora |
+| `pae-paha.pacioos.hawaii.edu` | a confirmar | ✅ **dado real, 5/5 variáveis** |
+
+**O PACIOOS não é da NOAA** — é do Pacific Islands Ocean Observing System, na Universidade do Havaí, e redistribui o mesmo produto Coral Reef Watch 5 km v3.1. Por isso não está sujeito à restrição, e foi por ele que a primeira ingestão bem-sucedida fora da rede federal aconteceu.
+
+Consequência para a operação: **o par padrão do projeto (pfeg) só funciona na UFF.** Agendamento automático, deploy ou trabalho de casa precisam do par PACIOOS. Como o estado de cada espelho depende da rede, rode `manage.py testar_fontes` na máquina que vai ingerir.
+
 #### ❌ Correção: o PACIOOS **não** tem certificado inválido
 
-A versão anterior desta seção afirmava que a falha do PACIOOS em duas redes indicava problema no servidor. **Estava errado, e a medição prova.** Diagnóstico com `manage.py testar_fontes --ssl` em 25/07/2026:
+A versão anterior desta seção afirmava que a falha do PACIOOS em "duas redes independentes" indicava problema no servidor. **Estava errado por dois motivos, e a medição prova.** Diagnóstico com `manage.py testar_fontes --ssl` em 25/07/2026:
 
 | Espelho | Cadeia do sistema | Bundle do `certifi` |
 |---|---|---|
@@ -52,7 +66,12 @@ A versão anterior desta seção afirmava que a falha do PACIOOS em duas redes i
 
 O mesmo host que falha com a cadeia nativa da máquina **verifica normalmente com o bundle do `certifi`**. Isso é falha de montagem de cadeia **no cliente**, não certificado ruim no servidor: o OpenSSL que o Python usa não busca o certificado intermediário faltante (*AIA chasing*), coisa que o navegador faz — daí o site abrir no Edge e falhar no `urlopen`.
 
-O erro de raciocínio foi tratar "falhou em duas redes independentes" como evidência de problema no servidor. As duas eram máquinas **Windows rodando Python**, que compartilham exatamente a limitação envolvida. Duas amostras da mesma causa não são duas evidências.
+O erro de raciocínio foi tratar "falhou em duas redes independentes" como evidência sobre o servidor. Duas coisas estavam erradas nessa frase:
+
+1. **As redes não eram duas.** Verificado com a autora em 25/07/2026: todas as execuções manuais foram feitas na UFF. A afirmação de duas redes entrou no documento por suposição minha, não por medição.
+2. **Ainda que fossem, não seriam evidências independentes.** São máquinas Windows rodando Python, que compartilham exatamente a limitação envolvida. Duas amostras da mesma causa não somam.
+
+Fica o método: registrar *onde* cada medição foi feita, não só o resultado. Sem isso, "falhou em dois lugares" vira argumento sem lastro.
 
 Consequências:
 - O PACIOOS continua utilizável e não deve ser descartado.
@@ -448,7 +467,9 @@ conforme a regra de governança daquele documento.
 | 24/07/2026 | **§6.14 resolvida.** Seed fictício removido pela migration `0016`; catálogo reconstruído a partir dos 9 arquivos reais via `manage.py inventariar_datasets`, com tamanho e período lidos do disco. Exclusões de arquivos com problema de integridade documentadas em código. |
 | 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
 | 25/07/2026 | Primeira ingestão ao vivo tentada na rede da faculdade. **§1.1 atualizada:** o espelho pfeg devolve HTTP 503 intermitente por sobrecarga. Pipeline passou a repetir falhas passageiras (`ingestao/retentativa.py`) e a preservar a causa real do erro — o resumidor apagava mensagens que usavam `<...>`, como as do `URLError`, e gravava só o tipo da exceção. |
+| 25/07/2026 | **Limite de tamanho de requisição do ERDDAP medido.** O backfill 2020–2026 num único pedido (~2.400 dias × 5 variáveis × ~121 pixels) falhou com `ReadTimeout` e `HTTP 408` nos três locais, gravando zero. O pipeline passou a fatiar o período em blocos de 180 dias (`INGESTAO_JANELA_DIAS`), gravando bloco a bloco — o que também torna o backfill retomável e faz um bloco com falha não descartar os demais. O cliente ERDDAP passou a ser inicializado uma vez por conector, e não por bloco: o `griddap_initialize()` baixa o eixo de tempo inteiro do dataset a cada chamada. |
+| 25/07/2026 | **§1.1 — restrição de rede registrada.** Os servidores da própria NOAA só respondem de dentro de rede com domínio federal (UFF); fora dela o pfeg dá timeout e o coastwatch.noaa.gov dá 403. O PACIOOS, por ser da Universidade do Havaí e não da NOAA, não tem essa restrição — foi por ele que a ingestão rodou fora da rede federal. Isso condiciona onde a ingestão pode ser agendada. |
 | 25/07/2026 | **Primeira ingestão ao vivo bem-sucedida.** 115 medições de Abrolhos (01–23/07/2026, 5 variáveis) vindas do PACIOOS `dhw_5km` por ERDDAP, gravadas com proveniência por valor. Duas correções foram necessárias: o conector substituía `e.constraints` em vez de atualizá-lo (o erddapy exige as chaves criadas por `griddap_initialize()`, inclusive `*_step`), e o período pedido ia além do eixo de tempo do dataset — produto de satélite publica com 1–3 dias de atraso e o ERDDAP responde 404 à janela inteira. **Validação física:** SST 24,8–25,7 °C e HotSpot −2,19 a −1,30 °C dão MMM implícita de **26,975 °C**, coerente com a MMM conhecida de Abrolhos (~27 °C); DHW e BAA zerados no inverno austral, como esperado. Idempotência confirmada com dado real: 115 medições após três execuções. |
-| 25/07/2026 | **§1.1 corrigida — o PACIOOS não tem certificado inválido.** A tentativa seguinte falhou com `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`, e o diagnóstico com `testar_fontes --ssl` mostrou o mesmo host verificando normalmente sob o bundle do `certifi`: é falha de cadeia no cliente, não no servidor. A conclusão anterior tratava "falhou em duas redes" como evidência sobre o servidor, quando as duas eram máquinas Windows com Python — mesma causa, não duas evidências. Criado `ingestao/certificados.py`; `certifi` promovido a dependência direta e deliberadamente **não** fixada, por ser uma lista de autoridades certificadoras. |
+| 25/07/2026 | **§1.1 corrigida — o PACIOOS não tem certificado inválido.** A tentativa seguinte falhou com `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`, e o diagnóstico com `testar_fontes --ssl` mostrou o mesmo host verificando normalmente sob o bundle do `certifi`: é falha de cadeia no cliente, não no servidor. A conclusão anterior tratava "falhou em duas redes" como evidência sobre o servidor; verificado depois com a autora que **todas as execuções manuais foram na UFF** — a segunda rede nunca existiu, foi suposição minha. Criado `ingestao/certificados.py`; `certifi` promovido a dependência direta e deliberadamente **não** fixada, por ser uma lista de autoridades certificadoras. |
 | 25/07/2026 | Pipeline de ingestão (`backend/ingestao/`) com o conector NOAA CRW. §6.3 (alcalinidade como pH) e §6.5 (DHW fora da norma) ficam **neutralizadas no novo caminho**, ainda presentes no `carregar_historico.py` legado. |
-| 25/07/2026 | Espelho ERDDAP padrão definido por medição (`testar_fontes` em duas redes): **pfeg + `NOAA_DHW`**, único a responder com as 5 variáveis. PACIOOS com certificado inválido, CoastWatch com 403. Ver §1.1. |
+| 25/07/2026 | Espelho ERDDAP padrão definido por medição (`testar_fontes` na rede da UFF): **pfeg + `NOAA_DHW`**, único a responder com as 5 variáveis. PACIOOS com falha de certificado, CoastWatch com 403. ⚠️ Duas afirmações desta linha foram corrigidas depois — ver as entradas seguintes: a falha do PACIOOS era da cadeia de CAs local, não do servidor, e a medição foi feita numa rede só, não em duas. |

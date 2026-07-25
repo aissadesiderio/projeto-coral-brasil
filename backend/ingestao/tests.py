@@ -18,7 +18,7 @@ from ingestao.certificados import (
     garantir_bundle_ca,
     interpretar,
 )
-from ingestao.base import PeriodoIndisponivel
+from ingestao.base import PeriodoIndisponivel, ResultadoColeta
 from ingestao.conectores.noaa_crw import (
     ConectorNoaaCrw,
     limitar_periodo,
@@ -28,7 +28,7 @@ from ingestao.erros import parece_documento_html, resumir_erro
 from ingestao.normalizacao import ColunaRecusada, normalizar, resolver_variavel
 from ingestao.persistencia import preparar_medicoes, ultima_data_ingerida
 from ingestao.qualidade import detectar_saltos, validar
-from ingestao.registro import ingerir
+from ingestao.registro import dividir_periodo, ingerir
 from ingestao.retentativa import e_transitorio, executar_com_retentativa
 
 # Mensagem literal devolvida pelo ERDDAP do pfeg em 25/07/2026.
@@ -638,6 +638,189 @@ class ConstraintsGriddapTests(TestCase):
 
         self.assertIn('latitude', str(ctx.exception))
         self.assertIn('depth', str(ctx.exception))
+
+
+class DividirPeriodoTests(TestCase):
+    """Fatiamento do periodo em blocos.
+
+    Regressao de 25/07/2026: pedir 2020-2026 de uma vez fez o ERDDAP responder
+    ReadTimeout e HTTP 408 nos tres locais, e o backfill inteiro terminou com
+    zero medicoes.
+    """
+
+    def test_periodo_curto_vira_um_bloco_so(self):
+        blocos = list(dividir_periodo(date(2026, 7, 1), date(2026, 7, 25), 180))
+
+        self.assertEqual(blocos, [(date(2026, 7, 1), date(2026, 7, 25))])
+
+    def test_blocos_sao_contiguos_e_sem_sobreposicao(self):
+        blocos = list(dividir_periodo(date(2020, 1, 1), date(2026, 7, 23), 180))
+
+        self.assertEqual(blocos[0][0], date(2020, 1, 1))
+        self.assertEqual(blocos[-1][1], date(2026, 7, 23))
+        for (_, fim_anterior), (inicio, _) in zip(blocos, blocos[1:]):
+            self.assertEqual(inicio - fim_anterior, timedelta(days=1))
+
+    def test_nenhum_bloco_passa_da_janela(self):
+        blocos = list(dividir_periodo(date(2020, 1, 1), date(2026, 7, 23), 180))
+
+        for inicio, fim in blocos:
+            self.assertLessEqual((fim - inicio).days + 1, 180)
+
+    def test_seis_anos_viram_poucos_blocos(self):
+        blocos = list(dividir_periodo(date(2020, 1, 1), date(2026, 7, 23), 180))
+
+        self.assertEqual(len(blocos), 14)
+
+    def test_um_unico_dia(self):
+        blocos = list(dividir_periodo(date(2026, 7, 1), date(2026, 7, 1), 180))
+
+        self.assertEqual(blocos, [(date(2026, 7, 1), date(2026, 7, 1))])
+
+    def test_janela_invalida_e_recusada(self):
+        with self.assertRaises(ValueError):
+            list(dividir_periodo(date(2026, 7, 1), date(2026, 7, 25), 0))
+
+
+class IngestaoPorBlocosTests(TestCase):
+    """Um bloco que falha nao pode levar junto os que deram certo."""
+
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='local-blocos-teste',
+            nome='Local Blocos',
+            estado='Bahia',
+            cidade='Caravelas',
+            latitude=-17.972,
+            longitude=-38.688,
+        )
+
+    class ConectorPorBloco(ConectorNoaaCrw):
+        """Devolve um dia de dado por bloco; falha nos blocos escolhidos."""
+
+        def __init__(self, blocos_que_falham=(), **kw):
+            super().__init__(**kw)
+            self.blocos_que_falham = set(blocos_que_falham)
+            self.chamadas = []
+
+        def coletar(self, local, inicio, fim):
+            numero = len(self.chamadas) + 1
+            self.chamadas.append((inicio, fim))
+            if numero in self.blocos_que_falham:
+                return ResultadoColeta(erro=f'falha simulada no bloco {numero}')
+            return self._extrair(df_crw(dias=1))
+
+    def test_periodo_longo_e_dividido_em_varias_chamadas(self):
+        conector = self.ConectorPorBloco(dormir=Relogio())
+
+        ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            conector,
+            janela_dias=90,
+        )
+
+        self.assertEqual(len(conector.chamadas), 5)
+        self.assertEqual(conector.chamadas[0][0], date(2026, 1, 1))
+        self.assertEqual(conector.chamadas[-1][1], date(2026, 12, 31))
+
+    def test_bloco_com_falha_nao_descarta_os_que_deram_certo(self):
+        conector = self.ConectorPorBloco(blocos_que_falham=[2], dormir=Relogio())
+
+        execucao = ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            conector,
+            janela_dias=90,
+        )
+
+        self.assertEqual(execucao.status, 'parcial')
+        self.assertGreater(execucao.registros_gravados, 0)
+        self.assertIn('falha simulada no bloco 2', execucao.mensagem_erro)
+
+    def test_todos_os_blocos_falhando_e_falha(self):
+        conector = self.ConectorPorBloco(
+            blocos_que_falham=range(1, 10), dormir=Relogio()
+        )
+
+        execucao = ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            conector,
+            janela_dias=90,
+        )
+
+        self.assertEqual(execucao.status, 'falha')
+        self.assertEqual(execucao.registros_gravados, 0)
+
+    def test_para_apos_falhas_seguidas_em_vez_de_insistir(self):
+        """Fonte fora do ar nao deve gastar o backoff completo em cada bloco."""
+        conector = self.ConectorPorBloco(
+            blocos_que_falham=range(1, 60), dormir=Relogio()
+        )
+
+        execucao = ingerir(
+            self.local,
+            date(2020, 1, 1),
+            date(2026, 7, 23),
+            conector,
+            janela_dias=30,
+        )
+
+        self.assertEqual(len(conector.chamadas), 3)
+        self.assertIn('nao foram tentados', execucao.mensagem_erro)
+
+    def test_falhas_isoladas_nao_interrompem_o_backfill(self):
+        """Tres falhas espalhadas nao sao tres seguidas."""
+        conector = self.ConectorPorBloco(
+            blocos_que_falham=[2, 4, 6], dormir=Relogio()
+        )
+
+        ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            conector,
+            janela_dias=45,
+        )
+
+        self.assertEqual(len(conector.chamadas), 9, 'nenhum bloco pode ser pulado')
+
+    def test_progresso_reporta_cada_bloco(self):
+        linhas = []
+        conector = self.ConectorPorBloco(dormir=Relogio())
+
+        ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            conector,
+            janela_dias=90,
+            progresso=linhas.append,
+        )
+
+        self.assertEqual(len(linhas), 5)
+        self.assertIn('bloco 1/5', linhas[0])
+
+    def test_nota_repetida_aparece_uma_vez_so(self):
+        class ConectorComNota(self.ConectorPorBloco):
+            def coletar(self, local, inicio, fim):
+                resultado = super().coletar(local, inicio, fim)
+                resultado.nota = 'Periodo encolhido.'
+                return resultado
+
+        execucao = ingerir(
+            self.local,
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            ConectorComNota(dormir=Relogio()),
+            janela_dias=90,
+        )
+
+        self.assertEqual(execucao.mensagem_erro.count('Periodo encolhido.'), 1)
 
 
 class LimitarPeriodoTests(TestCase):

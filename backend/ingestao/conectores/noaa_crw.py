@@ -45,8 +45,13 @@ VARIAVEIS_ERDDAP = (
 #   diagnostico errado - o `testar_fontes --ssl` mostra o mesmo host
 #   verificando normalmente sob o bundle do certifi. A falha era de montagem de
 #   cadeia no cliente. Ver ingestao/certificados.py.
-# - `coastwatch.noaa.gov` + `noaacrwdhwDaily` respondeu 403 nas mesmas redes.
+# - `coastwatch.noaa.gov` + `noaacrwdhwDaily` respondeu 403 na mesma rede.
 #   403 e bloqueio de aplicacao, nao de TLS: o handshake com esse host verifica.
+#
+# RESTRICAO DE REDE: os servidores da propria NOAA so respondem de dentro de
+# rede com dominio federal (aqui, a UFF). O PACIOOS e da Universidade do Havai,
+# nao da NOAA, e redistribui o mesmo produto - por isso funciona de qualquer
+# rede. Para cron ou deploy fora da universidade, use o par PACIOOS.
 #
 # Servidor e dataset SEMPRE andam em par: cada espelho publica o mesmo produto
 # sob um id proprio. Use `manage.py testar_fontes` para descobrir o par que
@@ -224,29 +229,47 @@ class ConectorNoaaCrw(ConectorBase):
         # producao o conector monta o proprio ERDDAP e espera de verdade.
         self._cliente = cliente
         self._dormir = dormir
+        self._erddap = None
+        self._eixos = None
+
+    def _preparar_cliente(self):
+        """Inicializa o ERDDAP uma vez e guarda os limites originais dos eixos.
+
+        Atribuir o `dataset_id` dispara `griddap_initialize()`, que faz quatro
+        requisicoes - uma delas o eixo de tempo inteiro do dataset, decadas de
+        datas diarias. Como o backfill fatia o periodo em blocos, refazer isso
+        a cada bloco multiplicaria o trafego sem necessidade: o dataset e o
+        mesmo do primeiro ao ultimo.
+        """
+        if self._erddap is None:
+            from erddapy import ERDDAP
+
+            e = ERDDAP(server=self.servidor, protocol='griddap')
+            e.dataset_id = self.dataset_id
+
+            # Copia antes de qualquer alteracao. A partir do segundo bloco,
+            # `e.constraints` ja carrega os nossos valores - e o
+            # `montar_constraints` precisa dos limites reais do eixo para
+            # decidir a ordem e a convencao de longitude.
+            self._eixos = dict(e.constraints)
+            e.variables = self._variaveis_publicadas(e.variables)
+            self._erddap = e
+
+        return self._erddap, self._eixos
 
     def _montar_cliente(self, bbox, inicio, fim):
-        from erddapy import ERDDAP
-
-        e = ERDDAP(server=self.servidor, protocol='griddap')
-
-        # Atribuir o dataset_id ja dispara `griddap_initialize()`, que busca o
-        # `.dds` e os eixos do dataset. E dai que saem as chaves validas de
-        # `e.constraints` e a lista real de variaveis publicadas.
-        e.dataset_id = self.dataset_id
-
-        e.variables = self._variaveis_publicadas(e.variables)
+        cliente, eixos = self._preparar_cliente()
 
         # O eixo de tempo so e conhecido depois do initialize - por isso o
         # periodo e encolhido aqui, e nao antes da chamada de rede.
-        inicio, fim, nota = limitar_periodo(inicio, fim, e.constraints.get('time<='))
+        inicio, fim, nota = limitar_periodo(inicio, fim, eixos.get('time<='))
         if nota:
             logger.warning('%s: %s', self.dataset_id, nota)
 
-        e.constraints.update(
-            montar_constraints(e.constraints, e.dim_names, bbox, inicio, fim)
+        cliente.constraints.update(
+            montar_constraints(eixos, cliente.dim_names, bbox, inicio, fim)
         )
-        return e, nota
+        return cliente, nota
 
     def _variaveis_publicadas(self, disponiveis):
         """Pede so o que este espelho publica.

@@ -10,9 +10,25 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
-import environ
+try:
+    import environ
+except ImportError as exc:  # pragma: no cover - depende do ambiente, nao do codigo
+    # Quase sempre significa "esqueci de ativar o venv". O traceback padrao do
+    # Django para isso e um ModuleNotFoundError no meio de dez frames de
+    # importlib, que nao sugere a causa nem o conserto.
+    raise ImportError(
+        'Nao foi possivel importar "environ" (django-environ).\n\n'
+        f'Python em uso: {sys.executable}\n\n'
+        'Se esse caminho nao aponta para a pasta venv do projeto, o ambiente '
+        'virtual nao esta ativo. Ative com:\n'
+        '    .\\venv\\Scripts\\activate\n\n'
+        'Se estiver ativo e o erro continuar, instale as dependencias:\n'
+        '    pip install -r requirements.txt'
+    ) from exc
+
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -197,6 +213,10 @@ NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='NOAA_DHW')
 # passageiras (503, timeout); certificado invalido ou 403 falham de primeira.
 # Ver backend/ingestao/retentativa.py.
 INGESTAO_TENTATIVAS = env.int('INGESTAO_TENTATIVAS', default=3)
+
+# Tamanho do bloco em que o periodo e fatiado antes de virar requisicao.
+# Pedir seis anos de uma vez faz o ERDDAP responder 408/ReadTimeout.
+INGESTAO_JANELA_DIAS = env.int('INGESTAO_JANELA_DIAS', default=180)
 
 # Copernicus Marine. A biblioteca `copernicusmarine` le estas variaveis
 # direto do ambiente; como o django-environ exporta o que le do .env para

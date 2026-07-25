@@ -31,6 +31,10 @@ py -3.13 -m venv venv
 pip install -r requirements.txt
 ```
 
+⚠️ **Ative o venv em cada terminal novo.** Sem ele, `python backend\manage.py`
+usa o Python do sistema, que não tem as dependências — o projeto detecta isso e
+diz qual Python está em uso, mas o erro só some ativando o ambiente.
+
 ### 2. Configuração — obrigatória
 
 O projeto **não sobe sem um `backend/.env`**. Esse arquivo não é versionado,
@@ -95,6 +99,34 @@ python backend\manage.py ingerir --completo --desde=2020-01-01
 Por padrão a ingestão é **incremental**: retoma da última data já gravada.
 Use `--completo` para rebaixar o período inteiro. Rodar duas vezes o mesmo
 período não duplica nem apaga — a gravação é idempotente.
+
+### Backfill de séries longas
+
+O período pedido é **fatiado em blocos** antes de virar requisição. Pedir seis
+anos de uma vez faz o ERDDAP responder `HTTP 408` ou `ReadTimeout` — a
+requisição é grande demais, e a execução inteira termina sem nada.
+
+```bash
+python backend\manage.py ingerir --desde=2020-01-01 --completo
+```
+
+O padrão é 180 dias por bloco (`INGESTAO_JANELA_DIAS` no `.env`, ou `--janela`
+na linha de comando). Cada bloco é **gravado assim que chega**, então:
+
+- Uma interrupção no meio preserva o que já veio.
+- Rodar de novo **sem** `--completo` retoma de onde parou.
+- Um bloco que falha não descarta os que deram certo — a execução termina como
+  `parcial`, listando quais períodos faltaram.
+
+Se três blocos seguidos falharem, o comando para em vez de percorrer dezenas de
+blocos gastando a retentativa em cada um. A mensagem diz quantos não foram
+tentados.
+
+Se ainda houver timeout, diminua a janela:
+
+```bash
+python backend\manage.py ingerir --desde=2020-01-01 --completo --janela=90
+```
 
 ### Atraso de publicação
 
@@ -194,7 +226,19 @@ variáveis cada dataset publica**, e recomenda o par a usar. Também avisa se o
 publica o mesmo produto sob um id próprio. Trocar só um dos dois gera um 404
 difícil de diagnosticar.
 
-Situação verificada em 25/07/2026:
+⚠️ Essas linhas são **conteúdo do arquivo `backend/.env`**, não comandos. Colar
+`NOAA_ERDDAP_SERVER=...` no PowerShell devolve `CommandNotFoundException` — o
+PowerShell define variável de ambiente com `$env:NOME = "valor"`, e mesmo assim
+o valor sumiria ao fechar o terminal. Edite o arquivo.
+
+🔒 **Os servidores da própria NOAA só respondem de rede com domínio federal**
+(no caso deste projeto, a UFF). O PACIOOS não é da NOAA — é da Universidade do
+Havaí e redistribui o mesmo produto, então funciona de qualquer rede. Se a
+ingestão for rodar por cron, em deploy ou fora da universidade, use o par
+PACIOOS.
+
+Situação verificada em 25/07/2026 — as duas primeiras linhas medidas **na rede
+da UFF**, a terceira de fora:
 
 | Espelho | Servidor | Dataset | Estado |
 |---|---|---|---|

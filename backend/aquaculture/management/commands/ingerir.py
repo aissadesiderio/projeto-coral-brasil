@@ -48,6 +48,14 @@ class Command(BaseCommand):
             action='store_true',
             help='Rebaixa todo o periodo em vez de retomar da ultima data ingerida.',
         )
+        parser.add_argument(
+            '--janela',
+            type=int,
+            help=(
+                'Dias por requisicao. Padrao: INGESTAO_JANELA_DIAS do .env. '
+                'Diminua se a fonte responder 408 ou timeout.'
+            ),
+        )
 
     def handle(self, *args, **options):
         exigir_migrations_aplicadas()
@@ -109,12 +117,19 @@ class Command(BaseCommand):
             slug = conector.slug
 
             for local in locais:
+                def mostrar(linha, slug=slug, local=local):
+                    self.stdout.write(f'  ...       {slug}/{local.slug}: {linha}')
+
                 execucao = ingerir(
                     local,
                     inicio,
                     fim,
                     conector,
                     incremental=not options['completo'],
+                    janela_dias=options['janela'],
+                    # Um backfill de anos leva minutos. Sem retorno por bloco,
+                    # o silencio e indistinguivel de travamento.
+                    progresso=mostrar if options['verbosity'] >= 1 else None,
                 )
                 total_gravado += execucao.registros_gravados
 
