@@ -13,7 +13,7 @@ from django.test import TestCase
 
 from aquaculture.models import ExecucaoIngestao, LocalRecife, MedicaoAmbiental
 from ingestao.conectores.noaa_crw import ConectorNoaaCrw
-from ingestao.erros import resumir_erro
+from ingestao.erros import parece_documento_html, resumir_erro
 from ingestao.normalizacao import ColunaRecusada, normalizar, resolver_variavel
 from ingestao.persistencia import preparar_medicoes, ultima_data_ingerida
 from ingestao.qualidade import detectar_saltos, validar
@@ -411,3 +411,50 @@ class TratamentoDeErroTests(TestCase):
 
     def test_resumir_erro_preserva_tipo_quando_mensagem_vazia(self):
         self.assertEqual(resumir_erro(ValueError('')), 'ValueError')
+
+
+class ResumoDeErroTests(TestCase):
+    """Resumir nao pode custar a causa do erro.
+
+    Regressao: a deteccao de HTML era "tem < e tem >", e o URLError do Python
+    formata a mensagem como "<urlopen error [SSL: ...]>". O resumo apagava a
+    mensagem inteira e gravava so "URLError" - pior do que nao resumir.
+    """
+
+    def test_urlerror_preserva_a_causa(self):
+        import ssl
+        import urllib.error
+
+        exc = urllib.error.URLError(
+            ssl.SSLCertVerificationError(
+                '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed'
+            )
+        )
+
+        resumo = resumir_erro(exc)
+
+        self.assertIn('URLError', resumo)
+        self.assertIn('CERTIFICATE_VERIFY_FAILED', resumo)
+
+    def test_mensagem_com_angulares_nao_e_confundida_com_html(self):
+        resumo = resumir_erro(ValueError('valor <esperado> nao encontrado'))
+
+        self.assertIn('esperado', resumo)
+
+    def test_pagina_html_continua_sendo_resumida(self):
+        html = (
+            '<!DOCTYPE HTML><html><head><title>403</title></head>'
+            '<body><h1>Forbidden</h1><p>No permission.</p></body></html>'
+        )
+
+        resumo = resumir_erro(OSError(html))
+
+        self.assertNotIn('<html', resumo)
+        self.assertNotIn('<p>', resumo)
+        self.assertIn('Forbidden', resumo)
+
+    def test_parece_documento_html_distingue_os_dois_casos(self):
+        self.assertTrue(parece_documento_html('<!DOCTYPE html><html>...'))
+        self.assertTrue(parece_documento_html('<body>erro</body>'))
+        self.assertFalse(parece_documento_html('<urlopen error timed out>'))
+        self.assertFalse(parece_documento_html('a < b and b > c'))

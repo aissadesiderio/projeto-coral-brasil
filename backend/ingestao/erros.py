@@ -13,11 +13,24 @@ LIMITE_CARACTERES = 400
 _TAGS_HTML = re.compile(r'<[^>]+>')
 _ESPACOS = re.compile(r'\s+')
 
+# Marcadores que identificam um documento HTML de verdade.
+#
+# Nao basta procurar "<" e ">": o URLError do Python formata a mensagem como
+# "<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] ...>", e tratar isso como
+# tag apagava a causa inteira do erro, deixando so "URLError" no log - que e
+# pior do que nao resumir nada.
+_MARCADORES_HTML = re.compile(r'<!doctype\s+html|<html[\s>]|<body[\s>]|<head[\s>]', re.IGNORECASE)
+
 # Linhas de boilerplate de pagina de erro que nao acrescentam informacao.
 _RUIDO = re.compile(
     r'^(doctype|html|head|title|body|hr|address|meta|link)\b',
     re.IGNORECASE,
 )
+
+
+def parece_documento_html(texto):
+    """Distingue uma pagina HTML de uma mensagem que apenas usa < e >."""
+    return bool(_MARCADORES_HTML.search(texto))
 
 
 def limpar_html(texto):
@@ -40,7 +53,7 @@ def resumir_erro(exc, limite=LIMITE_CARACTERES):
     tipo = type(exc).__name__
     mensagem = str(exc)
 
-    if '<' in mensagem and '>' in mensagem:
+    if parece_documento_html(mensagem):
         mensagem = limpar_html(mensagem)
 
     mensagem = _ESPACOS.sub(' ', mensagem).strip()
