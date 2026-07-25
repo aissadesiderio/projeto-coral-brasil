@@ -24,21 +24,31 @@ environ.Env.read_env(BASE_DIR / '.env')
 
 DEBUG = env.bool('DJANGO_DEBUG', default=False)
 
+# Uma variavel definida como vazia (`DJANGO_SECRET_KEY=` no .env) nao cai no
+# default do django-environ: ele devolve string vazia. Sem este tratamento, um
+# .env copiado do exemplo trocaria a mensagem clara abaixo por um
+# "SECRET_KEY must not be empty" do proprio Django, bem mais dificil de ligar
+# a causa.
+_secret_key = env('DJANGO_SECRET_KEY', default='').strip()
+
 # Fail fast: fora de DEBUG, rodar sem SECRET_KEY explicita e um erro de
 # configuracao, nao algo para silenciar com um fallback inseguro.
-if DEBUG:
-    SECRET_KEY = env(
-        'DJANGO_SECRET_KEY',
-        default='django-insecure-apenas-para-desenvolvimento-local',
-    )
+if _secret_key:
+    SECRET_KEY = _secret_key
+elif DEBUG:
+    SECRET_KEY = 'django-insecure-apenas-para-desenvolvimento-local'
 else:
-    try:
-        SECRET_KEY = env('DJANGO_SECRET_KEY')
-    except environ.ImproperlyConfigured as exc:
-        raise ImproperlyConfigured(
-            'DJANGO_SECRET_KEY e obrigatoria quando DJANGO_DEBUG=False. '
-            'Defina-a em backend/.env ou no ambiente antes de subir o servico.'
-        ) from exc
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY nao esta definida (ou esta vazia) e DJANGO_DEBUG '
+        'e False.\n\n'
+        'Para desenvolvimento local, crie backend/.env com:\n'
+        '    DJANGO_DEBUG=True\n'
+        '    DJANGO_SECRET_KEY=<chave>\n\n'
+        'Gere a chave com:\n'
+        '    python -c "from django.core.management.utils import '
+        'get_random_secret_key as k; print(k())"\n\n'
+        'Veja backend/.env.example. O arquivo .env nao e versionado.'
+    )
 
 ALLOWED_HOSTS = env.list(
     'DJANGO_ALLOWED_HOSTS',
@@ -182,6 +192,17 @@ NOAA_ERDDAP_SERVER = env(
     default='https://pae-paha.pacioos.hawaii.edu/erddap',
 )
 NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='dhw_5km')
+
+# Copernicus Marine. A biblioteca `copernicusmarine` le estas variaveis
+# direto do ambiente; como o django-environ exporta o que le do .env para
+# os.environ, basta declara-las la. Sao espelhadas aqui para que o comando
+# `testar_fontes` consiga relatar se estao configuradas.
+COPERNICUSMARINE_SERVICE_USERNAME = env(
+    'COPERNICUSMARINE_SERVICE_USERNAME', default=''
+)
+COPERNICUSMARINE_SERVICE_PASSWORD = env(
+    'COPERNICUSMARINE_SERVICE_PASSWORD', default=''
+)
 
 NEO4J_URI = env('NEO4J_URI', default='bolt://localhost:7687')
 NEO4J_USER = env('NEO4J_USER', default='neo4j')
