@@ -15,6 +15,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from aquaculture.management.utils import exigir_migrations_aplicadas
 from aquaculture.models import LocalRecife
+from ingestao.certificados import garantir_bundle_ca
 from ingestao.registro import CONECTORES, ingerir, obter_conector
 
 
@@ -50,6 +51,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         exigir_migrations_aplicadas()
+
+        # O `pandas.read_csv(url)` do erddapy busca pelo urllib, que no Windows
+        # nao usa o certifi como o `requests` usa - e falhava com
+        # CERTIFICATE_VERIFY_FAILED numa maquina onde o resto funcionava.
+        garantir_bundle_ca()
 
         inicio = _parse_data(options['desde'])
         fim = _parse_data(options['ate'])

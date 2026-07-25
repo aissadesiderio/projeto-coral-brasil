@@ -114,6 +114,51 @@ Se o 503 persistir depois das três tentativas, é sobrecarga real do servidor:
 espere alguns minutos e rode de novo. A ingestão é incremental e idempotente,
 então repetir o comando não custa nada.
 
+### `CERTIFICATE_VERIFY_FAILED`
+
+```
+URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify
+failed: unable to get local issuer certificate>
+```
+
+Isso **não** quer dizer que o servidor tenha um certificado ruim. Quer dizer
+que esta máquina não conseguiu montar a cadeia até uma raiz confiável. No
+Windows é comum: o OpenSSL do Python não busca o certificado intermediário que
+falta (o navegador busca), e a loja de raízes do Windows é preenchida sob
+demanda.
+
+O comando `ingerir` já aponta o OpenSSL para o bundle do `certifi`, o que
+resolve o caso normal. Se ainda falhar, diagnostique:
+
+```bash
+python backend\manage.py testar_fontes --ssl
+```
+
+O comando testa cada espelho com as duas cadeias — a do sistema e a do
+`certifi` — e a diferença entre elas diz o que fazer:
+
+| Resultado | Significado | O que fazer |
+|---|---|---|
+| Só o `certifi` verifica | Falta uma raiz nesta máquina | Nada — o pipeline já usa o `certifi` |
+| Só o sistema verifica | A rede intercepta TLS com uma raiz já instalada no Windows | Não defina `SSL_CERT_FILE` |
+| Nenhum dos dois | Proxy interceptando com raiz desconhecida, ou certificado realmente inválido | Ver abaixo |
+| Nenhum, sem handshake | Porta bloqueada — não é certificado | Tentar de outra rede |
+
+No caso do proxy, o comando imprime os nomes legíveis dentro do certificado
+apresentado. Se aparecer o nome da instituição ou de um produto de firewall, é
+interceptação: peça o certificado raiz ao suporte de TI e aponte para ele.
+
+```bash
+setx SSL_CERT_FILE "C:\caminho\para\raiz-da-instituicao.pem"
+```
+
+Um `SSL_CERT_FILE` já definido é respeitado — o projeto não sobrescreve.
+
+⚠️ **Não desligue a verificação de certificado.** Um `verify=False` faz o erro
+sumir aceitando qualquer certificado, inclusive o de quem estiver no meio do
+caminho. Para dados científicos com proveniência declarada, isso invalidaria a
+cadeia de custódia que o resto do pipeline se dá o trabalho de manter.
+
 ### Diagnóstico de rede
 
 Antes da primeira ingestão numa máquina ou rede nova:
@@ -136,11 +181,14 @@ Situação verificada em 25/07/2026:
 |---|---|---|---|
 | pfeg (**padrão**) | `https://coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ 5/5 variáveis — 503 intermitente |
 | NOAA CoastWatch | `https://coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 |
-| PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ⚠️ certificado inválido |
+| PACIOOS | `https://pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ TLS ok com `certifi` |
 
-O PACIOOS gerou os CSVs que o projeto já tem, mas falhou com
-`CERTIFICATE_VERIFY_FAILED` em duas redes independentes — problema no
-certificado do servidor, não bloqueio local.
+O PACIOOS chegou a ser marcado aqui como "certificado inválido". Estava errado:
+`testar_fontes --ssl` mostra o mesmo host verificando normalmente sob o bundle
+do `certifi`. A falha era de montagem de cadeia **no cliente**, não no servidor.
+
+⚠️ O estado de cada espelho depende da máquina e da rede tanto quanto do
+servidor. Rode `testar_fontes` na máquina que vai ingerir.
 
 **Copernicus** exige conta gratuita — preencha
 `COPERNICUSMARINE_SERVICE_USERNAME` e `..._PASSWORD` no `.env`.

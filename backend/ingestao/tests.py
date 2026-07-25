@@ -6,12 +6,18 @@ idempotente e tratamento de falha - tudo menos a chamada HTTP em si, que
 precisa ser verificada na maquina do usuario.
 """
 
+import os
 from datetime import date, timedelta
 
 import pandas as pd
 from django.test import TestCase
 
 from aquaculture.models import ExecucaoIngestao, LocalRecife, MedicaoAmbiental
+from ingestao.certificados import (
+    contexto_do_sistema,
+    garantir_bundle_ca,
+    interpretar,
+)
 from ingestao.conectores.noaa_crw import ConectorNoaaCrw
 from ingestao.erros import parece_documento_html, resumir_erro
 from ingestao.normalizacao import ColunaRecusada, normalizar, resolver_variavel
@@ -493,6 +499,109 @@ class ResumoDeErroTests(TestCase):
         self.assertTrue(parece_documento_html('<body>erro</body>'))
         self.assertFalse(parece_documento_html('<urlopen error timed out>'))
         self.assertFalse(parece_documento_html('a < b and b > c'))
+
+
+class BundleDeCertificadosTests(TestCase):
+    """A cadeia de confianca TLS usada pelas fontes externas.
+
+    Regressao de 25/07/2026: no PC da faculdade a ingestao falhava com
+    CERTIFICATE_VERIFY_FAILED porque o `pandas.read_csv(url)` busca pelo
+    urllib, que no Windows nao usa o certifi como o `requests` usa.
+    """
+
+    def setUp(self):
+        self._ambiente = {
+            v: os.environ.get(v)
+            for v in ('SSL_CERT_FILE', 'REQUESTS_CA_BUNDLE', 'SSL_CERT_DIR')
+        }
+        for variavel in self._ambiente:
+            os.environ.pop(variavel, None)
+
+    def tearDown(self):
+        for variavel, valor in self._ambiente.items():
+            if valor is None:
+                os.environ.pop(variavel, None)
+            else:
+                os.environ[variavel] = valor
+
+    def test_define_o_bundle_quando_ninguem_definiu(self):
+        caminho = garantir_bundle_ca()
+
+        self.assertIsNotNone(caminho, 'certifi deveria estar instalado')
+        self.assertTrue(os.path.exists(caminho))
+        self.assertEqual(os.environ['SSL_CERT_FILE'], caminho)
+        self.assertEqual(os.environ['REQUESTS_CA_BUNDLE'], caminho)
+
+    def test_respeita_bundle_ja_definido_no_ambiente(self):
+        """Um SSL_CERT_FILE existente costuma ser a raiz da instituicao."""
+        os.environ['SSL_CERT_FILE'] = 'C:\\ti\\raiz-da-faculdade.pem'
+
+        caminho = garantir_bundle_ca()
+
+        self.assertEqual(caminho, 'C:\\ti\\raiz-da-faculdade.pem')
+        self.assertEqual(os.environ['SSL_CERT_FILE'], 'C:\\ti\\raiz-da-faculdade.pem')
+
+    def test_e_idempotente(self):
+        primeiro = garantir_bundle_ca()
+
+        self.assertEqual(garantir_bundle_ca(), primeiro)
+
+    def test_contexto_do_sistema_ignora_o_certifi(self):
+        """Sem isso o diagnostico compararia o certifi com ele mesmo."""
+        garantir_bundle_ca()
+
+        contexto_do_sistema()
+
+        self.assertIn(
+            'SSL_CERT_FILE', os.environ, 'a variavel precisa ser restaurada depois'
+        )
+
+
+class InterpretacaoSslTests(TestCase):
+    """Traducao do diagnostico em conclusao acionavel."""
+
+    def _diagnostico(self, sistema, certifi_):
+        return {
+            'host': 'exemplo.org',
+            'sistema': sistema,
+            'certifi': certifi_,
+            'bundle_certifi': 'cacert.pem',
+            'nomes_no_certificado': [],
+        }
+
+    def test_so_o_certifi_funciona_e_o_caso_do_windows(self):
+        veredito, _ = interpretar(
+            self._diagnostico(
+                'SSLCertVerificationError: unable to get local issuer certificate',
+                None,
+            )
+        )
+
+        self.assertEqual(veredito, 'certifi')
+
+    def test_nenhum_dos_dois_verifica_sugere_interceptacao(self):
+        veredito, texto = interpretar(
+            self._diagnostico(
+                'SSLCertVerificationError: self signed certificate in chain',
+                'SSLCertVerificationError: self signed certificate in chain',
+            )
+        )
+
+        self.assertEqual(veredito, 'interceptacao')
+        self.assertIn('Nao desligue a verificacao', texto)
+
+    def test_timeout_nao_e_diagnosticado_como_certificado(self):
+        """Porta bloqueada tem outro conserto - foi o caso da maquina de casa."""
+        veredito, _ = interpretar(
+            self._diagnostico('TimeoutError: timed out', 'TimeoutError: timed out')
+        )
+
+        self.assertEqual(veredito, 'inalcancavel')
+
+    def test_tudo_verificando_nao_culpa_o_certificado(self):
+        veredito, _ = interpretar(self._diagnostico(None, None))
+
+        self.assertEqual(veredito, 'ok')
 
 
 class ClassificacaoDeFalhaTests(TestCase):

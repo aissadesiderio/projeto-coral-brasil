@@ -37,6 +37,16 @@ h5netcdf==1.8.1
 erddapy==3.1.1          # cliente ERDDAP (NOAA Coral Reef Watch)
 copernicusmarine==2.3.0 # cliente oficial Copernicus Marine Service
 
+# Raizes de CA. Ja vinha como dependencia transitiva, mas agora e usada
+# diretamente: no Windows o urllib (por onde o pandas busca o CSV do ERDDAP)
+# nao monta a cadeia sozinho. Ver backend/ingestao/certificados.py.
+#
+# Unica dependencia sem versao exata, de proposito: e uma lista de autoridades
+# certificadoras, e congela-la significa envelhecer a confianca do projeto.
+# Uma raiz nova em 2027 quebraria a ingestao com "unable to get local issuer
+# certificate" ate alguem lembrar de subir o pin.
+certifi>=2026.2.25
+
 # --- Machine learning ---
 scikit-learn==1.8.0
 joblib==1.5.3

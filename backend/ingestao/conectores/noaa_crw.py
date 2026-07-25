@@ -40,10 +40,12 @@ VARIAVEIS_ERDDAP = (
 #   cinco variaveis (incluindo CRW_BAA, o target) em 25/07/2026. E tambem o
 #   servidor que o `coleta_de_dados.py` original usava.
 # - PACIOOS (`pae-paha.pacioos.hawaii.edu` + `dhw_5km`) gerou os CSVs que o
-#   projeto ja tem, mas em 25/07/2026 falhava com CERTIFICATE_VERIFY_FAILED em
-#   duas redes independentes - problema de certificado do servidor, nao de
-#   bloqueio local.
+#   projeto ja tem. Ja foi marcado aqui como "certificado invalido"; era
+#   diagnostico errado - o `testar_fontes --ssl` mostra o mesmo host
+#   verificando normalmente sob o bundle do certifi. A falha era de montagem de
+#   cadeia no cliente. Ver ingestao/certificados.py.
 # - `coastwatch.noaa.gov` + `noaacrwdhwDaily` respondeu 403 nas mesmas redes.
+#   403 e bloqueio de aplicacao, nao de TLS: o handshake com esse host verifica.
 #
 # Servidor e dataset SEMPRE andam em par: cada espelho publica o mesmo produto
 # sob um id proprio. Use `manage.py testar_fontes` para descobrir o par que

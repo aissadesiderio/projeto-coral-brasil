@@ -36,9 +36,27 @@ Este documento registra **toda** fonte de informação usada na construção do 
 |---|---|---|---|
 | pfeg (**padrão do projeto**) | `coastwatch.pfeg.noaa.gov/erddap` | `NOAA_DHW` | ✅ responde com as 5 variáveis |
 | NOAA CoastWatch | `coastwatch.noaa.gov/erddap` | `noaacrwdhwDaily` | ⚠️ HTTP 403 nas duas redes |
-| PACIOOS | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ⚠️ `CERTIFICATE_VERIFY_FAILED` nas duas redes |
+| PACIOOS | `pae-paha.pacioos.hawaii.edu/erddap` | `dhw_5km` | ✅ TLS verifica com o `certifi` — ver correção abaixo |
 
-O PACIOOS foi a origem dos CSVs que o projeto já possui, mas a falha de certificado nas duas redes indica problema no servidor, não bloqueio local — por isso o padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
+O PACIOOS foi a origem dos CSVs que o projeto já possui. O padrão passou para o pfeg, que é também o servidor que o `coleta_de_dados.py` original usava.
+
+#### ❌ Correção: o PACIOOS **não** tem certificado inválido
+
+A versão anterior desta seção afirmava que a falha do PACIOOS em duas redes indicava problema no servidor. **Estava errado, e a medição prova.** Diagnóstico com `manage.py testar_fontes --ssl` em 25/07/2026:
+
+| Espelho | Cadeia do sistema | Bundle do `certifi` |
+|---|---|---|
+| PACIOOS | ❌ `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` | ✅ verifica |
+| NOAA CoastWatch | ✅ verifica | ✅ verifica |
+| pfeg | timeout (rota bloqueada nessa rede) | timeout |
+
+O mesmo host que falha com a cadeia nativa da máquina **verifica normalmente com o bundle do `certifi`**. Isso é falha de montagem de cadeia **no cliente**, não certificado ruim no servidor: o OpenSSL que o Python usa não busca o certificado intermediário faltante (*AIA chasing*), coisa que o navegador faz — daí o site abrir no Edge e falhar no `urlopen`.
+
+O erro de raciocínio foi tratar "falhou em duas redes independentes" como evidência de problema no servidor. As duas eram máquinas **Windows rodando Python**, que compartilham exatamente a limitação envolvida. Duas amostras da mesma causa não são duas evidências.
+
+Consequências:
+- O PACIOOS continua utilizável e não deve ser descartado.
+- **O estado de cada espelho depende da máquina e da rede tanto quanto do servidor.** Rode `testar_fontes` na máquina que vai ingerir, não em outra.
 
 **Disponibilidade do pfeg (medida em 25/07/2026):** o espelho responde, mas devolve `HTTP 503 — Service Unavailable: There was a (temporary?) problem. Wait a minute, then try again.` de forma intermitente. É sobrecarga do servidor, não configuração do projeto: o `.das` do mesmo dataset respondia normalmente na mesma máquina e no mesmo minuto. Desde então o pipeline distingue falha passageira de falha definitiva e repete só a primeira — 3 tentativas, esperando 10 s e 30 s (`backend/ingestao/retentativa.py`, ajustável por `INGESTAO_TENTATIVAS`). Certificado inválido, 403 e 404 continuam falhando na primeira tentativa, porque não melhoram com espera.
 **Licença:** domínio público (obra do governo federal dos EUA); citação requerida por cortesia científica.
@@ -430,5 +448,6 @@ conforme a regra de governança daquele documento.
 | 24/07/2026 | **§6.14 resolvida.** Seed fictício removido pela migration `0016`; catálogo reconstruído a partir dos 9 arquivos reais via `manage.py inventariar_datasets`, com tamanho e período lidos do disco. Exclusões de arquivos com problema de integridade documentadas em código. |
 | 25/07/2026 | **§6.13 corrigida** — a descrição anterior afirmava que a coluna `par` era majoritariamente nula; medição mostra 63,3% preenchida. O defeito real são as coordenadas irrecuperáveis. Criado [VARIAVEIS.md](VARIAVEIS.md) com a justificativa de uso e desuso de cada variável. |
 | 25/07/2026 | Primeira ingestão ao vivo tentada na rede da faculdade. **§1.1 atualizada:** o espelho pfeg devolve HTTP 503 intermitente por sobrecarga. Pipeline passou a repetir falhas passageiras (`ingestao/retentativa.py`) e a preservar a causa real do erro — o resumidor apagava mensagens que usavam `<...>`, como as do `URLError`, e gravava só o tipo da exceção. |
+| 25/07/2026 | **§1.1 corrigida — o PACIOOS não tem certificado inválido.** A tentativa seguinte falhou com `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`, e o diagnóstico com `testar_fontes --ssl` mostrou o mesmo host verificando normalmente sob o bundle do `certifi`: é falha de cadeia no cliente, não no servidor. A conclusão anterior tratava "falhou em duas redes" como evidência sobre o servidor, quando as duas eram máquinas Windows com Python — mesma causa, não duas evidências. Criado `ingestao/certificados.py`; `certifi` promovido a dependência direta e deliberadamente **não** fixada, por ser uma lista de autoridades certificadoras. |
 | 25/07/2026 | Pipeline de ingestão (`backend/ingestao/`) com o conector NOAA CRW. §6.3 (alcalinidade como pH) e §6.5 (DHW fora da norma) ficam **neutralizadas no novo caminho**, ainda presentes no `carregar_historico.py` legado. |
 | 25/07/2026 | Espelho ERDDAP padrão definido por medição (`testar_fontes` em duas redes): **pfeg + `NOAA_DHW`**, único a responder com as 5 variáveis. PACIOOS com certificado inválido, CoastWatch com 403. Ver §1.1. |

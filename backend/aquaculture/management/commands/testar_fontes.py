@@ -9,11 +9,13 @@ Uso:
 """
 
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
+from ingestao.certificados import diagnosticar, garantir_bundle_ca, interpretar
 from ingestao.conectores.noaa_crw import VARIAVEIS_ERDDAP
 
 # Espelhos conhecidos do produto Coral Reef Watch 5 km.
@@ -23,7 +25,7 @@ CANDIDATOS_NOAA = [
         'PACIOOS',
         'https://pae-paha.pacioos.hawaii.edu/erddap',
         'dhw_5km',
-        'Par que gerou os dados que o projeto ja tem (padrao).',
+        'Par que gerou os CSVs que o projeto ja tem.',
     ),
     (
         'NOAA CoastWatch',
@@ -56,7 +58,29 @@ def _buscar(url):
 class Command(BaseCommand):
     help = 'Testa quais fontes externas respondem desta rede e o que publicam.'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--ssl',
+            action='store_true',
+            help='Diagnostica a verificacao de certificado de cada espelho.',
+        )
+
     def handle(self, *args, **options):
+        bundle = garantir_bundle_ca()
+        if bundle:
+            self.stdout.write(f'Bundle de CAs em uso: {bundle}')
+        else:
+            self.stdout.write(
+                self.style.WARNING(
+                    'Sem bundle de CAs proprio - usando a cadeia padrao do sistema.'
+                )
+            )
+        self.stdout.write('')
+
+        if options['ssl']:
+            self._diagnosticar_ssl()
+            return
+
         self.stdout.write('Testando espelhos do NOAA Coral Reef Watch...')
         self.stdout.write('')
 
@@ -113,6 +137,47 @@ class Command(BaseCommand):
 
         self.stdout.write('')
         self._recomendar(funcionando)
+
+    def _diagnosticar_ssl(self):
+        """Compara a cadeia de confianca do sistema com a do certifi.
+
+        A diferenca entre as duas e o que separa "falta uma raiz nesta maquina"
+        (conserto automatico) de "alguem esta no meio do caminho" (precisa da
+        raiz da instituicao).
+        """
+        self.stdout.write('Diagnostico de certificado, espelho por espelho.')
+        self.stdout.write('Pode demorar: cada host tem duas tentativas com timeout.')
+        self.stdout.write('')
+
+        estilos = {
+            'ok': self.style.SUCCESS,
+            'certifi': self.style.SUCCESS,
+            'sistema': self.style.WARNING,
+            'inalcancavel': self.style.WARNING,
+            'interceptacao': self.style.ERROR,
+        }
+
+        for nome, servidor, _dataset, _nota in CANDIDATOS_NOAA:
+            host = urllib.parse.urlparse(servidor).hostname
+            self.stdout.write(f'{nome} ({host})')
+
+            resultado = diagnosticar(host)
+            veredito, explicacao = interpretar(resultado)
+
+            self.stdout.write(
+                f'  cadeia do sistema : {resultado["sistema"] or "verifica OK"}'
+            )
+            self.stdout.write(
+                f'  bundle do certifi : {resultado["certifi"] or "verifica OK"}'
+            )
+            self.stdout.write(estilos[veredito](f'  -> {explicacao}'))
+
+            if resultado['nomes_no_certificado']:
+                self.stdout.write('  Nomes legiveis no certificado apresentado:')
+                for texto in resultado['nomes_no_certificado']:
+                    self.stdout.write(f'    {texto}')
+
+            self.stdout.write('')
 
     def _recomendar(self, funcionando):
         atual_servidor = getattr(settings, 'NOAA_ERDDAP_SERVER', '')
