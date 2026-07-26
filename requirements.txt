@@ -21,9 +21,12 @@ tzdata==2026.1
 django-environ==0.12.0
 
 # --- Banco de dados ---
-# SQLite e o default local. Para PostgreSQL, defina DATABASE_URL no .env
-# e descomente a linha abaixo:
-# psycopg[binary]==3.2.9
+# PostgreSQL e a fonte unica da verdade desde 25/07/2026 (docs/arquitetura.md).
+# Configure DATABASE_URL no .env; sem ela o Django cai em SQLite, util so para
+# rodar os testes rapido.
+psycopg[binary]==3.2.9
+# Neo4j e projecao derivada, nunca escrita direta. Driver bruto: nao ha backend
+# de ORM do Django para Neo4j, o Cypher e escrito a mao em backend/db/.
 neo4j==5.20.0
 
 # --- Processamento de dados ---

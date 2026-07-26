@@ -236,6 +236,8 @@ Esta função **inventa** valores de vento e turbidez para contornar a falta de 
 
 O que está de fato em `MedicaoAmbiental`, gravado pelo pipeline de `backend/ingestao/`. Não inclui os CSVs legados nem o `StatusPredicao`, que vêm do caminho antigo.
 
+**Onde vive:** PostgreSQL 17, subido por `docker-compose.yml`. Migrado do SQLite em 25/07/2026 sem perda — contagens e distribuição do BAA idênticas antes e depois. Ver [arquitetura.md](arquitetura.md) para o papel de cada camada.
+
 | Fonte | Espelho / produto | Medições | Variáveis | Período |
 |---|---|---|---|---|
 | `noaa_crw` | PACIOOS `dhw_5km` | 43.038 | `sst`, `dhw`, `baa`, `baa_area_alerta`, `hotspot`, `sst_anomalia` | 2020-01-01 → 2026-07-24 |

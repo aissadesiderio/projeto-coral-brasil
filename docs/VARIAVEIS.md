@@ -242,7 +242,43 @@ Aplica-se o princípio 2.2: o O₂ mede o elo final dessa cadeia.
 | 4 | ~~`carregar_historico.py` lê `talk` como `ph`~~ | ✅ **Neutralizado no novo pipeline**: `normalizacao.resolver_variavel('talk')` levanta `ColunaRecusada`, com teste. O script antigo segue com o bug até ser aposentado. |
 | 5 | ~~DHW recalculado fora da norma NOAA~~ | ✅ **Resolvido no novo pipeline**: o conector lê a coluna `CRW_DHW` oficial, sem recalcular. |
 | 6 | **6 datas ausentes na série do CRW** | Janelas e defasagens que as atravessem ficam mais curtas do que declaram — ver §7.1 |
+| 8 | **Amostra efetiva é de ~4 anos-evento, não 7.173 dias** | Limitação central do trabalho: métrica por episódio, *leave-year-out* obrigatório, e a pergunta da entrega 2 fica difícil com essa base — ver §7.2 |
 | 7 | ~~Target agregado por média espacial~~ | ✅ **Resolvido e reingerido** em 25/07/2026: BAA agregado por máximo, com `baa_area_alerta` ao lado (§4.5). Banco reconstruído — 43.038 medições, Alerta Nível 2 de 160 para 369 registros. |
+
+### 7.2 O tamanho real da amostra são ~19 episódios, não 7.173 dias (medido em 25/07/2026)
+
+Esta é **a limitação mais séria do trabalho** e precisa aparecer no TCC como tal, não ser descoberta pela banca.
+
+Depois da correção da agregação (§4.5), a série tem **598 dias em Alerta Nível 1 ou acima** nos três locais. Isso parece amostra confortável. Não é. Agrupando dias contíguos — tolerando até 3 dias de folga, para que uma lacuna do produto ou uma oscilação diária não parta um evento em dois:
+
+| Local | Dias em alerta | Episódios | Anos com evento |
+|---|---|---|---|
+| Picãozinho (PB) | 294 | 8 | 2020, 2022, 2024, 2025, 2026 |
+| Porto de Galinhas (PE) | 160 | 6 | 2020, 2024, 2025 |
+| Abrolhos (BA) | 144 | 5 | 2020, 2022, 2024, 2025 |
+| **Total** | **598** | **19** | |
+
+Os maiores episódios:
+
+| Período | Local | Duração |
+|---|---|---|
+| 2024-01-27 → 2024-05-23 | Picãozinho | 117 dias |
+| 2024-03-01 → 2024-05-18 | Porto de Galinhas | 79 dias |
+| 2024-03-13 → 2024-05-22 | Abrolhos | 71 dias |
+| 2020-03-03 → 2020-05-08 | Picãozinho | 66 dias |
+
+**Os episódios caem nos mesmos anos nos três locais.** São o mesmo forçante oceanográfico atingindo três pontos da mesma costa — não 19 eventos independentes. O número efetivo de observações independentes está na casa de **quatro anos-evento** (2020, 2022, 2024, 2025), com 2026 aparecendo só em Picãozinho.
+
+#### O que isso obriga
+
+1. **Métrica por evento, não por dia.** Com 92% dos dias sem alerta, um modelo que sempre responde "sem alerta" acerta 92%. Acurácia sobre ~7.000 linhas diárias seria um número bonito e vazio. Usar PR-AUC, e reportar acerto/erro **por episódio**.
+2. **Validação *leave-year-out* deixa de ser preferência e vira obrigação** (§4, regra 3). Com quatro anos-evento, cada dobra remove ~25% do sinal disponível. Isso limita o quanto se pode afinar hiperparâmetro sem vazar.
+3. **A pergunta da entrega 2 fica mais difícil do que parecia.** "Salinidade acrescenta sinal além do DHW?" é uma pergunta sobre quatro eventos. É honesto saber disso *antes* de rodar o experimento, e é argumento a favor de integrar o GCBD (§4.4, caminho A) para ampliar a base de rótulos.
+4. **Dias dentro de um mesmo episódio são fortemente autocorrelacionados.** Tratá-los como amostras independentes infla qualquer intervalo de confiança. Se houver teste estatístico no TCC, a unidade amostral é o episódio.
+
+Medido com contagem de sequências contíguas de `baa >= 3` sobre `MedicaoAmbiental`, três locais, 2020-01-01 a 2026-07-24.
+
+---
 
 ### 7.1 Lacunas na série do CRW (medido em 25/07/2026)
 
@@ -271,5 +307,6 @@ Antes de adicionar ou remover qualquer variável:
 | Data | Alteração |
 |---|---|
 | 25/07/2026 | Documento criado a partir da sessão de seleção de variáveis. Registradas as 5 features baseline, 2 opcionais e 7 exclusões. Acrescentadas duas constatações verificadas em dados: a circularidade do `CRW_BAA` como target (§4.2) e a indisponibilidade de PAR de superfície (§3.5). |
+| 25/07/2026 | **§7.2 — o tamanho real da amostra medido.** Os 598 dias em alerta se agrupam em apenas **19 episódios**, concentrados nos mesmos quatro anos nos três locais (2020, 2022, 2024, 2025). A amostra efetiva são ~4 anos-evento, não 7.173 dias. Consequências registradas: métrica por episódio e não por dia, *leave-year-out* obrigatório, autocorrelação dentro do episódio, e a pergunta da entrega 2 exigindo o GCBD para ter base suficiente. Registrado como bloqueio 8 — a limitação central do trabalho. |
 | 25/07/2026 | **Agregação do target corrigida (§4.5).** O BAA é categoria ordinal e estava sendo agregado dos ~121 pixels por média, o que subestimava o alerta — Alerta Nível 1 registrado num dia com 37% da área em Alerta Nível 2. Passa a ser agregado por máximo. Nova variável `baa_area_alerta` (fração do recife em Alerta Nível 1 ou acima) fica registrada como segunda resposta candidata, e **proibida como feature** de um modelo que prevê `baa`. A medição de circularidade da §4.2 não é afetada: foi feita no dado por pixel. |
 | 25/07/2026 | **Target decidido: caminho C.** Entrega 1 = previsão de `CRW_BAA` com horizonte de N dias; entrega 2 = branqueamento observado via GCBD. Registradas as cinco regras que a entrega 1 impõe ao pipeline e ao treino. |

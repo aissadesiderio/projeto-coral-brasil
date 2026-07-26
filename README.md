@@ -58,18 +58,208 @@ string vazia sobrescreve o valor padrão — ou comente a linha, ou preencha.
 
 ### 3. Banco
 
+**PostgreSQL é a fonte única da verdade** desde 25/07/2026 — ver
+[docs/arquitetura.md](docs/arquitetura.md). SQLite ainda funciona (é o
+*fallback* quando não há `DATABASE_URL`), mas serve só para rodar teste rápido:
+com duas máquinas, dois arquivos SQLite divergem em silêncio e não há como
+saber qual está certo.
+
+Os dois bancos sobem por **Docker Compose** — um comando, mesmas versões em
+qualquer máquina, sem instalador e sem PATH.
+
+#### 3.1 Instalar o Docker Desktop (Windows)
+
+1. Baixe em **https://www.docker.com/products/docker-desktop/** →
+   *Download for Windows*.
+2. Rode o instalador e deixe **"Use WSL 2 instead of Hyper-V"** marcado.
+   Se ele avisar que falta o WSL, aceite instalar.
+3. **Reinicie o computador** quando ele pedir. Não é opcional — o WSL 2 só
+   passa a valer depois do reboot.
+4. Abra o Docker Desktop e espere o ícone da baleia ficar estável (a barra de
+   status para de dizer *starting*). Ele precisa estar **aberto** para os
+   comandos abaixo funcionarem.
+5. Confirme:
+
+```bash
+docker --version; docker compose version
+```
+
+<details>
+<summary><strong>"Virtualization support not detected"</strong> — leia antes de mexer na BIOS</summary>
+
+Essa mensagem do Docker Desktop é enganosa: na maioria das vezes a
+virtualização **está** ligada e o que falta é o WSL. Diagnostique antes:
+
+```bash
+wsl --status
+```
+
+**Se responder "O Subsistema do Windows para Linux não está instalado"**, a
+causa é essa. Abra o PowerShell **como Administrador** e rode:
+
+```bash
+wsl --install --no-distribution
+```
+
+(`--no-distribution` instala só a plataforma WSL 2, que é o que o Docker
+precisa — ele traz a própria distribuição. Se a sua versão do `wsl` não
+reconhecer a opção, use `wsl --install`, que instala o Ubuntu junto.)
+
+**Reinicie o computador.** O WSL 2 só vale depois do reboot.
+
+**Se depois do reboot o `wsl --status` disser "O WSL2 não pode ser iniciado
+porque a virtualização não está habilitada"**, o `wsl --install` instalou o
+WSL mas não ligou o componente do Windows. Aconteceu nesta máquina em
+25/07/2026. Ainda **como Administrador**:
+
+```bash
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+```
+
+```bash
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+```
+
+Reinicie de novo. Foi o que resolveu — e note que **a mensagem fala em
+firmware, mas a causa era um componente do Windows desligado.**
+
+---
+
+**Só suspeite da BIOS se o WSL já estiver instalado.** Confirme com:
+
+```bash
+(Get-CimInstance Win32_ComputerSystem).HypervisorPresent
+```
+
+`True` significa que **já existe um hypervisor rodando** — o que é impossível
+com a virtualização desligada no firmware. Nesse caso a BIOS está certa e o
+problema é outro.
+
+⚠️ Não use `Win32_Processor.VirtualizationFirmwareEnabled` para isso: quando
+um hypervisor já tomou as extensões do processador, essa propriedade reporta
+`False` mesmo com tudo habilitado, e leva à conclusão errada.
+
+`False` em `HypervisorPresent`, aí sim: reinicie entrando na BIOS/UEFI
+(geralmente `Del`, `F2` ou `F10` na tela do fabricante) e ative **Intel
+VT-x**, **AMD-V** ou **SVM Mode**, conforme o processador.
+</details>
+
+#### 3.2 Subir os bancos
+
+Na raiz do projeto:
+
+```bash
+docker compose up -d
+```
+
+A primeira vez baixa as imagens (algumas centenas de MB) e demora alguns
+minutos. As próximas sobem em segundos.
+
+Acompanhe até os dois ficarem `healthy`:
+
+```bash
+docker compose ps
+```
+
+O Postgres fica pronto em segundos; o Neo4j leva ~30. Enquanto diz
+`starting`, ainda não aceita conexão — o container existir não significa que
+o serviço responde, e é por isso que o compose declara *healthcheck*.
+
+Comandos do dia a dia:
+
+| Comando | O que faz |
+|---|---|
+| `docker compose up -d` | sobe os dois em segundo plano |
+| `docker compose ps` | mostra estado e saúde |
+| `docker compose stop` | para sem apagar nada |
+| `docker compose logs neo4j` | mostra o log de um serviço |
+| `docker compose down` | remove os containers, **mantém os dados** |
+| `docker compose down -v` | remove os containers **e apaga os dados** |
+
+⚠️ `down -v` é o único comando dessa lista que destrói dados. Os volumes são
+nomeados justamente para o dado sobreviver a `down` e voltar no próximo `up`.
+
+#### 3.3 Apontar o Django para eles
+
+```bash
+pip install -r requirements.txt
+```
+
+No `backend/.env`, acrescente:
+
+```
+DATABASE_URL=postgres://coral:coral_dev_local@localhost:5432/coral_brasil
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=coral_dev_local
+```
+
+*(conteúdo de arquivo, não comando)*. As senhas precisam bater com as do
+`docker-compose.yml` — os padrões dele são exatamente estes. Para trocar, veja
+[.env.example](.env.example) na raiz, que é o arquivo do Docker (o do Django é
+o `backend/.env`).
+
+A senha vai literal, sem aspas. Use só letras, números e sublinhado: `@ : / #`
+têm significado dentro de uma URL e o erro não diz que a culpa é da senha.
+
+Confirme para onde o Django está apontando **antes** de migrar:
+
+```bash
+python backend\manage.py shell -c "from django.conf import settings as s; print(s.DATABASES['default']['ENGINE'], s.DATABASES['default'].get('NAME'))"
+```
+
+Precisa dizer `postgresql`. Se disser `sqlite3`, a `DATABASE_URL` não foi lida.
+
 ```bash
 python backend\manage.py migrate
+```
+
+#### 3.4 Levar os dados do SQLite para o PostgreSQL
+
+Só necessário se você já tinha dados no SQLite. Com a `DATABASE_URL`
+**comentada** (para exportar do SQLite):
+
+```bash
+$env:PYTHONUTF8='1'; python backend\manage.py dumpdata --natural-foreign --natural-primary --exclude contenttypes --exclude auth.Permission --exclude admin.logentry --exclude sessions.session --indent 1 -o backend\dados_sqlite.json
+```
+
+⚠️ O `PYTHONUTF8=1` não é opcional no Windows: sem ele o `dumpdata` falha com
+`'charmap' codec can't encode character '\u207b'` ao chegar na unidade
+`mmol·m⁻³` do oxigênio. O erro não menciona encoding do arquivo de saída.
+
+Agora **descomente** a `DATABASE_URL` e importe:
+
+```bash
+$env:PYTHONUTF8='1'; python backend\manage.py loaddata backend\dados_sqlite.json
+```
+
+Confira que veio tudo:
+
+```bash
+python backend\manage.py shell -c "from aquaculture.models import MedicaoAmbiental as M; print(M.objects.count(), 'medicoes')"
+```
+
+O arquivo `dados_sqlite.json` tem ~20 MB e está no `.gitignore` — é
+reconstruível a qualquer momento. O `db.sqlite3` antigo pode ficar onde está
+como backup; ele deixa de ser lido assim que a `DATABASE_URL` existe.
+
+⚠️ **O Docker não faz as duas máquinas compartilharem dados.** Cada uma tem
+seu próprio volume local. O que ele iguala é *versão e configuração* — nada de
+"na minha máquina o Postgres é 14". Para os dados serem os mesmos nos dois
+computadores é preciso um banco hospedado (Neon, Supabase, Railway têm plano
+gratuito) e uma única `DATABASE_URL` apontando para lá. Enquanto isso não
+existir, o procedimento é: ingerir sempre na mesma máquina, ou mover o dado
+com `dumpdata`/`loaddata`.
+
+#### 3.5 Superusuário
+
+```bash
 python backend\manage.py createsuperuser
 ```
 
-⚠️ **O banco é local e não vem no repositório.** Toda máquina que puxa código
-novo precisa rodar `migrate` de novo — inclusive quando você já tinha o projeto
-funcionando ali antes. Os comandos de dados avisam se o banco está atrasado.
-
-SQLite é o padrão local. Para PostgreSQL, defina `DATABASE_URL` no `.env` e
-descomente `psycopg` no `requirements.txt` — nenhuma mudança de código é
-necessária.
+⚠️ **O banco não vem no repositório.** Toda máquina que puxa código novo
+precisa rodar `migrate` — inclusive quando o projeto já funcionava ali. Os
+comandos de dados avisam se o banco está atrasado.
 
 ### 4. Rodar
 

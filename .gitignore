@@ -54,3 +54,7 @@ relatorios_gerados/*.csv
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Dump de migracao SQLite -> PostgreSQL. Gerado por dumpdata, nao versionar:
+# tem 20 MB e e reconstruivel com "manage.py dumpdata".
+backend/dados_sqlite.json
