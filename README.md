@@ -21,9 +21,35 @@ encaixam, sem pressupor oceanografia nem aprendizado de máquina.
 | [docs/METODOLOGIA_SIMPLES.md](docs/METODOLOGIA_SIMPLES.md) | **Sem jargão.** Como o modelo funciona e é testado, para ler e explicar |
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | O mesmo, com os termos técnicos: a régua, o teste sem trapaça e por que acurácia não serve |
 | [docs/RESULTADOS.md](docs/RESULTADOS.md) | O que o experimento produziu, e o que ainda não dá para concluir |
+| [docs/GCBD.md](docs/GCBD.md) | A base de branqueamento observado: o que contém, o que custa integrar, seus defeitos e o resultado do passo 1 |
 | [docs/arquitetura.md](docs/arquitetura.md) | Separação entre banco transacional e grafo científico |
 | [backend/docs/contrato_canonico_variaveis.md](backend/docs/contrato_canonico_variaveis.md) | Nomes, unidades e regras de qualidade canônicas |
 | [PLANEJAMENTO.md](PLANEJAMENTO.md) | Checklist de go-live |
+
+### Cópia em `.docx`
+
+Para ler fora do editor, anexar num e-mail ou levar para o Word:
+
+```bash
+python backend\manage.py exportar_docs
+```
+
+Gera um `.docx` de cada documento em `docs/exportado/`. Um só:
+
+```bash
+python backend\manage.py exportar_docs --doc=docs/RESULTADOS.md
+```
+
+⚠️ **O `.docx` é artefato derivado, não uma segunda cópia.** Ele não é
+versionado e é regerado por este comando — se fosse versionado, em duas semanas
+o `.docx` diria uma coisa e o `.md` outra, e ninguém saberia qual vale. Edite
+sempre o Markdown.
+
+O conversor cobre o subconjunto de Markdown que esta documentação usa
+(cabeçalhos, tabelas, listas, citações, blocos de código e formatação inline),
+com testes garantindo que **nenhum texto se perde** e que as tabelas saem com
+as dimensões certas — elas carregam os resultados. Ver
+[`backend/documentacao/`](backend/documentacao/).
 
 ---
 
@@ -539,6 +565,41 @@ npm test
 Os testes de ingestão não usam rede: o cliente ERDDAP é substituído por um
 dublê. A chamada HTTP real precisa ser verificada rodando o comando `ingerir`.
 
+Os testes do GCBD também não precisam do CSV de 16 MB: montam quadros pequenos
+à mão.
+
+---
+
+## Modelos
+
+### Entrega 1 — prever o BAA em `t+N`
+
+Usa o banco. Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) §1–§10.
+
+### Entrega 2 — prever branqueamento observado (GCBD)
+
+**Não usa o banco nem a rede** — lê só o CSV do GCBD.
+
+```bash
+python backend\manage.py treinar_gcbd --importancia
+```
+
+Versão reduzida, com os três coeficientes fisicamente interpretáveis:
+
+```bash
+python backend\manage.py treinar_gcbd --interpretavel --importancia
+```
+
+O arquivo **não é versionado** (16 MB). Baixe pelo DOI registrado em
+[docs/GCBD.md](docs/GCBD.md) e coloque em
+`dados/global_bleaching_environmental.csv`, ou aponte a variável de ambiente
+`GCBD_CSV` para ele.
+
+Opções úteis: `--modelo boosting`, `--limiar 10` (percentual de branqueamento
+que conta como positivo), `--com-climatologia`, `--com-contexto`.
+
+Resultados em [docs/RESULTADOS.md](docs/RESULTADOS.md) §11–§14.
+
 ---
 
 ## Estrutura
@@ -548,9 +609,13 @@ backend/
   coral_site/      configuração Django
   aquaculture/     modelos, API, admin
   ingestao/        pipeline de coleta (conectores, normalização, qualidade)
-  ml_models/       modelo de predição
+  ml/              conjunto supervisionado, linha de base, modelo, importância
+                   (gcbd.py = entrega 2, lê CSV em vez do banco)
+  ml_models/       modelo de predição legado
+  documentacao/    conversor Markdown -> .docx
   dados/           CSVs brutos (não versionados)
   db/              conexão e schema Neo4j
+dados/             GCBD e outros CSVs de fonte externa (não versionados)
 frontend/src/
   pages/           páginas roteadas
   components/      componentes reutilizáveis

@@ -170,8 +170,28 @@ Estruturalmente é o mesmo defeito do `calcular_risco()` em `treinar_modelo.py`,
 
 ### 4.4 Três caminhos
 
-**A — Branqueamento observado como target.** Usar o *Global Coral-Bleaching Database* (van Woesik & Kratochwill 2022; 34.846 registros, 1980–2020, CC-BY, BCO-DMO 773466). O target passa a ser presença/ausência observada em campo. Todas as cinco features viram legítimas, e "salinidade acrescenta sinal além do DHW?" vira pergunta científica com resposta real.
+**A — Branqueamento observado como target.** Usar o *Global Coral-Bleaching Database* (van Woesik & Burkepile 2022; CC-BY, BCO-DMO 773466). O target passa a ser presença/ausência observada em campo. Todas as cinco features viram legítimas, e "salinidade acrescenta sinal além do DHW?" vira pergunta científica com resposta real.
 *Custo:* juntar registros de sítio a séries ambientais; cobertura brasileira mais rala.
+
+📊 **Base baixada e avaliada em 25/07/2026, e usada em 26/07/2026 — ver
+[GCBD.md](GCBD.md).** O levantamento confirmou o benefício e mediu o custo:
+**166 visitas brasileiras utilizáveis** (~~313 amostras~~ — corrigido em
+26/07/2026, ver GCBD.md Etapa 3), **balanceadas em 53,0%** contra 8% do BAA, em
+119 sítios espalhados por 15 graus de latitude — muito mais independência
+amostral que os 3 recifes colados da entrega 1. Mas o dado brasileiro **vai só
+até 2010**, e **Picãozinho fica sem cobertura**.
+
+✅ **O caminho A foi executado no passo 1, e ele valeu a pena.** A pergunta que
+este documento chamava de "pergunta científica com resposta real" recebeu a
+primeira resposta: **o sinal térmico sozinho não explica o branqueamento
+observado no Brasil**. A régua publicada da NOAA (`DHW ≥ 4`) tem precisão
+1,000 e revocação **0,114** — 78 dos 88 branqueamentos ocorreram com o
+acumulador térmico em **zero**. Ver [RESULTADOS.md](RESULTADOS.md) §11.
+
+Isso confirma o diagnóstico de circularidade que motivou esta seção: com o BAA
+como alvo, a entrega 1 concluiu que variáveis não térmicas não contribuem
+([RESULTADOS.md](RESULTADOS.md) §8) — mas o BAA **é** térmico. Trocado o alvo,
+sobra o que explicar.
 
 **B — Previsão de BAA com horizonte.** Manter o BAA, mas mudar a pergunta: em vez de "qual o BAA de hoje dadas as condições de hoje" (circular), prever **o BAA daqui a N dias a partir das condições de hoje**. Não é circular, porque o DHW futuro não é conhecido no presente — e aí salinidade, O₂ e turbidez podem genuinamente antecipar a trajetória térmica.
 *Custo:* nenhum dado novo. Exige rigor na montagem das janelas para não vazar futuro. **Muda o nome honesto do produto:** é previsão de estresse térmico, não de branqueamento.
@@ -293,6 +313,8 @@ Aplica-se o princípio 2.2: o O₂ mede o elo final dessa cadeia.
 | 6 | **6 datas ausentes na série do CRW** | Janelas e defasagens que as atravessem ficam mais curtas do que declaram — ver §7.1 |
 | 8 | **Amostra efetiva é de ~4 anos-evento, não 7.173 dias** | Limitação central do trabalho: métrica por episódio, *leave-year-out* obrigatório, e a pergunta da entrega 2 fica difícil com essa base — ver §7.2 |
 | 7 | ~~Target agregado por média espacial~~ | ✅ **Resolvido e reingerido** em 25/07/2026: BAA agregado por máximo, com `baa_area_alerta` ao lado (§4.5). Banco reconstruído — 43.038 medições, Alerta Nível 2 de 160 para 369 registros. |
+| 9 | **As térmicas do GCBD são colineares entre si** | Duas famílias de anomalia para o mesmo calor (`SSTA` contra a média do mês, `TSA` contra o máximo da climatologia): `SSTA_Frequency`×`TSA_Frequency` **r = 0,881**, `Temperature_Kelvin`×`TSA` **r = 0,881**, VIF até 11,7. Com as 8, **4 coeficientes saem invertidos** — `SSTA` = −0,58 diria que anomalia quente protege o coral. Mitigado pelo conjunto reduzido (`TSA_DHW`, `TSA`, `Windspeed`), que zera as inversões, mas **com viés de seleção declarado** — ver [RESULTADOS.md](RESULTADOS.md) §12 |
+| 10 | **`ClimSST` e `SSTA_Mean` do GCBD são inutilizáveis** | `ClimSST` = 262,15 K (−11 °C) em 115 de 313 registros brasileiros — ausência codificada como número; `SSTA_Mean` é constante. Ambas recusadas em `ml/gcbd.py`, com teste. Ver [FONTES.md](FONTES.md) §6.17 |
 
 ### 7.2 O tamanho real da amostra são ~19 episódios, não 7.173 dias (medido em 25/07/2026)
 
@@ -355,6 +377,7 @@ Antes de adicionar ou remover qualquer variável:
 
 | Data | Alteração |
 |---|---|
+| 26/07/2026 | **§4.4 — o caminho A foi executado, e a pergunta recebeu resposta.** Com branqueamento observado como alvo, **o sinal térmico sozinho não explica**: a régua da NOAA tem precisão 1,000 e revocação 0,114, e **78 dos 88 branqueamentos brasileiros ocorreram com o acumulador térmico em zero**. Isso confirma que a conclusão da entrega 1 — "variáveis não térmicas não contribuem" — era efeito do alvo, não do fenômeno. Corrigido o tamanho da base: **166 visitas**, não 313 amostras. Abertos dois bloqueios novos em §7: **(9)** as térmicas do GCBD são colineares entre si (`SSTA` e `TSA` são duas réguas do mesmo calor, r = 0,881, VIF até 11,7, 4 coeficientes invertidos) e **(10)** `ClimSST` e `SSTA_Mean` são inutilizáveis. |
 | 25/07/2026 | Documento criado a partir da sessão de seleção de variáveis. Registradas as 5 features baseline, 2 opcionais e 7 exclusões. Acrescentadas duas constatações verificadas em dados: a circularidade do `CRW_BAA` como target (§4.2) e a indisponibilidade de PAR de superfície (§3.5). |
 | 25/07/2026 | **§3.6 atualizada — o indício do oxigênio não se confirmou.** Medida a importância dentro do modelo treinado, a *trajetória* do oxigênio contribui −0,001 (logística) e −0,006 (boosting): ruído. Só o *nível* contribui algo pequeno e consistente (+0,021). A separação de 0,61 σ nas transições continua correta como descrição — ela é que não virou capacidade preditiva, provavelmente por redundância com as térmicas. O parágrafo original fica no documento com o aviso em cima: apagá-lo esconderia o percurso. Ver [RESULTADOS.md](RESULTADOS.md) §7. |
 | 25/07/2026 | **§3.6 — janelas retrospectivas implementadas e medidas.** Variação em 7 e 14 dias entra como feature (`backend/ml/dataset.py`), ao custo de 1,1% das amostras. A medição contrariou a expectativa: **a trajetória do DHW quase não distingue início de fim de episódio (0,27 σ)**, porque o DHW é acumulador de 12 semanas e sobe nos dois casos. Quem separa é a trajetória da **SST** (0,77 σ, com o sinal certo) e — o achado relevante — a do **oxigênio** (0,61 σ), primeira evidência de variável não-térmica carregando informação onde as térmicas falham. Salinidade não separa (0,02 σ). Números sugestivos, não estabelecidos: n≈95 sobre ~4 anos-evento correlacionados. |

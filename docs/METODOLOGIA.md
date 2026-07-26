@@ -108,6 +108,41 @@ O modelo nunca viu aquele ano. Se acerta ali, aprendeu de verdade.
 define a dobra é *o dia sobre o qual a previsão fala*. Uma amostra com features
 de 28/12/2023 prevendo 04/01/2024 pertence a 2024.
 
+### 3.1 Na entrega 2 o mesmo princípio muda de forma
+
+A entrega 2 não é série temporal: cada amostra é **uma visita** de mergulhador a
+um recife, num dia. Não há "dia seguinte" a vazar. Mas o princípio — *nunca
+testar em algo que o modelo já viu* — continua, e agora tem **duas leituras
+diferentes**, porque há duas maneiras de duas visitas serem parecidas.
+
+| Agrupamento | O que fica de fora | Pergunta que responde |
+|---|---|---|
+| Por **sítio** | Todas as visitas àquele recife | "Generaliza para um **recife novo**?" |
+| Por **ano** | Todas as visitas daquele ano | "Generaliza para um **evento novo**?" |
+
+**As duas são necessárias, e elas discordam.** No passo 1 da entrega 2, o mesmo
+modelo deu PR-AUC **0,803 por sítio** e **0,614 por ano**
+([RESULTADOS.md](RESULTADOS.md) §11.3).
+
+A discordância é diagnóstico, não inconveniente. Agrupando por sítio, o modelo
+ainda vê outras visitas *do mesmo ano*, com a mesma anomalia térmica — então
+pode acertar reconhecendo o ano em vez do fenômeno. Agrupando por ano, essa
+saída se fecha. O exemplo numérico está em [RESULTADOS.md](RESULTADOS.md) §11.4.
+
+> **Para um sistema de aviso, o número do ano é o que vale.** O evento sobre o
+> qual o site vai avisar é, por definição, um que não estava no treino.
+
+### 3.2 Por que as predições são reunidas em vez de a métrica ser promediada
+
+Na entrega 1, cada ano vira uma dobra e as métricas são promediadas sobre os
+anos com evento. Na entrega 2 isso não funcionaria: as dobras são muito
+desiguais — 1994 tem 1 visita, 2007 tem 33.
+
+Uma média por dobra daria o **mesmo peso** a uma dobra de 1 amostra e a uma de
+33. Então aqui se guarda a predição **fora da dobra** de cada visita e se
+calcula **uma métrica só** sobre todas. Cada visita conta uma vez, que é o que
+se quer.
+
 ---
 
 ## 4. Por que não medimos "quantos por cento acertou"
@@ -287,6 +322,8 @@ banca:
 | [`backend/ml/baseline.py`](../backend/ml/baseline.py) | Persistência, métricas diárias e por episódio, divisão *leave-year-out* |
 | [`backend/ml/modelo.py`](../backend/ml/modelo.py) | O modelo e a comparação ano a ano contra a persistência |
 | [`backend/ml/tests.py`](../backend/ml/tests.py) | Testes que travam cada regra acima |
+| [`backend/ml/gcbd.py`](../backend/ml/gcbd.py) | **Entrega 2:** conjunto de branqueamento observado, validação agrupada (§3.1), régua da NOAA |
+| [`backend/ml/testes_gcbd.py`](../backend/ml/testes_gcbd.py) | 26 testes — inclusive o que garante que **nenhum sítio cai nos dois lados** da divisão |
 
 O modelo é encapsulado num `Pipeline` do sklearn que **seleciona features por
 nome**. Não é preciosismo: o modelo antigo do projeto predizia `0.0` para todos
@@ -300,6 +337,7 @@ implícito.
 
 | Data | Alteração |
 |---|---|
+| 26/07/2026 | **§3.1 e §3.2 criadas — a validação da entrega 2.** O princípio de nunca testar no que o modelo já viu continua, mas numa base transversal ele se desdobra em **dois agrupamentos que discordam**: por sítio (recife novo) e por ano (evento novo). Registrado que a discordância é diagnóstico — no passo 1 foi 0,803 contra 0,614 —, e que **para um sistema de aviso vale o número do ano**. Também por que aqui as predições fora-da-dobra são reunidas numa métrica única em vez de promediadas: as dobras vão de 1 a 33 visitas, e a média daria peso igual às duas. §8 atualizada com os arquivos novos. |
 | 25/07/2026 | **§5 corrigida — os coeficientes não são interpretáveis neste projeto.** O argumento de que "a logística é interpretável" valia sob uma condição que o projeto não cumpre: features não correlacionadas. Cada variável entra junto com a própria trajetória, e a medição mostrou o coeficiente do `dhw` **negativo** — o que lido como mecanismo diria que calor acumulado protege o coral. Enquanto a colinearidade não for resolvida, a leitura defensável é a importância por grupo, que dá magnitude e não direção. Ver [RESULTADOS.md](RESULTADOS.md) §7. |
 | 25/07/2026 | **§5 criada — quais modelos e por que dois.** Registra que o `boosting` **é** baseado em árvores de decisão e a `logistica` não, e corrige uma inversão comum: variável que influencia "para mais e para menos" é argumento **a favor** de árvore, não contra — quem tem dificuldade com relação em U é o modelo linear. Também por que os dois convivem (interpretabilidade contra expressividade) e por que ambos ficam nos padrões. |
 | 25/07/2026 | Documento criado. Registra o desenho do experimento da entrega 1: alvo binário com horizonte de N dias, persistência como piso, validação *leave-year-out*, métricas de evento raro e por episódio, e as quatro limitações que decorrem de ~4 anos-evento de amostra efetiva. |

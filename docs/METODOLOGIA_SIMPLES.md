@@ -16,6 +16,7 @@ A versão técnica, com os nomes formais e os detalhes de implementação, está
 6. [Por que usamos dois modelos](#6-por-que-usamos-dois-modelos)
 7. [Por que o modelo precisa saber a direção](#7-por-que-o-modelo-precisa-saber-a-direção)
 8. [O que ainda não dá para afirmar](#8-o-que-ainda-não-dá-para-afirmar)
+9. [O que descobrimos quando finalmente olhamos branqueamento de verdade](#9-o-que-descobrimos-quando-finalmente-olhamos-branqueamento-de-verdade)
 
 ---
 
@@ -91,6 +92,58 @@ praticamente o mesmo dia.
 | … | … |
 
 O modelo nunca viu aquele ano. Se ele acerta ali, **aprendeu de verdade**.
+
+### Na segunda parte do projeto, esconder é mais complicado
+
+Na segunda parte do projeto usamos dados diferentes: em vez de medições diárias
+de satélite, são **visitas de mergulhadores** a recifes, ao longo de 16 anos.
+Cada visita é: fulano foi neste recife, neste dia, e anotou se o coral estava
+branqueado.
+
+Aqui não existe "dia seguinte" para colar. Mas existem **duas maneiras
+diferentes de duas visitas se parecerem**, e por isso escondemos de dois jeitos:
+
+| Escondemos… | E perguntamos |
+|---|---|
+| **um recife inteiro** | "O modelo funciona num recife que ele nunca viu?" |
+| **um ano inteiro** | "O modelo funciona num ano que ele nunca viu?" |
+
+**E as duas respostas foram diferentes** — muito diferentes. Escondendo recife,
+o modelo pareceu bom. Escondendo ano, ele quase empatou com chutar.
+
+### Por que isso acontece — com quatro visitas
+
+Vamos supor quatro visitas só, a dois recifes vizinhos, **A** e **B**:
+
+| Visita | Recife | Ano | Fez quanto calor | Branqueou? |
+|---|---|---|---|---|
+| 1 | A | 2005 | muito | sim |
+| 2 | B | 2005 | muito | sim |
+| 3 | A | 2010 | pouco | sim |
+| 4 | B | 2010 | pouco | sim |
+
+Repare: em 2005 branqueou com muito calor. Em 2010 branqueou **com pouco** —
+porque naquele ano teve outra coisa, digamos uma enxurrada de água doce, que o
+modelo não enxerga.
+
+**Escondendo o recife B:** o modelo estuda nas visitas 1 e 3 (as do recife A) e
+é testado nas 2 e 4 (as do B).
+
+Mas olhe bem: a visita 1 e a visita 2 são **do mesmo ano**, com o **mesmo
+calor**. O modelo já viu como foi 2005 e já viu como foi 2010 — só não conhecia
+aquele pedaço de mapa. **Ele acerta as duas.** Parece um ótimo modelo.
+
+**Escondendo o ano 2010:** o modelo estuda nas visitas 1 e 2, onde branqueamento
+veio junto com muito calor. É testado nas 3 e 4, onde veio com pouco.
+
+Ele aprendeu "muito calor, branqueia". Vê pouco calor e responde "não branqueia".
+**Erra as duas.**
+
+O modelo nunca foi bom. Ele estava **reconhecendo o ano**, não entendendo o
+fenômeno. Esconder o recife não revelava isso; esconder o ano, sim.
+
+> **E como o site precisa avisar sobre um branqueamento que ainda não
+> aconteceu — um ano que ninguém viu —, o número honesto é o do ano.**
 
 ---
 
@@ -390,6 +443,91 @@ de "previsão de branqueamento" seria prometer mais do que ele entrega.
 
 ---
 
+## 9. O que descobrimos quando finalmente olhamos branqueamento de verdade
+
+A limitação da seção anterior — "o modelo prevê estresse térmico, não
+branqueamento" — deixou de ser só uma ressalva. Nós fomos atrás do dado que
+faltava e testamos.
+
+### O problema com a pergunta antiga
+
+O projeto queria saber: **temperatura explica tudo, ou salinidade e oxigênio
+também importam?**
+
+Só que na primeira parte a resposta que o modelo tentava adivinhar (o "alerta"
+da NOAA) é **calculada a partir de temperatura**. É como perguntar se a altura
+de alguém depende do peso, mas medir a altura com uma régua feita de peso: a
+resposta vem viciada, e vai dizer que só o peso importa.
+
+Então buscamos uma base em que a resposta veio de **gente de verdade**:
+mergulhadores que foram ao recife, olharam e anotaram se o coral estava branco.
+São **166 visitas** a recifes brasileiros, entre 1994 e 2010.
+
+### A régua da NOAA, testada contra a realidade brasileira
+
+A NOAA — o serviço americano que monitora recifes no mundo inteiro — tem uma
+regra publicada. Ela soma quanto calor a mais o recife acumulou nas últimas 12
+semanas, e quando esse acúmulo passa de um certo ponto, ela declara:
+**"branqueamento esperado aqui"**.
+
+Testamos essa regra nas 166 visitas brasileiras. O resultado:
+
+| | |
+|---|---|
+| Visitas em que houve branqueamento | **88** |
+| Quantas a regra da NOAA previu | **10** |
+| Quantas ela errou apontando branqueamento onde não houve | **0** |
+
+Leia devagar, porque as duas metades dizem coisas opostas:
+
+**A regra nunca erra para mais.** Nas 10 vezes em que ela disse "vai
+branquear", branqueou. Zero alarmes falsos. Isso é impressionante.
+
+**Mas ela quase nunca fala.** Em **78 das 88 vezes** que o coral branqueou no
+Brasil, a régua da NOAA marcava **zero** — nenhum calor acumulado. O recife
+estava branqueando e o termômetro não tinha nada a dizer.
+
+> Em linguagem comum: **calor demais é um jeito garantido de matar coral, mas
+> está longe de ser o único.**
+
+### Por que isso é a coisa mais importante que o projeto achou
+
+Porque é exatamente o buraco que o projeto se propôs a preencher.
+
+Se a temperatura explicasse tudo, este projeto seria redundante — bastaria
+copiar o alerta da NOAA e exibi-lo em português. O que a medição mostra é que
+**existem 78 branqueamentos brasileiros sem explicação térmica**, esperando
+alguém investigar.
+
+E apareceu uma pista. Entre as variáveis que sobraram, a segunda mais útil para
+o modelo não foi de temperatura: foi **o vento**.
+
+Isso faz sentido físico. Vento mexe a água, mistura a camada quente da
+superfície com a água mais fria de baixo, e muda a salinidade e o oxigênio
+perto do coral — que são justamente as duas coisas que este projeto mede e que
+a NOAA não olha.
+
+### ⚠️ O que ainda **não** dá para dizer
+
+**Não descobrimos que salinidade e oxigênio explicam os 78 casos.** Nós não os
+medimos nessa base — ela não os traz. Descobrimos que **há espaço para eles**,
+não que eles ocupam esse espaço.
+
+E mais três ressalvas honestas:
+
+1. **Esse dado brasileiro para em 2010.** Nada do branqueamento de 2020 ou de
+   2024 tem essa checagem de mergulhador.
+2. **Picãozinho ficou de fora**: o recife com mergulhador mais próximo está a
+   198 km, que é outro sistema de recifes.
+3. **166 visitas é pouco.** Diferença pequena entre versões do modelo continua
+   sendo sorte.
+
+O próximo passo já está definido e orçado: buscar salinidade e oxigênio para os
+90 dias anteriores a cada uma dessas visitas, e ver se eles explicam o que a
+temperatura não explicou.
+
+---
+
 ## Onde ver mais
 
 | Documento | O que tem |
@@ -405,5 +543,6 @@ de "previsão de branqueamento" seria prometer mais do que ele entrega.
 
 | Data | Alteração |
 |---|---|
+| 26/07/2026 | **§9 criada — o resultado da segunda parte, em linguagem comum.** Por que a pergunta antiga era viciada (a resposta que o modelo adivinhava era feita de temperatura — analogia da régua feita de peso), e o que apareceu quando o alvo passou a ser branqueamento visto por mergulhador: **a regra da NOAA acerta 10 de 10 quando fala, mas fica calada em 78 dos 88 branqueamentos brasileiros**. Acrescentado também, em §3, o exemplo de quatro visitas mostrando por que esconder um recife e esconder um ano dão respostas diferentes, e por que a do ano é a honesta. |
 | 25/07/2026 | Acrescentado, em §6 e §7, o resultado da medida de importância: a "receita" **não** se explica neste projeto, porque cada variável é medida duas vezes (nível e mudança) e as linhas individuais deixam de fazer sentido — analogia das duas colheres de sal. E o indício do oxigênio, que a §7 anunciava, **não se confirmou**. |
 | 25/07/2026 | Documento criado como versão sem jargão da METODOLOGIA.md, para leitura e apresentação. Mesmo conteúdo, com analogias: previsão do tempo, prova com as questões vazadas, alarme de incêndio, receita e cozinheiro. |

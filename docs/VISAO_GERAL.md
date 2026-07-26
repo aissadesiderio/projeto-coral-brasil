@@ -346,6 +346,13 @@ O documento [FONTES.md](FONTES.md) leva isso adiante: ele cataloga **19
 problemas de proveniência** encontrados no projeto herdado, cada um com
 medição, e o que foi feito com ele.
 
+📝 **Para escrever artigo ou monografia:** a [§7 do FONTES.md](FONTES.md#7-como-citar-e-onde-cada-fonte-entra)
+é o mapa de citação. Ela liga cada fonte ao que ela produz no projeto, ao
+arquivo do código, e **às afirmações documentadas que dependem dela** — para
+que, ao escrever um parágrafo, dê para saber o que precisa ser citado nele.
+Registra também duas pendências bloqueantes para submissão: os DOIs dos
+produtos CMEMS e uma referência não identificada no código legado.
+
 ---
 
 ## 9. As duas entregas
@@ -376,6 +383,28 @@ brasileiros.
 
 Essa é a contribuição científica do TCC. É também a mais difícil: a base atual
 tem ~4 anos-evento, o que limita muito o que se pode afirmar.
+
+#### ✅ Passo 1 feito em 26/07/2026 — e ele muda a leitura do projeto
+
+O primeiro passo era gratuito: usar as variáveis térmicas que já vêm no próprio
+GCBD, sem ingerir nada, para saber **quanto do branqueamento observado a
+temperatura sozinha explica**. São 166 visitas a recifes brasileiros, entre
+1994 e 2010, metade delas com branqueamento.
+
+> **A régua publicada da NOAA (`DHW ≥ 4`) acertou 10 de 10 quando disparou — e
+> ficou calada em 78 dos 88 branqueamentos observados.**
+
+Ou seja: estresse térmico acumulado é **suficiente** para branquear coral, mas
+está **longe de ser necessário**. A maior parte do branqueamento brasileiro
+registrado aconteceu sem que o termômetro tivesse o que dizer.
+
+Isso é a justificativa do projeto inteiro, medida em vez de suposta. Se a
+temperatura explicasse tudo, bastaria traduzir o alerta da NOAA para português.
+
+⚠️ **O que ainda não foi mostrado:** que salinidade e oxigênio ocupam esse
+espaço. Eles não estão no GCBD e não foram medidos. Há lacuna; falta o
+ocupante — que é exatamente o passo 2. Ver [GCBD.md](GCBD.md) e
+[RESULTADOS.md](RESULTADOS.md) §11–§14.
 
 ### Por que quase foi circular
 
@@ -408,13 +437,15 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Linha de base** | persistência medida: F1 0,840 em 7 dias |
 | **Modelo treinado e comparado** | primeira rodada em [RESULTADOS.md](RESULTADOS.md): detecta 18 de 19 episódios contra 15 da persistência |
 | **Importância das variáveis** | medida: DHW e SST respondem por >95% da capacidade preditiva |
-| **227 testes** | rodam offline |
+| **GCBD, passo 1** | branqueamento **observado** como alvo, sem ingerir nada: a régua da NOAA pega 10 dos 88 eventos brasileiros ([RESULTADOS.md](RESULTADOS.md) §11) |
+| **Documentação em .docx** | artefato derivado, regerável com `manage.py exportar_docs` |
+| **275 testes** | rodam offline |
 
 ### Falta
 
 | | |
 |---|---|
-| **GCBD** | ⬆️ subiu de prioridade: com o BAA como alvo, nenhuma variável não térmica contribui ([RESULTADOS.md](RESULTADOS.md) §8). Só rótulo observado pode responder a pergunta da entrega 2 |
+| **GCBD, passo 2 — salinidade e O₂** | ⬆️ prioridade máxima, e agora com lacuna medida: **78 branqueamentos observados sem estresse térmico acumulado**. Falta ingerir 90 dias antes de cada visita (~35 mil medições) e rodar o experimento ([GCBD.md](GCBD.md)) |
 | **Projeção do Neo4j** | ⚠️ o grafo ainda mostra dado do caminho legado |
 | **Agendamento** | nada roda sozinho ainda |
 | **API e site** | endpoints, paginação, mapa, séries temporais |
@@ -473,5 +504,6 @@ O catálogo completo, com medição de cada um, está em [FONTES.md](FONTES.md) 
 
 | Data | Alteração |
 |---|---|
+| 26/07/2026 | **§9 — passo 1 da entrega 2 registrado.** Com branqueamento observado como alvo, a régua da NOAA acerta 10 de 10 quando dispara mas fica calada em **78 dos 88 branqueamentos brasileiros**. É a justificativa do projeto medida em vez de suposta: estresse térmico é suficiente, não necessário. §10 atualizada — 275 testes, GCBD passo 1 e exportação .docx entram em "pronto"; a prioridade máxima passa a ser o **passo 2**, agora com lacuna quantificada. |
 | 25/07/2026 | Estado atualizado: importância das variáveis medida (DHW e SST respondem por mais de 95% da capacidade preditiva) e a colinearidade registrada como pendência — hoje os coeficientes não permitem afirmar direção de efeito. |
 | 25/07/2026 | Documento criado como porta de entrada do projeto: o problema biológico, a cadeia MMM→HotSpot→DHW→BAA explicada com exemplo, as fontes e suas naturezas distintas, o caminho do dado, as duas entregas, o que falta e os defeitos herdados. |

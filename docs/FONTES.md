@@ -344,6 +344,40 @@ Define a MMM (Maximum Monthly Mean) por pixel, o HotSpot, a acumulação de DHW 
 
 ## 4. Fontes candidatas ainda não integradas
 
+### 4.1 GCBD — Global Coral-Bleaching Database ✅ integrada (passo 1) em 26/07/2026
+
+**Instituição:** van Woesik, R.; Burkepile, D. — publicada em *Scientific Data* (2022)
+**Repositório:** BCO-DMO, dataset 773466 — https://www.bco-dmo.org/dataset/773466
+**DOI do artigo:** `10.1038/s41597-022-01121-y` · **DOI do dado:** `10.26008/1912/bco-dmo.773466.2`
+**Forma de acesso:** download direto de CSV, sem credencial
+**Licença:** **CC-BY 4.0**
+**Arquivo:** `global_bleaching_environmental.csv` — 16,00 MB, SHA-256 `78cc014b1e7887f26f4c44a40d4d9213…`
+**Data da coleta:** 25/07/2026
+**Não versionado** — reconstruível pelo DOI; o comando está em [GCBD.md](GCBD.md).
+
+**Citação obrigatória:**
+> van Woesik, R., Burkepile, D. (2022). *Bleaching and environmental data for global coral reef sites from 1980-2020.* BCO-DMO. doi:10.26008/1912/bco-dmo.773466.2
+
+**Para quê:** é a única fonte de **branqueamento observado em campo** do projeto, e portanto a base da entrega 2 — trocar o alvo de classificação por satélite (BAA) por observação real. Ver [VARIAVEIS.md](VARIAVEIS.md) §4.4.
+
+**Cobertura brasileira medida em 25/07/2026, revista em 26/07/2026:** 384 registros, 137 sítios, **1994-03-15 a 2010-12-17**. Alvo utilizável em 313 linhas, que são **166 visitas** em 119 sítios (ver §6.17), com **53,0% de positivos**.
+
+**Onde é lida:** [`ml/gcbd.py`](../backend/ml/gcbd.py), comando `manage.py treinar_gcbd`. O arquivo é procurado em `dados/global_bleaching_environmental.csv`, ou onde `GCBD_CSV` apontar.
+
+⚠️ **Cinco achados que condicionam o uso**, todos medidos:
+
+1. **O dado brasileiro termina em 2010** — sobreposição **zero** com a série ambiental já ingerida (2020 em diante).
+2. **Picãozinho fica sem cobertura**: sítio GCBD mais próximo a **198 km**. Abrolhos, ao contrário, tem 41 sítios, o mais próximo a **1,3 km**.
+3. **A base não traz salinidade nem oxigênio** — as duas variáveis que diferenciam este projeto. Responder a pergunta da entrega 2 exige ingestão nossa.
+4. 🚨 **`ClimSST` tem valor-sentinela** — 262,15 K (−11 °C) em 115 dos 313 registros brasileiros. Removida do baseline. Ver §6.17.
+5. **A unidade amostral é a visita, não a linha** — o arquivo traz uma linha por substrato. Ver §6.17.
+
+📖 **Levantamento completo de viabilidade, em cinco etapas, em [GCBD.md](GCBD.md)** — estrutura, conteúdo, cobertura geográfica, custo de ingestão e plano recomendado. Os resultados do passo 1 estão em [RESULTADOS.md](RESULTADOS.md) §11–§14.
+
+---
+
+### 4.2 Demais candidatas
+
 Levantadas no planejamento, com justificativa de por que interessam ao projeto.
 
 | Fonte | Link | Para quê |
@@ -567,20 +601,163 @@ A ingestão sofreu 10 `ReadTimeout` do PACIOOS, todos absorvidos pela retentativ
 ### 6.15 DOIs dos produtos CMEMS não coletados
 Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
 
+### 6.17 ✅ TRATADO em 26/07/2026 — três defeitos no GCBD, detectados ao usá-lo
+
+Medidos em 26/07/2026, ao integrar a base (§4.1). Nenhum aparece na
+documentação do GCBD; todos aparecem quando se olha o dado.
+
+#### (a) 🚨 `ClimSST` traz ausência codificada como número
+
+`ClimSST` — a climatologia de SST do sítio — vale **exatamente 262,15 K em 115
+dos 313 registros brasileiros (36,7%)**.
+
+262,15 K são **−11 °C**. Num recife tropical, isso não é climatologia.
+
+A origem fica clara na aritmética:
+
+```
+262,15 K  −  273,15  =  −11,00 °C
+```
+
+Ou seja: alguém tinha `-11` como código de "sem dado" em Celsius e converteu
+para Kelvin junto com os valores reais. O código de falta virou uma temperatura
+plausível para um programa, e absurda para um oceanógrafo.
+
+**Consequência se não tratado:** o modelo aprenderia que 37% dos recifes
+brasileiros têm climatologia ártica — e, pior, que essa característica separa
+dois grupos de sítios, virando um identificador acidental.
+
+**Tratamento:** `ClimSST` está em `COLUNAS_RECUSADAS` em
+[`ml/gcbd.py`](../backend/ml/gcbd.py), e o valor 262,15 vira `NaN` no
+carregamento (`SENTINELAS`). Dois testes travam a decisão.
+
+⚠️ O plano registrado em [GCBD.md](GCBD.md) **recomendava `ClimSST`** como uma
+das três variáveis do baseline. A recomendação foi escrita a partir da lista de
+colunas, não da distribuição delas — e não sobreviveu à medição.
+
+#### (b) `SSTA_Mean` é constante
+
+Vale **0,0 em todos os 313 registros brasileiros**. Uma coluna sem variância não
+pode informar nada e ainda consome um grau de liberdade. Também recusada.
+
+#### (c) A unidade amostral não é a linha
+
+O arquivo traz **uma linha por substrato amostrado** na mesma visita:
+
+| Site_ID | Date | Substrate_Name | Percent_Bleaching |
+|---|---|---|---|
+| 1653 | 2005-04-05 | Hard Coral | 2,0 |
+| 1653 | 2005-04-05 | Nutrient Indicator Algae | 2,0 |
+
+Duas linhas, uma observação. Medido: **0 de 166 visitas** divergem em
+`Percent_Bleaching`, e **0** divergem em qualquer variável térmica.
+
+**Consequência se não tratado:** n inflado em **1,9×** (313 em vez de 166), com
+cópias exatas da mesma visita caindo nos dois lados da validação — o que
+inventaria desempenho sem que nada no resultado denunciasse.
+
+**Tratamento:** `agregar_por_visita`, com quatro testes.
+
+> Os três são o mesmo tipo de defeito que §6.3 (alcalinidade usada como pH) e
+> §6.2 (hemisfério errado): dado que o programa aceita e o fenômeno não. É a
+> razão de esta seção existir.
+
 ---
 
-## 7. Como citar
+## 7. Como citar, e onde cada fonte entra
 
-Ao publicar o site ou o trabalho acadêmico, incluir uma seção de atribuição com:
+Esta seção existe para uma pergunta específica: **ao escrever um parágrafo do
+artigo, o que precisa ser citado ali?** Ela liga cada fonte ao que ela produz
+no projeto, ao ponto do código, e às afirmações que dependem dela.
 
-1. **Copernicus** — *"Generated using E.U. Copernicus Marine Service Information"*, mais o DOI de cada produto usado. Créditos adicionais ao NECCTON Project (EU) nos produtos biogeoquímicos.
-2. **NOAA Coral Reef Watch** — citação da versão 3.1 do produto de 5 km, com data de acesso.
-3. **Met Office / GHRSST** — via produto Copernicus SST_GLO_SST_L4_REP_OBSERVATIONS_010_011, se vier a ser usado.
-4. **iNaturalist** — crédito ao autor de cada fotografia, com a licença específica da observação e link.
-5. **IUCN Red List** — se os status de conservação forem mantidos, citar a versão da Red List consultada.
-6. **GCBD** — van Woesik & Kratochwill (2022), CC-BY 4.0, se integrado.
+### 7.1 Mapa de proveniência
 
-O projeto está sob licença MIT (`LICENSE`), mas isso **cobre apenas o código** — os dados e as imagens seguem as licenças de suas fontes originais.
+| Fonte | O que produz | Onde no código | Afirmações que dependem dela |
+|---|---|---|---|
+| **NOAA Coral Reef Watch 5 km v3.1** | `sst`, `dhw`, `baa`, `baa_area_alerta`, `hotspot`, `sst_anomalia` — **43.038 medições** | [`ingestao/conectores/noaa_crw.py`](../backend/ingestao/conectores/noaa_crw.py) | Todo o alvo e as features térmicas da entrega 1. [RESULTADOS.md](RESULTADOS.md) inteiro; [VARIAVEIS.md](VARIAVEIS.md) §3.1, §3.2, §4.5, §7.1, §7.2 |
+| **Copernicus Marine (CMEMS)** | `salinidade`, `oxigenio` — **14.382 medições** | [`ingestao/conectores/copernicus.py`](../backend/ingestao/conectores/copernicus.py) | As duas variáveis não térmicas. [VARIAVEIS.md](VARIAVEIS.md) §3.3, §3.4; e o achado de [RESULTADOS.md](RESULTADOS.md) §8 de que **elas não contribuem** com o BAA como alvo |
+| **GCBD** | O **alvo observado** da entrega 2 — 166 visitas brasileiras, 88 positivas — e as 8 térmicas do dia que as acompanham | [`ml/gcbd.py`](../backend/ml/gcbd.py), `manage.py treinar_gcbd` | Todo o [RESULTADOS.md](RESULTADOS.md) §11–§14, e em especial a afirmação central: **a regra `DHW ≥ 4` da NOAA perde 78 dos 88 branqueamentos observados no Brasil**. Também [GCBD.md](GCBD.md) e o desenho da entrega 2 em [VARIAVEIS.md](VARIAVEIS.md) §4.4 |
+| **iNaturalist** | Fotografias de espécies | seed do banco | Nenhuma afirmação científica — uso ilustrativo |
+| **IUCN Red List** | `status_conservacao` por espécie | seed do banco | Nenhuma afirmação do modelo |
+| **Met Office / GHRSST** | ⛔ nada no caminho novo | `dados/sst.csv` (legado) | Nenhuma — a série mais longa do projeto **não é usada** (§6.4) |
+
+### 7.2 Citação exata de cada uma
+
+**NOAA Coral Reef Watch** — produto `CoralTemp-v3.1`, acessado pelo espelho
+PACIOOS em 25/07/2026:
+
+> NOAA Coral Reef Watch. (2018, atualizado diariamente). *NOAA Coral Reef Watch
+> Version 3.1 Daily Global 5km Satellite Coral Bleaching Heat Stress Products.*
+> College Park, Maryland, USA: NOAA Coral Reef Watch. Dados acessados em
+> 25/07/2026 via PACIOOS ERDDAP, dataset `dhw_5km`.
+
+⚠️ Registrar **o espelho e a data**, não só "NOAA": o mesmo produto é
+redistribuído por três servidores, e o par servidor+dataset é o que torna a
+consulta reproduzível (§1.1).
+
+**Copernicus Marine** — atribuição obrigatória pela licença:
+
+> "Generated using E.U. Copernicus Marine Service Information"
+
+mais o DOI de cada produto usado. Produtos efetivamente usados neste projeto:
+
+| Dataset | Variável | Tipo |
+|---|---|---|
+| `cmems_mod_glo_phy_my_0.083deg_P1D-m` | salinidade | reanálise |
+| `cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m` | salinidade | análise |
+| `cmems_mod_glo_bgc_my_0.25deg_P1D-m` | oxigênio | reanálise |
+| `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m` | oxigênio | análise |
+
+Produtos biogeoquímicos levam crédito adicional ao **NECCTON Project (EU)**.
+
+🚨 **Os DOIs individuais desses quatro produtos ainda não foram coletados** —
+pendência registrada em §6.15, e **bloqueante para submissão**.
+
+**GCBD** — são **duas citações distintas**, para artefatos distintos:
+
+| O que você está citando | Citação |
+|---|---|
+| O **artigo** que descreve a base | van Woesik, R. & Kratochwill, C. (2022). *A global coral-bleaching database, 1980–2020.* Scientific Data. doi:10.1038/s41597-022-01121-y |
+| Os **dados** que você baixou | van Woesik, R., Burkepile, D. (2022). *Bleaching and environmental data for global coral reef sites from 1980-2020.* BCO-DMO. doi:10.26008/1912/bco-dmo.773466.2 |
+
+Ao usar os dados, cite as duas: o artigo pelo método, o repositório pelo dado.
+
+⚠️ **Ao relatar os resultados de [RESULTADOS.md](RESULTADOS.md) §11–§14, cite
+também a régua contra a qual eles são medidos.** A linha de base não é nossa: é
+o limiar publicado da NOAA (`DHW ≥ 4` → Alerta Nível 1), que já tem a citação
+do Coral Reef Watch em §7.2. Afirmar que "a regra perde 78 de 88 eventos" sem
+citar de quem é a regra deixaria o leitor sem como verificar o que foi testado.
+
+**iNaturalist** — crédito ao autor de cada fotografia, com a licença
+específica daquela observação e link. Licença varia por foto.
+
+**IUCN Red List** — citar a versão consultada.
+
+### 7.3 Referências científicas com problema de rastreabilidade
+
+🚨 **Seis afirmações do modelo legado citam um documento que não existe no
+repositório e não foi identificado** — marcadores `[cite: N]` em
+`treinar_modelo.py`. Detalhe em §3.1.
+
+**Nenhuma dessas afirmações pode ir para o artigo sem que a fonte seja
+localizada ou substituída.** Elas embasam a função `calcular_risco()`, que a
+entrega 1 já não usa — mas se algum raciocínio do texto se apoiar nelas
+(hipóxia reduzindo o limiar, sinergia calor+acidificação), a referência
+precisa ser encontrada primeiro.
+
+### 7.4 Licenças
+
+| O quê | Licença |
+|---|---|
+| Código deste projeto | MIT (`LICENSE`) |
+| Dados NOAA CRW | domínio público (obra do governo dos EUA) |
+| Dados Copernicus | livre e aberta, **com atribuição obrigatória** |
+| GCBD | **CC-BY 4.0** |
+| Fotografias iNaturalist | varia por observação — verificar uma a uma |
+
+⚠️ A licença MIT **cobre apenas o código**. Dados e imagens seguem a licença
+da fonte original, e algumas exigem atribuição na própria página que os exibe,
+não só numa seção de créditos.
 
 ---
 
@@ -624,6 +801,9 @@ conforme a regra de governança daquele documento.
 | 25/07/2026 | **Backfill histórico concluído: 35.850 medições.** 2020-01-01 a 2026-07-23, três locais, 5 variáveis, em 14 blocos por local. Executado **duas vezes de forma independente** — pfeg `NOAA_DHW` na rede da UFF e PACIOOS `dhw_5km` fora dela — com resultado idêntico bloco a bloco, o que valida cruzadamente os dois espelhos. Cobertura e as 6 datas ausentes do produto documentadas na §1.1. |
 | 25/07/2026 | **§6.16 resolvida — BAA passa a ser agregado por máximo.** A regra de agregação espacial deixou de ser uniforme: `ConectorNoaaCrw.AGREGACAO` a declara por variável, e média ficou restrita a grandeza contínua. Nova variável canônica **`baa_area_alerta`** (fração dos pixels válidos em Alerta Nível 1 ou acima) grava a extensão do evento, que nem média nem máximo preservam sozinhos. Contrato canônico ganhou a tabela de tipo/agregação e a regra 5: variável ordinal ou categórica precisa declarar sua agregação, e usar média fora de variável contínua é defeito, não escolha. |
 | 25/07/2026 | **PACIOOS vira o espelho padrão do projeto**, no lugar do pfeg — `SERVIDOR_PADRAO`/`DATASET_PADRAO` no conector, defaults em `settings.py` e `.env.example` (onde as linhas `NOAA_ERDDAP_*` passam a vir comentadas). Razão: o pfeg exige rede com domínio federal, e um padrão que só funciona numa rede específica é armadilha para quem clona o repositório — foi exatamente o que travou a primeira tentativa de rodar fora da universidade. O PACIOOS não é versão degradada: os dois espelhos deram resultado idêntico bloco a bloco no backfill de 2020–2026. ⚠️ Registrado também o que **não** se sabe: o PACIOOS nunca foi testado de dentro da UFF, e a tabela da §1.1 diz "não medido" em vez de presumir sucesso. |
+| 26/07/2026 | **§6.17 criada — três defeitos no GCBD, detectados ao integrá-lo**, e §4.1 promovida a integrada. (a) 🚨 **`ClimSST` traz ausência codificada como número**: 262,15 K (= 273,15 − 11, ou seja um `-11` de "sem dado" convertido de Celsius) em **115 dos 313 registros brasileiros**; a coluna foi recusada e o valor vira `NaN` no carregamento. O plano de [GCBD.md](GCBD.md) **recomendava `ClimSST`** — a recomendação vinha da lista de colunas, não da distribuição delas. (b) `SSTA_Mean` é constante em 0,0 e também foi recusada. (c) **A unidade amostral é a visita, não a linha**: o arquivo traz uma linha por substrato, e as 313 linhas são **166 visitas**, com 0 divergindo no alvo — tratar linha como amostra inflaria n em 1,9× e poria cópias exatas nos dois lados da validação. §7.1 atualizada com onde o GCBD entra e quais afirmações dependem dele, e §7.2 com a ressalva de que a régua da entrega 2 é o limiar publicado da NOAA e precisa ser citada junto. |
+| 25/07/2026 | **§7 reescrita — mapa de proveniência para citação.** Deixou de ser uma lista de fontes e passou a responder "ao escrever este parágrafo, o que preciso citar?": cada fonte ligada ao que produz, ao arquivo do código, e às afirmações documentadas que dependem dela. Corrigida uma imprecisão que atrapalharia a submissão — **o GCBD tem duas citações distintas**, van Woesik & Kratochwill (2022) para o artigo e van Woesik & Burkepile (2022) para o dado no BCO-DMO; a versão anterior misturava as duas. Registrado também que **seis afirmações do modelo legado citam documento não identificado** (§3.1) e não podem ir para o artigo, e que **os DOIs dos quatro produtos CMEMS usados continuam pendentes** — bloqueante para submissão. |
+| 25/07/2026 | **§4.1 criada — GCBD baixado e avaliado.** Base de branqueamento observado (van Woesik & Burkepile 2022, CC-BY, BCO-DMO 773466), 16 MB, com hash e citação registrados. Levantamento de viabilidade em cinco etapas em [GCBD.md](GCBD.md), feito **antes** de qualquer código de integração. Três achados condicionam o uso: o dado brasileiro **termina em 2010** (sobreposição zero com a série atual), **Picãozinho fica sem cobertura** (sítio mais próximo a 198 km, contra 1,3 km em Abrolhos), e **a base não traz salinidade nem oxigênio**. Em compensação, o alvo é balanceado em 50,2%, contra 8% do BAA. Custo de ingestão dimensionado: janela de 90 dias por observação custa 106 mil medições, contra 5 milhões da série contínua. |
 | 25/07/2026 | **§1.5 criada — estado da base ingerida.** Tabela consolidada do que está de fato em `MedicaoAmbiental`: 57.420 medições, 8 variáveis, três locais, **as duas fontes cobrindo exatamente a mesma janela** (2020-01-01 a 2026-07-24), pré-requisito para montar janelas com defasagem sem perder amostra. README: tabela de espelhos passa a registrar o comportamento nas **duas redes**, e o PACIOOS deixa de ser plano B — é o único que responde dentro e fora da UFF, foi por ele que os 43.038 registros entraram, e os dois espelhos já haviam sido comparados bloco a bloco com resultado idêntico. O padrão do código segue no pfeg, por ser o espelho oficial; quem roda fora da universidade sobrescreve no `.env`. |
 | 25/07/2026 | **Backfill do NOAA reexecutado com a regra nova: 43.038 medições** (7.173 × 6 variáveis, PACIOOS, 2020-01-01 a 2026-07-24). O Alerta Nível 2 passou de 160 para 369 registros — a média escondia 209 dias de estresse máximo. `baa_area_alerta` mostra 2025 chegando a 1,000 em Abrolhos, recife inteiro em alerta. BAA e DHW voltaram a ser internamente consistentes sob a regra da NOAA (DHW ≥ 8 ⇒ Alerta Nível 2), o que a média espacial quebrava. Medições completas na §6.16. |
 | 25/07/2026 | **Backfill do Copernicus concluído: 14.382 medições.** 2020-01-01 a 2026-07-24, três locais, salinidade e oxigênio, em 14 blocos por local (~13 min). Cobertura **completa**: 2.397 dias por local e variável, zero lacunas e zero nulos. A emenda reanálise→análise caiu em datas distintas por variável (salinidade 23/06, oxigênio 31/05), conforme o eixo de tempo de cada dataset — 99% da série vem da reanálise. Faixas e gradiente latitudinal registrados na §1.2, com a ressalva de que ausência de lacunas aqui é propriedade de saída de modelo, não indicador de qualidade. Nenhuma data futura gravada. |

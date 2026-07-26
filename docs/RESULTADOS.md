@@ -1,17 +1,30 @@
-# Resultados — primeira rodada
+# Resultados
 
-Primeira execução completa do experimento da entrega 1, em **25/07/2026**.
-
-O desenho do experimento (a régua, a validação, as métricas e por que elas)
+O desenho dos experimentos (a régua, a validação, as métricas e por que elas)
 está em [METODOLOGIA.md](METODOLOGIA.md). Este documento é só o que saiu.
+
+| Parte | O quê | Quando | Seções |
+|---|---|---|---|
+| **Entrega 1** | Prever o **BAA** em t+N, nos 3 recifes monitorados | 25/07/2026 | §1–§10 |
+| **Entrega 2, passo 1** | Prever **branqueamento observado**, nos sítios do GCBD | 26/07/2026 | §11–§14 |
 
 ---
 
-## Em uma frase
+## Em uma frase, cada uma
 
-> **Em 7 dias o modelo empata com a previsão burra no acerto diário, mas
-> detecta 18 dos 19 episódios contra 15 dela — e em 14 dias passa a ganhar nas
-> duas métricas.**
+> **Entrega 1** — Em 7 dias o modelo empata com a previsão burra no acerto
+> diário, mas detecta 18 dos 19 episódios contra 15 dela; e em 14 dias passa a
+> ganhar nas duas métricas.
+
+> **Entrega 2, passo 1** — A regra de estresse térmico da NOAA, quando dispara,
+> acerta quase sempre; mas dos 88 branqueamentos observados no Brasil ela pega
+> **10**. O sinal térmico sozinho não explica o fenômeno.
+
+---
+
+# Entrega 1 — previsão do BAA
+
+Primeira execução completa, em **25/07/2026**.
 
 ---
 
@@ -506,13 +519,323 @@ Estes números orientam decisão de projeto. Não sustentam afirmação científ
 | ✅ feito | ~~Importância das variáveis~~ | Feito em 25/07/2026 (§7): derrubou o indício do oxigênio e revelou que os coeficientes não são interpretáveis |
 | ✅ feito | ~~Diagnosticar a colinearidade~~ | Feito (§8): a causa é a dupla janela 7d/14d (r = 0,976), não nível×trajetória como se supunha |
 | ✅ feito | ~~Aplicar a versão D ao código~~ | Aplicada em 25/07/2026: 4 entradas, coeficientes íntegros, teste travando a regra |
-| **Alta** | **GCBD** | Com o BAA como alvo, a resposta a "variáveis não térmicas ajudam?" é **não**. Só rótulo observado pode mudar isso |
+| ✅ feito | ~~GCBD, passo 1~~ | Feito em 26/07/2026 (§11 e §12): o sinal térmico sozinho **não** explica o branqueamento observado no Brasil |
+| **Alta** | **GCBD, passo 2 — ingerir salinidade e O₂** | §11 mudou a resposta: com rótulo observado, sobra o que explicar. Ver [GCBD.md](GCBD.md) |
 | Alta | Investigar 2022 | É o único ano em que o modelo perde claramente |
 | Média | Curva de calibração | Brier bom não basta para exibir porcentagem num site |
 | Média | Testar horizontes entre 7 e 21 dias | A vantagem cresce com o horizonte; achar onde ela vira |
 | Baixa | Ajuste de hiperparâmetro | Só faz sentido depois de ampliar a base com o GCBD |
 
 ---
+
+# Entrega 2, passo 1 — branqueamento observado
+
+Rodado em **26/07/2026**. Muda o alvo: de **BAA** (um rótulo que a NOAA calcula
+a partir de temperatura) para **coral branqueado contado por mergulhador**.
+
+A troca importa porque a pergunta central do projeto estava mal posta na
+entrega 1. Perguntar "variáveis não térmicas ajudam a prever o BAA?" era
+circular — o BAA é térmico por construção. Ver [GCBD.md](GCBD.md).
+
+**Não houve ingestão.** Este passo usa só as variáveis térmicas que já vêm no
+arquivo do GCBD, exatamente como o plano previa.
+
+---
+
+## 11. O resultado que muda o projeto
+
+> **A regra de estresse térmico da NOAA, quando dispara, acerta quase sempre —
+> mas ela quase nunca dispara. Dos 88 branqueamentos observados no Brasil, ela
+> pega 10.**
+
+### 11.1 O conjunto
+
+| | |
+|---|---|
+| Linhas brasileiras utilizáveis | 313 |
+| **Visitas** (unidade amostral real) | **166** |
+| Sítios | 119 |
+| Positivos (`Percent_Bleaching` > 0%) | **88 — 53,0%** |
+| Período | 1994–2010 |
+
+🚨 **São 166 visitas, não 313 amostras.** O GCBD traz uma linha por substrato
+amostrado (`Hard Coral`, `Nutrient Indicator Algae`, `Fleshy Seaweed`). Dentro
+de uma visita, as térmicas e o `Percent_Bleaching` são **idênticos** —
+conferido: **0 de 166 visitas divergem no alvo**. Tratar linha como amostra
+inflaria n em 1,9× sem acrescentar informação nenhuma, e ainda poria cópias da
+mesma visita nos dois lados da validação.
+
+Isso corrige o "313 amostras utilizáveis" do levantamento inicial.
+
+### 11.2 A linha de base: a regra publicada da NOAA
+
+`TSA_DHW ≥ 4` → Alerta Nível 1, branqueamento esperado. É o piso a ser batido,
+o mesmo papel que a persistência teve na entrega 1.
+
+| Métrica | Valor |
+|---|---|
+| Precisão | **1,000** |
+| Revocação | **0,114** |
+| F1 | 0,204 |
+| Verdadeiros positivos | 10 |
+| Falsos positivos | **0** |
+| Falsos negativos | **78** |
+| `TSA_DHW = 0` em | **87,3% das visitas** |
+
+**Lido em palavras:** quando o DHW acumula estresse suficiente, houve
+branqueamento — em 10 de 10 casos. Mas **78 dos 88 branqueamentos observados
+aconteceram com `TSA_DHW = 0`**, isto é, sem nenhum estresse térmico acumulado
+pelo critério da NOAA.
+
+> O estresse térmico por DHW é **suficiente, mas está longe de ser necessário**
+> para o branqueamento observado nos recifes brasileiros.
+
+Esta é a frase mais importante que o projeto produziu até aqui, e ela só pôde
+aparecer porque o alvo deixou de ser térmico.
+
+### 11.3 O modelo, e o contraste que decide tudo
+
+A validação é cruzada e **agrupada** — nunca aleatória. Duas versões, porque
+respondem perguntas diferentes:
+
+- **agrupado por sítio:** "generaliza para um **recife novo**?"
+- **agrupado por ano:** "generaliza para um **evento novo**?"
+
+Logística, as 8 térmicas do dia:
+
+| | por **sítio** | por **ano** |
+|---|---|---|
+| PR-AUC | **0,803** | **0,614** |
+| ganho sobre o acaso | 1,51× | 1,16× |
+| F1 | 0,686 | 0,534 |
+| Acurácia | 0,675 | **0,506** |
+| *(classe majoritária)* | *0,530* | *0,530* |
+
+🚨 **Agrupado por ano, a acurácia (0,506) fica abaixo da classe majoritária
+(0,530).** Responder sempre "não branqueou" acertaria mais.
+
+Boosting melhora, mas não muda a forma:
+
+| Modelo | PR-AUC sítio | PR-AUC ano |
+|---|---|---|
+| logística | 0,803 | 0,614 |
+| **boosting** | **0,867** | **0,683** |
+
+O boosting ganhar aqui é o oposto da entrega 1, e faz sentido: as classes estão
+equilibradas (53%), a relação com o DHW tem limiar, e a árvore acha interação.
+
+### 11.4 Por que o número do "ano" é o que importa — com números pequenos
+
+A diferença entre 0,803 e 0,614 não é detalhe técnico. Ela é o resultado.
+
+Imagine dois recifes vizinhos, **A** e **B**, visitados em 2005 e em 2010.
+
+| Visita | Recife | Ano | Anomalia térmica | Branqueou? |
+|---|---|---|---|---|
+| 1 | A | 2005 | +1,2 °C | sim |
+| 2 | B | 2005 | +1,2 °C | sim |
+| 3 | A | 2010 | +0,3 °C | sim |
+| 4 | B | 2010 | +0,3 °C | sim |
+
+Em 2005 branqueou com muito calor. Em 2010 branqueou com pouco — porque naquele
+ano houve, digamos, uma pluma de água doce que o modelo não vê.
+
+**Agrupando por sítio:** deixo o recife B de fora. Treino nas visitas 1 e 3 (do
+A), testo nas 2 e 4 (do B). Mas as visitas 1 e 2 são o *mesmo ano*, com a
+*mesma anomalia*. O modelo já viu 2005 e já viu 2010 — só não viu aquele
+pedaço de mapa. **Ele acerta as duas.** Parece ótimo.
+
+**Agrupando por ano:** deixo 2010 inteiro de fora. Treino nas visitas 1 e 2, em
+que branqueamento veio com +1,2 °C. Testo nas 3 e 4, em que veio com +0,3 °C.
+O modelo aprendeu "calor alto → branqueia", vê +0,3 e responde "não". **Erra as
+duas.**
+
+O modelo não era bom; ele estava **reconhecendo o ano**, não o fenômeno. E como
+o que o site precisa fazer é avisar sobre um evento **futuro**, que por
+definição ainda não está no treino, o número honesto é o do ano.
+
+É a mesma lógica que a entrega 1 aplicou ao proibir divisão aleatória em série
+temporal ([METODOLOGIA.md](METODOLOGIA.md) §3) — aqui ela só reaparece numa
+base transversal.
+
+### 11.5 O que **não** ajudou
+
+| Conjunto | n | PR-AUC sítio | PR-AUC ano | taxa base |
+|---|---|---|---|---|
+| 8 térmicas do dia | 166 | 0,803 | 0,614 | 0,530 |
+| \+ 23 de climatologia do sítio (31) | 166 | 0,842 | 0,662 | 0,530 |
+| \+ 4 de contexto (12) | **148** | 0,628 | **0,457** | 0,473 |
+| \+ climatologia e contexto (35) | 148 | 0,704 | 0,465 | 0,473 |
+
+**A climatologia do sítio quase não acrescenta.** São 23 colunas a mais — 
+`TSA_Mean`, `SSTA_Maximum`, os desvios-padrão — e o ganho por ano é de 0,614
+para 0,662, com a acurácia caindo para 0,488. Elas descrevem o *lugar*, não a
+*visita*: são constantes dentro de cada sítio.
+
+🚨 **O contexto do sítio piora, e muito.** Profundidade, distância da costa,
+turbidez e frequência de ciclones levam a PR-AUC por ano a **0,457, abaixo da
+própria taxa base (0,473)** — pior que sortear. E ainda custam 18 visitas,
+porque `Depth_m` falta em 18 delas.
+
+Isso é resultado, não fracasso: com 166 visitas, cada coluna a mais é um grau
+de liberdade que a amostra não sustenta.
+
+### 11.6 O limiar de branqueamento importa
+
+`Percent_Bleaching > 0%` é uma escolha, e ela foi declarada. Vale mostrar o
+efeito:
+
+| Limiar | Positivos | Taxa base | PR-AUC ano | ganho |
+|---|---|---|---|---|
+| **> 0%** | 88 | 0,530 | 0,717 | 1,35× |
+| > 10% | 27 | 0,163 | 0,398 | 2,45× |
+
+Duas leituras opostas do mesmo modelo: em valor absoluto ele é muito pior para
+branqueamento severo (0,398 contra 0,717); em ganho relativo, muito melhor
+(2,45× contra 1,35×), porque o evento é raro.
+
+⚠️ **O equilíbrio de 53% não é artefato do limiar.** Dos 88 positivos, só **2
+têm menos de 0,1%** de colônias branqueadas, e a mediana deles é **5%**. A
+preocupação registrada em [GCBD.md](GCBD.md) — de que "0,1% não é o mesmo
+fenômeno que 85%" — foi medida e não se confirmou como problema.
+
+---
+
+## 12. A colinearidade voltou — e a versão interpretável
+
+Os coeficientes das 8 térmicas saíram invertidos, o mesmo defeito de §8:
+
+| Variável | Coeficiente | |
+|---|---|---|
+| `TSA_DHW` | +1,264 | |
+| `SSTA_Frequency` | +0,874 | |
+| `TSA_Frequency` | **−0,786** | 🚨 invertido |
+| `TSA` | +0,694 | |
+| `SSTA` | **−0,577** | 🚨 invertido |
+| `SSTA_DHW` | **−0,320** | 🚨 invertido |
+| `Windspeed` | −0,150 | esperado — vento resfria |
+| `Temperature_Kelvin` | **−0,136** | 🚨 invertido |
+
+`SSTA = −0,58` afirma que **anomalia quente de SST protege o coral**. É
+fisicamente falso.
+
+### 12.1 A causa, medida
+
+| Par | r |
+|---|---|
+| `SSTA_Frequency` × `TSA_Frequency` | **0,881** |
+| `Temperature_Kelvin` × `TSA` | **0,881** |
+| `SSTA_DHW` × `TSA_DHW` | 0,693 |
+| `SSTA` × `TSA` | 0,649 |
+
+Fator de inflação de variância (VIF acima de 5 já é sinal de alerta):
+
+| Variável | VIF |
+|---|---|
+| `SSTA_Frequency` | **11,72** |
+| `TSA` | **9,63** |
+| `TSA_Frequency` | **7,85** |
+| `SSTA_DHW` | 5,60 |
+| `Temperature_Kelvin` | 5,31 |
+
+A razão é estrutural, não acidental: o GCBD traz **duas famílias de anomalia**
+para a mesma coisa. `SSTA` é a anomalia contra a média do mês; `TSA` é a
+anomalia contra o **máximo** da climatologia mensal. São duas réguas do mesmo
+calor — e o modelo não consegue repartir crédito entre elas.
+
+### 12.2 Sete versões comparadas
+
+Logística, PR-AUC agrupada:
+
+| Versão | Features | sítio | **ano** | invertidos |
+|---|---|---|---|---|
+| A — as 8 | 8 | 0,803 | 0,614 | **4** |
+| F — `TSA_DHW`+`SSTA_Freq`+`TSA`+`SSTA` | 4 | 0,769 | **0,732** | 2 |
+| G — F sem `SSTA` | 3 | 0,703 | 0,686 | 1 |
+| H — G + `Windspeed` | 4 | 0,718 | 0,692 | 1 |
+| I — `TSA_DHW`+`TSA` | 2 | 0,699 | 0,692 | **0** |
+| **J — `TSA_DHW`+`TSA`+`Windspeed`** | **3** | **0,722** | **0,717** | **0** |
+| K — `TSA_DHW`+`SSTA_Freq`+`Windspeed` | 3 | 0,750 | 0,706 | 1 |
+
+**A versão J é a adotada como conjunto interpretável.** Três entradas, nenhum
+coeficiente invertido:
+
+| Variável | Coeficiente | Leitura física |
+|---|---|---|
+| `TSA_DHW` | **+0,950** | estresse térmico acumulado piora |
+| `Windspeed` | −0,355 | vento mistura a coluna d'água e resfria — negativo é o esperado |
+| `TSA` | +0,210 | anomalia térmica do dia piora |
+
+E o mais revelador: **sítio 0,722 contra ano 0,717.** A diferença sumiu. A
+versão A tinha um abismo (0,803 × 0,614); a J generaliza igualmente bem para um
+recife novo e para um ano novo — que é a assinatura de um modelo que aprendeu o
+fenômeno em vez de decorar os eventos.
+
+Importância por permutação, medida fora da dobra (agrupado por ano):
+
+| Variável | Queda do PR-AUC |
+|---|---|
+| `TSA_DHW` | +0,1002 |
+| `Windspeed` | +0,0728 |
+| `TSA` | +0,0064 |
+
+**`Windspeed` é a segunda variável mais útil** — e ela não é térmica. É o
+primeiro indício, em todo o projeto, de que algo além de temperatura carrega
+sinal sobre branqueamento.
+
+### 12.3 ⚠️ A ressalva de seleção
+
+**As métricas da versão J são otimistas.** O conjunto foi escolhido olhando a
+mesma validação que o avalia; sobre 166 visitas isso é viés real, não teórico.
+
+Por isso:
+
+- **A versão A (as 8 térmicas) é a que se relata sem ressalva.** Ela é o que o
+  GCBD oferece, sem escolha nossa. É o padrão do código (`FEATURES_PADRAO`).
+- **A versão J é o conjunto interpretável**, disponível em
+  `FEATURES_INTERPRETAVEIS` e no `--interpretavel`, com esta ressalva anexada.
+- **As conclusões de §11 não dependem da escolha:** a regra da NOAA pega 10 de
+  88 em qualquer versão, e o abismo sítio×ano aparece em todas as sete.
+
+Confirmar a versão J exigiria um conjunto de teste que não participou da
+escolha. Com 166 visitas, ele não existe — e inventá-lo dividindo mais seria
+trocar um viés por outro.
+
+---
+
+## 13. O que este passo permite e não permite concluir
+
+**Permite:**
+
+1. A regra publicada da NOAA, aplicada ao Brasil, **perde 78 de 88 eventos**.
+2. Modelos treinados só com térmicas ficam entre 1,16× e 1,35× o acaso quando
+   testados num ano que não viram.
+3. **Sobra o que explicar** — que é exatamente a premissa do projeto, e que a
+   entrega 1 não tinha como testar.
+
+**Não permite:**
+
+1. **Dizer que salinidade e oxigênio explicam o resto.** Eles não foram
+   medidos aqui. O que se mostrou é que há espaço, não quem o ocupa.
+2. **Estender ao presente.** O dado brasileiro do GCBD termina em **2010**.
+   Nada dos eventos de 2020 ou 2024 tem rótulo observado.
+3. **Falar de Picãozinho.** O sítio GCBD mais próximo está a 198 km.
+4. **Tratar 166 visitas como amostra grande.** Diferença de PR-AUC abaixo de
+   ~0,05 entre versões é ruído.
+
+---
+
+## 14. O próximo passo, agora com motivo medido
+
+O passo 2 do plano de [GCBD.md](GCBD.md) — ingerir salinidade e oxigênio numa
+janela de 90 dias antes de cada visita — deixou de ser "seria interessante" e
+passou a ter uma lacuna quantificada para preencher:
+
+> 78 branqueamentos observados sem nenhum estresse térmico acumulado.
+
+O custo continua o mesmo: **35.460 medições**, menos que o backfill do
+Copernicus já feito. E agora a comparação tem um baseline forte e medido, que
+era a razão de fazer o passo 1 antes.
 
 ---
 
@@ -524,12 +847,27 @@ python backend\manage.py shell -c "from aquaculture.models import LocalRecife; f
 
 Semente fixa (`42`) em ambos os modelos; o resultado é determinístico.
 
+Entrega 2, passo 1 (§11–§14) — não toca no banco nem na rede, só no CSV do GCBD:
+
+```bash
+python backend\manage.py treinar_gcbd --importancia
+```
+
+```bash
+python backend\manage.py treinar_gcbd --interpretavel --importancia
+```
+
+O arquivo do GCBD não é versionado. Baixe pelo DOI de [GCBD.md](GCBD.md) e
+coloque em `dados/global_bleaching_environmental.csv`, ou aponte `GCBD_CSV`
+para ele.
+
 ---
 
 ## Histórico
 
 | Data | Alteração |
 |---|---|
+| 26/07/2026 | **Entrega 2, passo 1 rodado (§11–§14).** Alvo passa a ser branqueamento observado. Três correções ao levantamento inicial: a unidade amostral é a **visita** (166, não 313 amostras), `ClimSST` tem **sentinela** em 115 de 313 registros e saiu do baseline, e o equilíbrio de 53% **não** é artefato do limiar (só 2 dos 88 positivos têm < 0,1%). O resultado central: a regra da NOAA tem precisão 1,000 mas revocação 0,114 — **78 dos 88 branqueamentos ocorreram com `TSA_DHW` = 0**. Modelos térmicos ficam em 1,16×–1,35× o acaso ao serem testados num ano não visto, e o abismo sítio (0,803) × ano (0,614) mostra que a versão com 8 features reconhecia o evento, não o fenômeno. Adotada a versão **J** (`TSA_DHW`, `TSA`, `Windspeed`) como conjunto interpretável — 3 entradas, zero coeficientes invertidos, sítio 0,722 × ano 0,717 —, com ressalva de viés de seleção declarada em §12.3. `Windspeed` aparece como segunda variável mais útil: o primeiro sinal não térmico do projeto. |
 | 25/07/2026 | **Versão D aplicada ao código.** `FEATURES_PADRAO` vazio e uma janela por variável — 4 entradas. Coeficientes todos com sinal fisicamente correto, e importância por coluna igual à por grupo, já que a colinearidade sumiu. Revelou o retrato honesto que a versão C disfarçava: **o modelo é essencialmente um modelo da trajetória do DHW** (+0,670 de 0,67 total), e as variáveis não térmicas não contribuem. Reforça a necessidade do GCBD para a entrega 2. |
 | 25/07/2026 | **§8 — colinearidade diagnosticada, e o diagnóstico anterior estava errado.** Não é nível×trajetória (r ≈ 0,10) e sim **as duas janelas da mesma variável** (`dhw_variacao_7d` × `dhw_variacao_14d`, **r = 0,976**). Cinco versões comparadas: a **D — uma janela por variável** resolve, com 4 entradas em vez de 10, F1 0,728 contra 0,707, o melhor PR-AUC (0,790) e **nenhum coeficiente térmico invertido**. Custo: 16 episódios em vez de 18, dentro do ruído. Recomendação registrada: adotar D — ainda **não aplicada ao código**. |
 | 25/07/2026 | Acrescentada a demonstração numérica de por que a colinearidade produz coeficiente absurdo — três fórmulas com coeficientes diferentes, incluindo um negativo, dando **a mesma predição**. E registrado o desenho do experimento que vai resolvê-la (§9), com as duas saídas possíveis já decididas. |
