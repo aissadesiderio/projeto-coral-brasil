@@ -328,17 +328,35 @@ class JanelaTests(TestCase):
             variacoes, {'sst', 'dhw', 'salinidade', 'oxigenio'}
         )
 
-    def test_padrao_deriva_das_features_e_nao_e_lista_fixa(self):
-        """Pedir features=('sst',) nao pode passar a exigir salinidade."""
+    def test_padrao_deriva_das_variaveis_e_nao_e_lista_fixa(self):
+        """Pedir ('sst',) nao pode passar a exigir salinidade."""
         janelas = janelas_para(('sst',))
 
         self.assertEqual({j.variavel for j in janelas}, {'sst'})
-        self.assertEqual({j.dias for j in janelas}, {7, 14})
 
-    def test_variavel_nao_termica_nao_ganha_janela_de_14_dias(self):
-        janelas = janelas_para(('salinidade',))
+    def test_uma_janela_por_variavel_e_so_uma(self):
+        """Trava a correcao de 25/07/2026 - ver docs/RESULTADOS.md secao 8.
 
-        self.assertEqual([j.dias for j in janelas], [7])
+        Duas janelas da mesma variavel tinham r = 0,976 entre si, o que
+        tornava os coeficientes ininterpretaveis sem comprar desempenho.
+        """
+        janelas = janelas_para(('sst', 'dhw', 'salinidade', 'oxigenio'))
+
+        por_variavel = {}
+        for janela in janelas:
+            por_variavel.setdefault(janela.variavel, []).append(janela.dias)
+
+        for variavel, dias in por_variavel.items():
+            self.assertEqual(
+                len(dias), 1,
+                f'{variavel} tem mais de uma janela: {dias}',
+            )
+
+    def test_nenhum_nivel_entra_como_feature_por_padrao(self):
+        """Versao D: so trajetorias. Ver docs/RESULTADOS.md secao 8."""
+        from ml.dataset import FEATURES_PADRAO
+
+        self.assertEqual(FEATURES_PADRAO, ())
 
     def test_conjunto_sem_janela_e_possivel_para_comparacao(self):
         serie(self.local, date(2024, 1, 1), 30)
@@ -576,11 +594,8 @@ class ConjuntoMultiLocalTests(TestCase):
 
         conjunto = montar_todos([local], horizonte=7, features=('sst',))
 
-        self.assertEqual(
-            [j.nome for j in conjunto.janelas],
-            ['sst_variacao_7d', 'sst_variacao_14d'],
-        )
-        self.assertIn('sst_variacao_14d', conjunto.quadro.columns)
+        self.assertEqual([j.nome for j in conjunto.janelas], ['sst_variacao_7d'])
+        self.assertIn('sst_variacao_7d', conjunto.quadro.columns)
 
     def test_empilha_locais_com_coluna_de_origem(self):
         locais = []

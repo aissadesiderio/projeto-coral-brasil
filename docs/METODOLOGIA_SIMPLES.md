@@ -221,16 +221,59 @@ Ela diz coisas assim:
 Isso é obviamente falso. Calor acumulado é justamente o que mata coral.
 
 **O motivo é que medimos a mesma coisa duas vezes.** Cada variável entra na
-receita de dois jeitos: *"quanto está"* e *"quanto mudou na última semana"*.
+receita com **duas medidas de mudança**: quanto mudou na **última semana** e
+quanto mudou nas **últimas duas semanas**.
 
 É como uma receita que manda:
 
-> - coloque **2 colheres de sal**
 > - coloque **1 colher a mais de sal que ontem**
+> - coloque **2 colheres a mais de sal que na semana passada**
 
-As duas instruções se sobrepõem. O prato pode até sair certo, mas **cada linha
-sozinha deixa de fazer sentido** — e uma delas pode até virar negativa para
-compensar a outra.
+As duas instruções dizem quase a mesma coisa — quem sabe uma já sabe a outra. O
+prato pode até sair certo, mas **cada linha sozinha deixa de fazer sentido**, e
+uma delas pode virar negativa para compensar a outra.
+
+> ⚠️ **Primeiro achamos que o problema era outro.** Suspeitávamos que a
+> sobreposição fosse entre *"quanto está"* e *"quanto mudou"*. Medimos, e essas
+> duas quase não se sobrepõem — saber que o calor está em 8 diz pouco sobre ele
+> ter subido ou descido. A sobreposição real era entre as **duas medidas de
+> mudança**, que se parecem em **97%**.
+
+### Por que isso acontece, com números
+
+O nome técnico é **colinearidade**: duas informações que dizem quase a mesma
+coisa.
+
+No nosso caso, cada variável entra duas vezes:
+
+| Coluna | O que ela diz |
+|---|---|
+| `dhw` | o calor acumulado **é 8** |
+| `dhw_variacao_14d` | ele **subiu 3** nas últimas duas semanas |
+
+Elas andam juntas. Sabendo uma, você já sabe muito sobre a outra.
+
+Agora suponha que a verdade seja simples — **risco = 2 × calor acumulado** — e
+que, nos nossos dados, a variação seja mais ou menos **metade** do calor
+acumulado.
+
+O modelo pode escrever essa mesma verdade de infinitas formas, e **todas dão a
+resposta certa**:
+
+| Fórmula que o modelo poderia escolher | Resultado |
+|---|---|
+| `2 × dhw` + `0 × variação` | ✅ certo |
+| `0 × dhw` + `4 × variação` | ✅ certo |
+| **`−2 × dhw`** + `8 × variação` | ✅ **também certo** |
+
+Confira a última: se a variação é metade do dhw, então
+`−2×dhw + 8×(dhw÷2)` = `−2dhw + 4dhw` = `2×dhw`. Bate.
+
+As três previsões são **idênticas**. O modelo escolhe uma qualquer — e se
+escolher a terceira, a explicação dele passa a dizer *"mais calor acumulado =
+menos risco"*.
+
+> **A previsão não está errada. A explicação é que não é confiável.**
 
 ### O que dá para afirmar mesmo assim
 
@@ -245,10 +288,31 @@ o modelo piora:
 | Salinidade | nada |
 
 O que **não** dá é dizer a direção ("subir isso aumenta o risco em tanto") —
-não até separarmos as medidas repetidas.
+não enquanto as medidas repetidas estiverem juntas.
 
 E é bom que isso tenha aparecido agora: se alguém numa banca lesse o
 "calor acumulado diminui o risco" antes de nós, seria bem pior.
+
+### E já sabemos como consertar
+
+Testamos uma receita com **uma medida de mudança só** — a da última semana, sem
+a de duas semanas. Resultado:
+
+| | Receita atual | Receita enxuta |
+|---|---|---|
+| Instruções | 10 | **4** |
+| Acerto | 0,707 | **0,728** |
+| Linhas com sinal invertido | 1 | **nenhuma** |
+
+**A receita enxuta acerta um pouco mais, usa menos da metade das instruções, e
+volta a fazer sentido lida linha por linha.** O calor acumulado aparece como o
+maior fator, positivo, como a física manda.
+
+O único custo: ela pega **16 dos 19 eventos** em vez de 18 — e essa diferença
+está dentro da margem de erro do projeto.
+
+A decisão registrada é adotar a receita enxuta. Um modelo que se explica vale
+mais que dois eventos de vantagem dentro da margem de erro.
 
 ---
 

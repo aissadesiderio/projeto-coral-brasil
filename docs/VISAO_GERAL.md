@@ -414,8 +414,7 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 
 | | |
 |---|---|
-| **Resolver a colinearidade** | ⚠️ hoje os coeficientes não são interpretáveis — o `dhw` sai negativo. Sem isso não há como afirmar direção de efeito |
-| **GCBD** | sem rótulo observado não há entrega 2 |
+| **GCBD** | ⬆️ subiu de prioridade: com o BAA como alvo, nenhuma variável não térmica contribui ([RESULTADOS.md](RESULTADOS.md) §8). Só rótulo observado pode responder a pergunta da entrega 2 |
 | **Projeção do Neo4j** | ⚠️ o grafo ainda mostra dado do caminho legado |
 | **Agendamento** | nada roda sozinho ainda |
 | **API e site** | endpoints, paginação, mapa, séries temporais |

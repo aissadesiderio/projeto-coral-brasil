@@ -194,16 +194,22 @@ Não é indecisão — cada um responde uma pergunta diferente.
 cumpre*. Ela dá um coeficiente por variável, o que em princípio permite
 afirmar *"o oxigênio caindo aumenta o risco, nesta magnitude"*.
 
-🚨 **Medido em 25/07/2026: aqui os coeficientes não são interpretáveis.** Cada
-variável entra junto com a própria trajetória, e as duas são correlacionadas
-por construção. O resultado é que o coeficiente do `dhw` saiu **negativo** e o
-do `oxigenio` positivo — o que lido como mecanismo diria que calor acumulado
-protege o coral. É artefato de colinearidade, não física.
+🚨 **Medido em 25/07/2026: com o conjunto atual de features, os coeficientes
+não são interpretáveis.** O do `dhw` saiu **negativo** — lido como mecanismo,
+diria que calor acumulado protege o coral. É artefato de colinearidade.
 
-Interpretabilidade de coeficiente exige features não correlacionadas. Enquanto
-isso não for resolvido — usando só nível *ou* só trajetória, ou uma medida que
-trate a correlação —, **a leitura defensável é a importância por grupo**, que
-dá magnitude mas não direção. Ver [RESULTADOS.md](RESULTADOS.md) §7.
+**A causa medida não é a que se supunha.** Nível e trajetória quase não se
+correlacionam (r ≈ 0,10). A colinearidade está entre as **duas janelas da mesma
+variável**: `dhw_variacao_7d` e `dhw_variacao_14d` têm **r = 0,976**.
+
+✅ **E há solução medida:** usar **uma janela por variável** elimina o problema
+sem custo de desempenho — 4 entradas em vez de 10, F1 0,728 contra 0,707, o
+melhor PR-AUC de todas as versões testadas, e **nenhum coeficiente térmico
+invertido**. Ver [RESULTADOS.md](RESULTADOS.md) §8 para as cinco versões
+comparadas.
+
+Enquanto essa mudança não for aplicada ao código, **a leitura defensável é a
+importância por grupo**, que dá magnitude mas não direção.
 
 **O boosting responde "e se um modelo mais expressivo ganhasse?"**. Se ele
 **não** superar a logística, isso é resultado publicável: ou a relação é

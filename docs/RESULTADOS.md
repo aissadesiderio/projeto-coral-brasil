@@ -226,6 +226,11 @@ Não é conclusão — é a próxima coisa a medir.
 
 ## 7. Importância das variáveis — e o indício do oxigênio **não** se confirmou
 
+⚠️ **Os números desta seção são da versão C** (10 entradas), que era o padrão
+quando a medição foi feita. O padrão mudou para a versão D em 25/07/2026 — ver
+§8 para os números atuais. Esta seção fica como registro do percurso: foi ela
+que revelou a colinearidade que a §8 diagnosticou.
+
 Medida em 25/07/2026, dentro do *leave-year-out*: para cada ano com evento,
 treina sem ele e mede a importância **nele**. Duas medidas, porque uma sozinha
 engana — ver [METODOLOGIA.md](METODOLOGIA.md) §5.
@@ -314,6 +319,29 @@ Nenhuma das duas é verdade. O que acontece é **colinearidade**: `dhw` e
 `dhw_variacao_14d` andam juntos, o modelo usa a trajetória, e o coeficiente do
 nível vira um termo de correção sem significado físico isolado.
 
+#### Por que a colinearidade produz coeficiente absurdo
+
+Suponha a verdade `risco = 2 × dhw`, e que na nossa série a variação seja
+aproximadamente **metade** do dhw. Então estas três fórmulas são
+**numericamente equivalentes**:
+
+| Fórmula | Verificação |
+|---|---|
+| `2·dhw + 0·variação` | = 2·dhw |
+| `0·dhw + 4·variação` | = 4·(dhw/2) = 2·dhw |
+| **`−2·dhw + 8·variação`** | = −2·dhw + 4·dhw = **2·dhw** |
+
+As três dão **exatamente a mesma predição**. O otimizador escolhe uma conforme
+a regularização e o ruído da dobra — e nada impede que escolha a terceira, em
+que o coeficiente do nível é negativo.
+
+> **A predição não está errada. O que não é identificável é o coeficiente.**
+
+É por isso que a queda por permutação **por grupo** (+0,492 para o DHW) é
+confiável enquanto o coeficiente individual não é: a permutação mede o efeito
+de destruir a informação, que é único; o coeficiente mede uma repartição, que
+não é.
+
 **Consequência para o trabalho:** o argumento de que "a logística é
 interpretável" — registrado em [METODOLOGIA.md](METODOLOGIA.md) §5 — **só vale
 com features não correlacionadas**. As nossas são correlacionadas por
@@ -326,7 +354,133 @@ direção — só magnitude.
 
 ---
 
-## 8. O que **não** se pode concluir
+## 8. A colinearidade — o diagnóstico estava errado
+
+Experimento rodado em 25/07/2026. **Ele derrubou a hipótese que este documento
+registrava**, e vale começar por isso.
+
+### O que eu supunha, e o que foi medido
+
+A §7 dizia que a colinearidade vinha de *"cada variável entrar junto com a
+própria trajetória"*. **Falso.** Correlação medida:
+
+| Par | r |
+|---|---|
+| `sst` × `sst_variacao_7d` | +0,104 |
+| `dhw` × `dhw_variacao_7d` | +0,107 |
+| `oxigenio` × `oxigenio_variacao_7d` | +0,100 |
+| `salinidade` × `salinidade_variacao_7d` | +0,253 |
+
+Nível e trajetória **quase não se correlacionam** — o que, pensando depois, é
+óbvio: saber que o DHW está em 8 diz pouco sobre ele ter subido ou descido.
+
+A colinearidade real está em outro lugar:
+
+| Par | r |
+|---|---|
+| `dhw_variacao_7d` × `dhw_variacao_14d` | **+0,976** |
+| `sst_variacao_7d` × `sst_variacao_14d` | **+0,704** |
+
+**São as duas janelas da mesma variável.** A variação em 14 dias contém a de 7
+dias — a de 14 é quase a de 7 vezes dois. Estávamos medindo a mesma coisa duas
+vezes, mas não no eixo que eu supunha.
+
+### As cinco versões testadas
+
+Regressão logística, horizonte 7 dias, mesmo *leave-year-out*:
+
+| Versão | Entradas | F1 | PR-AUC | Brier | Episódios | Coef. térmico invertido |
+|---|---|---|---|---|---|---|
+| A — só níveis | 4 | 0,489 | 0,676 | 0,104 | 15/19 | 0 |
+| B — só trajetórias (7d e 14d) | 6 | 0,731 | 0,757 | 0,044 | 17/19 | 1 |
+| C — ambos *(no ar hoje)* | 10 | 0,707 | 0,760 | 0,047 | **18/19** | 1 |
+| **D — só trajetórias de 7d** | **4** | **0,728** | **0,790** | **0,043** | 16/19 | **0** |
+| E — níveis + trajetória 7d | 8 | 0,674 | 0,791 | 0,049 | 17/19 | 1 |
+
+### O que isso resolve
+
+**A versão D elimina o problema.** Com uma janela só por variável, a
+correlação de 0,976 desaparece e os coeficientes voltam a fazer sentido físico:
+
+| Variável | Coeficiente |
+|---|---|
+| `dhw_variacao_7d` | **+4,475** |
+| `sst_variacao_7d` | +0,145 |
+| `salinidade_variacao_7d` | +0,082 |
+| `oxigenio_variacao_7d` | −0,079 |
+
+Todos os térmicos positivos, com o DHW dominando — exatamente o que a física
+prevê. **Nenhum sinal invertido.**
+
+E ela não custa desempenho: F1 **0,728** contra 0,707 da versão atual, com o
+**melhor PR-AUC de todas** (0,790) e a melhor calibração (0,043) — usando
+**4 entradas em vez de 10**.
+
+### O custo, e a decisão que ele exige
+
+D detecta **16 episódios de 19**, contra 18 da versão C.
+
+Essa é a única métrica em que C ganha, e é justamente a que este projeto
+declarou ser a mais importante ([METODOLOGIA.md](METODOLOGIA.md) §6).
+
+| | Interpretável | Episódios |
+|---|---|---|
+| **D** — 4 entradas | ✅ sim | 16/19 |
+| **C** — 10 entradas | ❌ não | **18/19** |
+
+⚠️ **Dois episódios em 19, com ~4 anos-evento efetivos, está dentro do ruído**
+que este documento define como limite (§9). Não é diferença que sustente
+escolha sozinha.
+
+**Recomendação: adotar D.** Um modelo que se explica vale mais que dois
+episódios de vantagem dentro da margem de erro — e a versão C não permite
+afirmar direção de efeito nenhuma, que era o objetivo original do experimento.
+
+### ✅ Aplicada ao código em 25/07/2026
+
+`FEATURES_PADRAO` passou a ser vazio e `janelas_para` a gerar **uma janela por
+variável**. O padrão do projeto agora é:
+
+```
+sst_variacao_7d, dhw_variacao_7d, salinidade_variacao_7d, oxigenio_variacao_7d
+```
+
+Um teste trava a regra (`test_uma_janela_por_variavel_e_so_uma`), com a
+referência a esta seção — para que ninguém acrescente a segunda janela de novo
+sem esbarrar no motivo.
+
+### O que a mudança revelou na leitura
+
+Com uma coluna por variável, **a importância por coluna e por grupo passam a
+coincidir** — a repartição de crédito some junto com a colinearidade. E o
+retrato fica muito mais direto:
+
+| Variável | Queda do PR-AUC | Coeficiente |
+|---|---|---|
+| **`dhw_variacao_7d`** | **+0,670** | **+4,445** |
+| `sst_variacao_7d` | +0,004 | +0,127 |
+| `salinidade_variacao_7d` | +0,000 | +0,085 |
+| `oxigenio_variacao_7d` | −0,001 | −0,090 |
+
+**Todos os coeficientes agora fazem sentido físico**, e nenhum está invertido.
+
+Mas o retrato honesto é mais duro do que o da versão C sugeria:
+
+> 🚨 **O modelo é, essencialmente, um modelo da trajetória do DHW.** Sozinha,
+> ela responde por praticamente toda a capacidade preditiva. SST contribui
+> quase nada; salinidade e oxigênio, nada.
+
+Na versão C esse fato ficava disfarçado, repartido entre dez colunas
+correlacionadas. Ele não mudou — só ficou visível.
+
+**Consequência para a entrega 2:** com os dados atuais, a resposta a *"variáveis
+não térmicas acrescentam sinal?"* é **não**. Isso reforça, e não enfraquece, a
+necessidade do GCBD: enquanto o alvo for o BAA — que é definido a partir de
+temperatura —, é pouco provável que qualquer outra variável apareça.
+
+---
+
+## 9. O que **não** se pode concluir
 
 Estes números orientam decisão de projeto. Não sustentam afirmação científica.
 
@@ -345,16 +499,20 @@ Estes números orientam decisão de projeto. Não sustentam afirmação científ
 
 ---
 
-## 9. Próximos passos que estes resultados indicam
+## 10. Próximos passos que estes resultados indicam
 
 | Prioridade | O quê | Por quê |
 |---|---|---|
 | ✅ feito | ~~Importância das variáveis~~ | Feito em 25/07/2026 (§7): derrubou o indício do oxigênio e revelou que os coeficientes não são interpretáveis |
-| Alta | **Resolver a colinearidade** | Sem isso não há como afirmar direção de efeito — nem para o TCC, nem para o painel |
+| ✅ feito | ~~Diagnosticar a colinearidade~~ | Feito (§8): a causa é a dupla janela 7d/14d (r = 0,976), não nível×trajetória como se supunha |
+| ✅ feito | ~~Aplicar a versão D ao código~~ | Aplicada em 25/07/2026: 4 entradas, coeficientes íntegros, teste travando a regra |
+| **Alta** | **GCBD** | Com o BAA como alvo, a resposta a "variáveis não térmicas ajudam?" é **não**. Só rótulo observado pode mudar isso |
 | Alta | Investigar 2022 | É o único ano em que o modelo perde claramente |
 | Média | Curva de calibração | Brier bom não basta para exibir porcentagem num site |
 | Média | Testar horizontes entre 7 e 21 dias | A vantagem cresce com o horizonte; achar onde ela vira |
 | Baixa | Ajuste de hiperparâmetro | Só faz sentido depois de ampliar a base com o GCBD |
+
+---
 
 ---
 
@@ -372,6 +530,9 @@ Semente fixa (`42`) em ambos os modelos; o resultado é determinístico.
 
 | Data | Alteração |
 |---|---|
+| 25/07/2026 | **Versão D aplicada ao código.** `FEATURES_PADRAO` vazio e uma janela por variável — 4 entradas. Coeficientes todos com sinal fisicamente correto, e importância por coluna igual à por grupo, já que a colinearidade sumiu. Revelou o retrato honesto que a versão C disfarçava: **o modelo é essencialmente um modelo da trajetória do DHW** (+0,670 de 0,67 total), e as variáveis não térmicas não contribuem. Reforça a necessidade do GCBD para a entrega 2. |
+| 25/07/2026 | **§8 — colinearidade diagnosticada, e o diagnóstico anterior estava errado.** Não é nível×trajetória (r ≈ 0,10) e sim **as duas janelas da mesma variável** (`dhw_variacao_7d` × `dhw_variacao_14d`, **r = 0,976**). Cinco versões comparadas: a **D — uma janela por variável** resolve, com 4 entradas em vez de 10, F1 0,728 contra 0,707, o melhor PR-AUC (0,790) e **nenhum coeficiente térmico invertido**. Custo: 16 episódios em vez de 18, dentro do ruído. Recomendação registrada: adotar D — ainda **não aplicada ao código**. |
+| 25/07/2026 | Acrescentada a demonstração numérica de por que a colinearidade produz coeficiente absurdo — três fórmulas com coeficientes diferentes, incluindo um negativo, dando **a mesma predição**. E registrado o desenho do experimento que vai resolvê-la (§9), com as duas saídas possíveis já decididas. |
 | 25/07/2026 | **§7 — importância das variáveis medida.** DHW e SST respondem por mais de 95% da capacidade preditiva. **O indício do oxigênio (VARIAVEIS §3.6) não se confirmou**: a trajetória contribui −0,001 e −0,006, ou seja, ruído; só o nível contribui algo pequeno (+0,021). Documentada também a divisão de crédito por correlação (grupo DHW cai 0,492 mas suas colunas isoladas somam 0,284) e — mais importante — que **os coeficientes da logística não são interpretáveis aqui**: `dhw` saiu negativo por colinearidade. Isso corrige o argumento de interpretabilidade da METODOLOGIA §5. |
 | 25/07/2026 | Acrescentada a seção "Entendendo o resultado, com números pequenos": exemplo trabalhado de dois eventos (um de 60 dias, um de 5) mostrando por que contar dias e contar eventos dão respostas opostas, e por que a segunda é a que importa num sistema de aviso. |
 | 25/07/2026 | Primeira rodada. Empate no acerto diário em 7 dias (F1 0,741 contra 0,738), vitória na detecção de episódios (18/19 contra 15/19) e vitória nas duas métricas em 14 dias. Confirmado que as features de trajetória são o que sustenta o resultado: sem elas o F1 cai para 0,489. 2022 identificado como o ano em que o modelo falha. |

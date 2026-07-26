@@ -34,9 +34,20 @@ from datetime import timedelta
 from aquaculture.models import MedicaoAmbiental
 from ingestao.conectores.noaa_crw import LIMIAR_ALERTA
 
-# As features do baseline, conforme docs/VARIAVEIS.md secao 1. KD490 saiu por
+# As variaveis do baseline, conforme docs/VARIAVEIS.md secao 1. KD490 saiu por
 # so existir de 2023-11 em diante e nao ter reanalise (secao 3.5).
-FEATURES_PADRAO = ('sst', 'dhw', 'salinidade', 'oxigenio')
+VARIAVEIS_BASELINE = ('sst', 'dhw', 'salinidade', 'oxigenio')
+
+# **Nenhum nivel entra como feature, por decisao medida** (versao D de
+# docs/RESULTADOS.md secao 8). O modelo usa so as trajetorias.
+#
+# Parece contraintuitivo tirar o valor absoluto, entao vale o numero: com so
+# os niveis a logistica faz F1 0,489; so com trajetorias, 0,728; com os dois,
+# 0,674. O nivel nao acrescenta e ainda piora - o que faz sentido para um alvo
+# que e *mudanca de estado* daqui a N dias, nao o estado de hoje.
+#
+# Passe `features=VARIAVEIS_BASELINE` para reproduzir a versao com niveis.
+FEATURES_PADRAO = ()
 
 ALVO_PADRAO = 'baa'
 
@@ -100,24 +111,30 @@ class Janela:
 # operacoes ficam disponiveis para quem quiser testar explicitamente.
 OPERACOES = ('variacao', 'media', 'maximo')
 
-# Variaveis termicas, que ganham tambem a janela de 14 dias: o sinal delas e
-# mais lento, e e nelas que a trajetoria de medio prazo tem mecanismo conhecido.
-TERMICAS = ('sst', 'dhw')
+# Uma janela por variavel, e so.
+#
+# Ate 25/07/2026 o padrao tinha duas - 7 e 14 dias para as termicas. A medicao
+# mostrou que as duas sao quase a mesma coluna: `dhw_variacao_7d` e
+# `dhw_variacao_14d` tem **r = 0,976**. Isso tornava os coeficientes
+# ininterpretaveis (o do `dhw` saia negativo, dizendo que calor acumulado
+# protege o coral) sem comprar desempenho: com uma janela so, o F1 sobe de
+# 0,707 para 0,728 e o PR-AUC de 0,760 para 0,790, com 4 entradas em vez de 10.
+#
+# Ver docs/RESULTADOS.md secao 8 para as cinco versoes comparadas.
+DIAS_DA_JANELA = 7
 
 
-def janelas_para(features):
-    """Conjunto padrao de janelas para as features pedidas.
+def janelas_para(variaveis):
+    """Janela padrao das variaveis pedidas: a trajetoria de 7 dias de cada uma.
 
-    Derivado das features, e nao uma lista fixa: um conjunto montado com
-    `features=('sst',)` nao deveria passar a exigir salinidade so porque ela
-    esta no padrao do projeto.
+    Derivado das variaveis, e nao uma lista fixa: um conjunto montado com
+    `('sst',)` nao deveria passar a exigir salinidade so porque ela esta no
+    padrao do projeto.
     """
-    janelas = [Janela(f, 7, 'variacao') for f in features]
-    janelas += [Janela(f, 14, 'variacao') for f in features if f in TERMICAS]
-    return tuple(janelas)
+    return tuple(Janela(v, DIAS_DA_JANELA, 'variacao') for v in variaveis)
 
 
-JANELAS_PADRAO = janelas_para(FEATURES_PADRAO)
+JANELAS_PADRAO = janelas_para(VARIAVEIS_BASELINE)
 
 
 class FeatureComVazamento(ValueError):
@@ -291,7 +308,13 @@ def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
     import pandas as pd
 
     features = tuple(features)
-    janelas = tuple(janelas_para(features) if janelas is None else janelas)
+    # Sem features de nivel, a janela vem das variaveis do baseline; com elas,
+    # das proprias - para `features=('sst',)` nao passar a exigir salinidade.
+    janelas = tuple(
+        janelas_para(features or VARIAVEIS_BASELINE)
+        if janelas is None
+        else janelas
+    )
     _recusar_vazamento(features, alvo)
     _validar_janelas(janelas, alvo)
 
@@ -372,7 +395,13 @@ def montar_todos(locais, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
     import pandas as pd
 
     features = tuple(features)
-    janelas = tuple(janelas_para(features) if janelas is None else janelas)
+    # Sem features de nivel, a janela vem das variaveis do baseline; com elas,
+    # das proprias - para `features=('sst',)` nao passar a exigir salinidade.
+    janelas = tuple(
+        janelas_para(features or VARIAVEIS_BASELINE)
+        if janelas is None
+        else janelas
+    )
 
     partes, dias, sem_alvo, sem_feature, sem_janela = [], 0, 0, 0, 0
     for local in locais:
