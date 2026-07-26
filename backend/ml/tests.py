@@ -21,8 +21,12 @@ from ml.baseline import (
     prever_persistencia,
 )
 from ml.dataset import (
+    JANELAS_PADRAO,
     FeatureComVazamento,
+    Janela,
+    aplicar_janela,
     carregar_largo,
+    janelas_para,
     montar,
     montar_todos,
 )
@@ -59,7 +63,7 @@ class MontagemTests(TestCase):
     def test_alvo_vem_do_futuro_e_features_do_presente(self):
         serie(self.local, date(2024, 1, 1), 20, baa=lambda i: i % 5)
 
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
         linha = conjunto.quadro.iloc[0]
 
         self.assertEqual(linha['data'], date(2024, 1, 1))
@@ -76,7 +80,7 @@ class MontagemTests(TestCase):
         buraco = date(2024, 1, 10)
         serie(self.local, date(2024, 1, 1), 20, baa=lambda i: i, pular={buraco})
 
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
 
         for linha in conjunto.quadro.itertuples():
             self.assertEqual(
@@ -88,7 +92,7 @@ class MontagemTests(TestCase):
         buraco = date(2024, 1, 10)
         serie(self.local, date(2024, 1, 1), 20, pular={buraco})
 
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
 
         datas = set(conjunto.quadro['data'])
         self.assertNotIn(date(2024, 1, 3), datas)  # alvo cairia em 10/01
@@ -99,7 +103,7 @@ class MontagemTests(TestCase):
         buraco = date(2024, 1, 10)
         serie(self.local, date(2024, 1, 1), 20, baa=lambda i: i, pular={buraco})
 
-        conjunto = montar(self.local, horizonte=1, features=FEATURES)
+        conjunto = montar(self.local, horizonte=1, features=FEATURES, janelas=())
 
         alvos = dict(zip(conjunto.quadro['alvo_data'], conjunto.quadro['alvo']))
         self.assertNotIn(buraco, alvos)
@@ -111,7 +115,7 @@ class MontagemTests(TestCase):
             data=date(2024, 1, 3), variavel='sst'
         ).update(valor=None, quality_flag='invalido')
 
-        conjunto = montar(self.local, horizonte=1, features=FEATURES)
+        conjunto = montar(self.local, horizonte=1, features=FEATURES, janelas=())
 
         self.assertNotIn(date(2024, 1, 3), set(conjunto.quadro['data']))
         self.assertEqual(conjunto.descartadas_sem_feature, 1)
@@ -119,7 +123,7 @@ class MontagemTests(TestCase):
     def test_contagens_explicam_o_que_foi_descartado(self):
         serie(self.local, date(2024, 1, 1), 10)
 
-        conjunto = montar(self.local, horizonte=3, features=FEATURES)
+        conjunto = montar(self.local, horizonte=3, features=FEATURES, janelas=())
 
         self.assertEqual(conjunto.dias_na_serie, 10)
         self.assertEqual(conjunto.descartadas_sem_alvo, 3)  # os 3 ultimos dias
@@ -127,13 +131,13 @@ class MontagemTests(TestCase):
         self.assertIn('horizonte 3d', conjunto.resumo())
 
     def test_serie_vazia_nao_quebra(self):
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
 
         self.assertEqual(conjunto.n, 0)
 
     def test_horizonte_zero_e_recusado(self):
         with self.assertRaises(ValueError):
-            montar(self.local, horizonte=0, features=FEATURES)
+            montar(self.local, horizonte=0, features=FEATURES, janelas=())
 
     def test_mesma_variavel_em_duas_fontes_falha_alto(self):
         """Escolher em silencio esconderia mistura de produtos."""
@@ -141,7 +145,7 @@ class MontagemTests(TestCase):
         gravar(self.local, date(2024, 1, 1), {'sst': 27.0}, fonte='copernicus')
 
         with self.assertRaises(ValueError) as ctx:
-            montar(self.local, horizonte=1, features=FEATURES)
+            montar(self.local, horizonte=1, features=FEATURES, janelas=())
 
         self.assertIn('mais de uma fonte', str(ctx.exception))
 
@@ -163,25 +167,208 @@ class VazamentoTests(TestCase):
 
     def test_hotspot_e_recusado_como_feature(self):
         with self.assertRaises(FeatureComVazamento) as ctx:
-            montar(self.local, 7, features=('sst', 'hotspot'))
+            montar(self.local, 7, features=('sst', 'hotspot'), janelas=())
 
         self.assertIn('determina o BAA', str(ctx.exception))
 
     def test_area_de_alerta_e_recusada_como_feature(self):
         with self.assertRaises(FeatureComVazamento):
-            montar(self.local, 7, features=('sst', 'baa_area_alerta'))
+            montar(self.local, 7, features=('sst', 'baa_area_alerta'), janelas=())
 
     def test_o_proprio_alvo_e_recusado_como_feature(self):
         with self.assertRaises(FeatureComVazamento):
-            montar(self.local, 7, features=('sst', 'baa'))
+            montar(self.local, 7, features=('sst', 'baa'), janelas=())
 
     def test_alvo_atual_existe_mas_nao_esta_entre_as_features(self):
         serie(self.local, date(2024, 1, 1), 10)
 
-        conjunto = montar(self.local, horizonte=3, features=FEATURES)
+        conjunto = montar(self.local, horizonte=3, features=FEATURES, janelas=())
 
         self.assertIn('alvo_atual', conjunto.quadro.columns)
         self.assertNotIn('alvo_atual', conjunto.features)
+
+
+class JanelaTests(TestCase):
+    """As janelas olham so para tras, e contam dias - nunca posicoes."""
+
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='local-janela', nome='Janela', estado='Bahia',
+            cidade='Caravelas', latitude=-17.972, longitude=-38.688,
+        )
+
+    def test_variacao_e_a_diferenca_para_n_dias_atras(self):
+        # dhw = i/10, entao a variacao em 7 dias e sempre 0,7.
+        serie(self.local, date(2024, 1, 1), 30)
+        janelas = (Janela('dhw', 7, 'variacao'),)
+
+        conjunto = montar(self.local, 3, features=FEATURES, janelas=janelas)
+
+        valores = conjunto.quadro['dhw_variacao_7d']
+        self.assertTrue(all(abs(v - 0.7) < 1e-9 for v in valores))
+
+    def test_variacao_distingue_subida_de_descida(self):
+        """A razao de a janela existir: DHW=6 hoje nao diz a direcao."""
+        subindo = pd.Series([2.0, 3.0, 4.0, 5.0, 6.0])
+        descendo = pd.Series([10.0, 9.0, 8.0, 7.0, 6.0])
+        janela = Janela('dhw', 4, 'variacao')
+
+        self.assertEqual(aplicar_janela(subindo, janela).iloc[-1], 4.0)
+        self.assertEqual(aplicar_janela(descendo, janela).iloc[-1], -4.0)
+
+    def test_variacao_conta_dias_e_nao_linhas(self):
+        """Sem o reindex, `shift(7)` andaria 7 linhas e pularia a lacuna.
+
+        A variação compara dois instantes: basta que `t` e `t-7` existam. Um
+        dia faltando no meio não invalida — a diferença entre 11/01 e 04/01
+        continua sendo de sete dias. O que não pode é `t-7` virar `t-8`.
+        """
+        buraco = date(2024, 1, 10)
+        serie(self.local, date(2024, 1, 1), 30, pular={buraco})
+        janelas = (Janela('dhw', 7, 'variacao'),)
+
+        conjunto = montar(self.local, 3, features=FEATURES, janelas=janelas)
+
+        # dhw = i/10 por construção, então a variação de 7 dias é sempre 0,7 -
+        # e só continua sendo se o deslocamento for mesmo de 7 dias.
+        for linha in conjunto.quadro.itertuples():
+            self.assertAlmostEqual(linha.dhw_variacao_7d, 0.7, places=9)
+            self.assertNotEqual(linha.data, buraco)
+            self.assertNotEqual(linha.data - timedelta(days=7), buraco)
+
+    def test_media_descarta_amostra_com_lacuna_dentro_da_janela(self):
+        """Diferente da variação: média resume todos os dias do intervalo."""
+        buraco = date(2024, 1, 10)
+        serie(self.local, date(2024, 1, 1), 30, pular={buraco})
+        janelas = (Janela('dhw', 7, 'media'),)
+
+        conjunto = montar(self.local, 3, features=FEATURES, janelas=janelas)
+
+        for linha in conjunto.quadro.itertuples():
+            dias_da_janela = {linha.data - timedelta(days=k) for k in range(7)}
+            self.assertNotIn(buraco, dias_da_janela)
+
+    def test_media_de_janela_incompleta_e_descartada_e_nao_encurtada(self):
+        """Uma "media de 7 dias" que fosse de 5 mentiria sobre a cobertura."""
+        entrada = pd.Series([1.0, 2.0, float('nan'), 4.0, 5.0, 6.0, 7.0])
+
+        resultado = aplicar_janela(entrada, Janela('sst', 3, 'media'))
+
+        self.assertTrue(pd.isna(resultado.iloc[2]))
+        self.assertTrue(pd.isna(resultado.iloc[3]))
+        self.assertTrue(pd.isna(resultado.iloc[4]))
+        self.assertAlmostEqual(resultado.iloc[5], 5.0)
+
+    def test_janela_nao_enxerga_o_futuro(self):
+        """Vazamento seria uma janela centrada ou adiantada."""
+        entrada = pd.Series([1.0, 2.0, 3.0, 100.0])
+
+        media = aplicar_janela(entrada, Janela('sst', 3, 'media'))
+
+        # Em t=2 o valor 100 (em t=3) nao pode ter entrado.
+        self.assertAlmostEqual(media.iloc[2], 2.0)
+
+    def test_maximo_da_janela(self):
+        entrada = pd.Series([1.0, 9.0, 3.0, 2.0])
+
+        maximo = aplicar_janela(entrada, Janela('sst', 3, 'maximo'))
+
+        self.assertEqual(maximo.iloc[2], 9.0)
+        self.assertEqual(maximo.iloc[3], 9.0)
+
+    def test_janela_sobre_variavel_proibida_e_recusada(self):
+        """Media de 7 dias do HotSpot nao e menos derivada do alvo."""
+        with self.assertRaises(FeatureComVazamento) as ctx:
+            montar(self.local, 7, features=FEATURES,
+                   janelas=(Janela('hotspot', 7, 'media'),))
+
+        self.assertIn('hotspot', str(ctx.exception))
+
+    def test_operacao_desconhecida_e_recusada(self):
+        with self.assertRaises(ValueError):
+            montar(self.local, 7, features=FEATURES,
+                   janelas=(Janela('sst', 7, 'mediana'),))
+
+    def test_janela_pode_usar_variavel_fora_das_features(self):
+        serie(self.local, date(2024, 1, 1), 30)
+        janelas = (Janela('baa_area_alerta', 7, 'media'),)
+
+        # `baa_area_alerta` e proibida - confirma que a recusa vale mesmo
+        # quando ela nao esta entre as features.
+        with self.assertRaises(FeatureComVazamento):
+            montar(self.local, 7, features=('sst',), janelas=janelas)
+
+    def test_custo_da_janela_aparece_no_resumo(self):
+        serie(self.local, date(2024, 1, 1), 30)
+
+        com = montar(self.local, 3, features=FEATURES,
+                     janelas=(Janela('dhw', 7, 'variacao'),))
+        sem = montar(self.local, 3, features=FEATURES, janelas=())
+
+        self.assertEqual(com.descartadas_sem_janela, 7)
+        self.assertEqual(com.n, sem.n - 7)
+        self.assertIn('sem janela completa', com.resumo())
+        self.assertNotIn('sem janela', sem.resumo())
+
+    def test_colunas_de_entrada_juntam_features_e_janelas(self):
+        serie(self.local, date(2024, 1, 1), 30)
+        janelas = (Janela('dhw', 7, 'variacao'),)
+
+        conjunto = montar(self.local, 3, features=FEATURES, janelas=janelas)
+
+        self.assertEqual(
+            conjunto.colunas_de_entrada, ('sst', 'dhw', 'dhw_variacao_7d')
+        )
+        self.assertNotIn('alvo_atual', conjunto.colunas_de_entrada)
+
+    def test_padrao_do_projeto_traz_trajetoria_das_quatro_variaveis(self):
+        variacoes = {j.variavel for j in JANELAS_PADRAO if j.operacao == 'variacao'}
+
+        self.assertEqual(
+            variacoes, {'sst', 'dhw', 'salinidade', 'oxigenio'}
+        )
+
+    def test_padrao_deriva_das_features_e_nao_e_lista_fixa(self):
+        """Pedir features=('sst',) nao pode passar a exigir salinidade."""
+        janelas = janelas_para(('sst',))
+
+        self.assertEqual({j.variavel for j in janelas}, {'sst'})
+        self.assertEqual({j.dias for j in janelas}, {7, 14})
+
+    def test_variavel_nao_termica_nao_ganha_janela_de_14_dias(self):
+        janelas = janelas_para(('salinidade',))
+
+        self.assertEqual([j.dias for j in janelas], [7])
+
+    def test_conjunto_sem_janela_e_possivel_para_comparacao(self):
+        serie(self.local, date(2024, 1, 1), 30)
+
+        conjunto = montar(self.local, 3, features=FEATURES, janelas=())
+
+        self.assertEqual(conjunto.janelas, ())
+        self.assertEqual(conjunto.colunas_de_entrada, FEATURES)
+
+    def test_janela_nao_atravessa_a_fronteira_entre_locais(self):
+        """Concatenar antes de aplicar janela misturaria dois recifes."""
+        locais = []
+        for slug in ('a-janela', 'b-janela'):
+            local = LocalRecife.objects.create(
+                slug=slug, nome=slug, estado='Bahia', cidade='Caravelas',
+                latitude=-17.9, longitude=-38.6,
+            )
+            serie(local, date(2024, 1, 1), 20)
+            locais.append(local)
+
+        conjunto = montar_todos(
+            locais, horizonte=3, features=FEATURES,
+            janelas=(Janela('dhw', 7, 'variacao'),),
+        )
+
+        # Cada local perde os 7 primeiros dias: 20 - 3 (alvo) - 7 = 10.
+        for slug in ('a-janela', 'b-janela'):
+            parte = conjunto.quadro[conjunto.quadro['local'] == slug]
+            self.assertEqual(len(parte), 10)
+            self.assertEqual(parte['data'].min(), date(2024, 1, 8))
 
 
 class PersistenciaTests(TestCase):
@@ -194,7 +381,7 @@ class PersistenciaTests(TestCase):
     def test_persistencia_repete_o_valor_de_hoje(self):
         serie(self.local, date(2024, 1, 1), 20, baa=lambda i: i % 5)
 
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
         previsto = prever_persistencia(conjunto.quadro)
 
         pd.testing.assert_series_equal(
@@ -360,7 +547,7 @@ class DivisaoTemporalTests(TestCase):
     def test_ano_de_teste_sai_inteiro_do_treino(self):
         serie(self.local, date(2023, 12, 1), 90, baa=lambda i: i % 5)
 
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
         treino, teste = dividir_deixando_um_ano_de_fora(conjunto.quadro, 2024)
 
         self.assertTrue(all(d.year != 2024 for d in treino['alvo_data']))
@@ -371,7 +558,7 @@ class DivisaoTemporalTests(TestCase):
         """O que define a dobra e o dia sobre o qual a previsao fala."""
         serie(self.local, date(2023, 12, 28), 10, baa=lambda i: 1)
 
-        conjunto = montar(self.local, horizonte=7, features=FEATURES)
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
         _, teste = dividir_deixando_um_ano_de_fora(conjunto.quadro, 2024)
 
         self.assertTrue(all(d.year == 2023 for d in teste['data']))
@@ -379,6 +566,22 @@ class DivisaoTemporalTests(TestCase):
 
 
 class ConjuntoMultiLocalTests(TestCase):
+    def test_padrao_de_janela_tambem_vale_para_montar_todos(self):
+        """Regressao: `montar_todos` nao resolvia `janelas=None` e estourava."""
+        local = LocalRecife.objects.create(
+            slug='todos-padrao', nome='TP', estado='Bahia', cidade='Caravelas',
+            latitude=-17.9, longitude=-38.6,
+        )
+        serie(local, date(2024, 1, 1), 40)
+
+        conjunto = montar_todos([local], horizonte=7, features=('sst',))
+
+        self.assertEqual(
+            [j.nome for j in conjunto.janelas],
+            ['sst_variacao_7d', 'sst_variacao_14d'],
+        )
+        self.assertIn('sst_variacao_14d', conjunto.quadro.columns)
+
     def test_empilha_locais_com_coluna_de_origem(self):
         locais = []
         for slug in ('a-ml', 'b-ml'):
@@ -389,7 +592,7 @@ class ConjuntoMultiLocalTests(TestCase):
             serie(local, date(2024, 1, 1), 15)
             locais.append(local)
 
-        conjunto = montar_todos(locais, horizonte=7, features=FEATURES)
+        conjunto = montar_todos(locais, horizonte=7, features=FEATURES, janelas=())
 
         self.assertEqual(set(conjunto.quadro['local']), {'a-ml', 'b-ml'})
         self.assertEqual(conjunto.n, 16)
@@ -401,7 +604,7 @@ class ConjuntoMultiLocalTests(TestCase):
         )
         serie(local, date(2024, 1, 1), 60, baa=lambda i: 4 if 20 <= i < 40 else 0)
 
-        conjunto = montar(local, horizonte=7, features=FEATURES)
+        conjunto = montar(local, horizonte=7, features=FEATURES, janelas=())
         diario, episodio = avaliar_persistencia(conjunto)
 
         self.assertEqual(diario.n, conjunto.n)

@@ -9,10 +9,18 @@ Copernicus Marine Service.
 
 ## Documentação
 
+**Começando do zero? Leia [docs/VISAO_GERAL.md](docs/VISAO_GERAL.md).** Ele
+explica o problema biológico, o que cada variável significa e como as peças se
+encaixam, sem pressupor oceanografia nem aprendizado de máquina.
+
 | Documento | Conteúdo |
 |---|---|
+| [docs/VISAO_GERAL.md](docs/VISAO_GERAL.md) | **Porta de entrada.** O projeto explicado do início: branqueamento, DHW, BAA, o caminho do dado e o que falta |
 | [docs/FONTES.md](docs/FONTES.md) | Toda fonte de dados: origem, licença, citação e problemas de proveniência conhecidos |
 | [docs/VARIAVEIS.md](docs/VARIAVEIS.md) | Por que cada variável entra ou fica de fora do modelo |
+| [docs/METODOLOGIA_SIMPLES.md](docs/METODOLOGIA_SIMPLES.md) | **Sem jargão.** Como o modelo funciona e é testado, para ler e explicar |
+| [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | O mesmo, com os termos técnicos: a régua, o teste sem trapaça e por que acurácia não serve |
+| [docs/RESULTADOS.md](docs/RESULTADOS.md) | O que o experimento produziu, e o que ainda não dá para concluir |
 | [docs/arquitetura.md](docs/arquitetura.md) | Separação entre banco transacional e grafo científico |
 | [backend/docs/contrato_canonico_variaveis.md](backend/docs/contrato_canonico_variaveis.md) | Nomes, unidades e regras de qualidade canônicas |
 | [PLANEJAMENTO.md](PLANEJAMENTO.md) | Checklist de go-live |

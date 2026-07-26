@@ -73,6 +73,47 @@ Este documento registra **por que cada variável entra ou fica de fora** do mode
 
   **Recomendação: tirar o KD490 do baseline.** O custo é alto e o benefício está duplamente reduzido — o papel previsto (`PAR_fundo`) já está bloqueado por falta de PAR, então ele entraria só como turbidez. Reavaliar depois como *experimento no subperíodo* 2023-11 → presente, comparando um modelo com e sem KD490 na mesma janela. Se agregar, aí sim vale discutir o custo da série curta.
 
+### 3.6 Janelas retrospectivas — trajetória (25/07/2026)
+
+#### Por que elas existem
+
+O valor instantâneo não diz a direção:
+
+> **DHW = 6 hoje** descreve tanto um recife que subiu de 2 na última semana — evento começando, vai piorar — quanto um que caiu de 10 — evento terminando.
+
+São situações opostas com a mesma feature. A linha de base de persistência acerta 84% em 7 dias justamente porque episódio longo é estável no meio; **onde ela erra é no começo e no fim**. Sem janelas, o modelo competiria com a persistência usando *menos* informação do que ela usa implicitamente — e perder assim não ensinaria nada sobre o fenômeno, só sobre a pobreza das features.
+
+Implementadas em `backend/ml/dataset.py`. O conjunto padrão é a **variação em 7 dias** das quatro features do baseline, mais **14 dias** para SST e DHW, cujo sinal é mais lento. São 6 features derivadas, não 24: com ~4 anos-evento de amostra efetiva (§7.2), três operações × quatro variáveis × duas janelas seria receita de sobreajuste.
+
+Custo medido: **75 amostras de 7.134 (1,1%)** — o começo de cada série e as bordas das lacunas.
+
+#### O que a medição mostrou — e não era o esperado
+
+Separação entre **início** de episódio (calmo → alerta em 7 dias) e **fim** (alerta → calmo), que são exatamente os dois casos que a persistência confunde. Medida em desvios-padrão da própria feature; n = 95 e 96.
+
+| Feature | Início | Fim | Separação |
+|---|---|---|---|
+| `sst_variacao_14d` | +0,174 | −0,116 | **0,77 σ** |
+| `sst_variacao_7d` | +0,112 | −0,077 | **0,70 σ** |
+| `oxigenio_variacao_7d` | −0,407 | +0,123 | **0,61 σ** |
+| `dhw_variacao_14d` | +0,854 | +1,444 | 0,61 σ |
+| `dhw_variacao_7d` | +0,502 | +0,637 | **0,27 σ** |
+| `salinidade_variacao_7d` | +0,011 | +0,013 | 0,02 σ |
+
+**A trajetória do DHW quase não separa — e era a que eu esperava que separasse.** Os dois casos dão variação *positiva*: o DHW sobe tanto no começo quanto no fim do episódio. O motivo é mecanístico e devia ter sido antecipado: **o DHW é um acumulador de 12 semanas**. Ele continua subindo enquanto houver estresse recente, e só cai devagar. Serve para dizer *quão avançado* está o evento — o DHW instantâneo separa início de fim em 1,98 σ (1,33 contra 7,90) — mas não para dizer se ele está começando ou acabando.
+
+**Quem separa é a trajetória da SST**, e com o sinal certo: subindo no início, caindo no fim. Faz sentido — a SST governa o HotSpot instantâneo, que é o que define o alerta do dia.
+
+#### O achado que importa para a entrega 2
+
+**A trajetória do oxigênio separa 0,61 σ**, caindo no início do episódio e subindo no fim. É coerente com a física — água mais quente dissolve menos O₂ — e é **a primeira evidência empírica no projeto de que uma variável não-térmica carrega informação** onde as térmicas falham.
+
+Isso é exatamente a pergunta da entrega 2 (§4.4, caminho A), aparecendo antes da hora e num lugar onde ela pode ser testada. Não é resposta: é motivo para o teste valer a pena.
+
+A **salinidade não separa nada** (0,02 σ) nas transições. Continua no baseline por hipótese mecanística, mas sem apoio empírico até aqui.
+
+⚠️ **Estes números são sugestivos, não estabelecidos.** São 95 e 96 amostras, tiradas de ~4 anos-evento correlacionados entre si (§7.2). Servem para orientar o desenho do modelo e para dizer o que medir — não para afirmar efeito.
+
 ---
 
 ## 4. Target — decisão tomada (caminho C)
@@ -85,6 +126,10 @@ Este documento registra **por que cada variável entra ou fica de fora** do mode
 > **Entrega 2 (contribuição científica):** target = branqueamento observado, via Global Coral-Bleaching Database. É o que sustenta a seção de resultados do TCC e permite responder se salinidade, O₂ e turbidez acrescentam sinal além do DHW.
 >
 > As cinco features baseline valem nas duas entregas.
+
+📖 **Como esse alvo é avaliado** — a régua da persistência, o teste sem trapaça
+e por que acurácia não serve — está em [METODOLOGIA.md](METODOLOGIA.md), com
+exemplo trabalhado.
 
 **Regras que a entrega 1 impõe:**
 
@@ -307,6 +352,7 @@ Antes de adicionar ou remover qualquer variável:
 | Data | Alteração |
 |---|---|
 | 25/07/2026 | Documento criado a partir da sessão de seleção de variáveis. Registradas as 5 features baseline, 2 opcionais e 7 exclusões. Acrescentadas duas constatações verificadas em dados: a circularidade do `CRW_BAA` como target (§4.2) e a indisponibilidade de PAR de superfície (§3.5). |
+| 25/07/2026 | **§3.6 — janelas retrospectivas implementadas e medidas.** Variação em 7 e 14 dias entra como feature (`backend/ml/dataset.py`), ao custo de 1,1% das amostras. A medição contrariou a expectativa: **a trajetória do DHW quase não distingue início de fim de episódio (0,27 σ)**, porque o DHW é acumulador de 12 semanas e sobe nos dois casos. Quem separa é a trajetória da **SST** (0,77 σ, com o sinal certo) e — o achado relevante — a do **oxigênio** (0,61 σ), primeira evidência de variável não-térmica carregando informação onde as térmicas falham. Salinidade não separa (0,02 σ). Números sugestivos, não estabelecidos: n≈95 sobre ~4 anos-evento correlacionados. |
 | 25/07/2026 | **§7.2 — o tamanho real da amostra medido.** Os 598 dias em alerta se agrupam em apenas **19 episódios**, concentrados nos mesmos quatro anos nos três locais (2020, 2022, 2024, 2025). A amostra efetiva são ~4 anos-evento, não 7.173 dias. Consequências registradas: métrica por episódio e não por dia, *leave-year-out* obrigatório, autocorrelação dentro do episódio, e a pergunta da entrega 2 exigindo o GCBD para ter base suficiente. Registrado como bloqueio 8 — a limitação central do trabalho. |
 | 25/07/2026 | **Agregação do target corrigida (§4.5).** O BAA é categoria ordinal e estava sendo agregado dos ~121 pixels por média, o que subestimava o alerta — Alerta Nível 1 registrado num dia com 37% da área em Alerta Nível 2. Passa a ser agregado por máximo. Nova variável `baa_area_alerta` (fração do recife em Alerta Nível 1 ou acima) fica registrada como segunda resposta candidata, e **proibida como feature** de um modelo que prevê `baa`. A medição de circularidade da §4.2 não é afetada: foi feita no dado por pixel. |
 | 25/07/2026 | **Target decidido: caminho C.** Entrega 1 = previsão de `CRW_BAA` com horizonte de N dias; entrega 2 = branqueamento observado via GCBD. Registradas as cinco regras que a entrega 1 impõe ao pipeline e ao treino. |

@@ -23,6 +23,9 @@ zero foi exatamente o defeito do `carregar_historico.py` legado.
 
 **3. Variaveis derivadas do alvo sao recusadas na construcao**, e nao por
 convencao de quem chama. Ver `PROIBIDAS_COMO_FEATURE`.
+
+**4. As janelas retrospectivas olham so para tras**, e sao medidas em dias.
+Ver `Janela` e a nota sobre trajetoria abaixo.
 """
 
 from dataclasses import dataclass, field
@@ -61,6 +64,62 @@ PROIBIDAS_COMO_FEATURE = {
 }
 
 
+@dataclass(frozen=True)
+class Janela:
+    """Uma feature retrospectiva: `operacao` de `variavel` nos ultimos `dias`.
+
+    Sempre olhando **para tras**, incluindo o proprio dia `t`. Nunca para
+    frente - seria vazamento direto.
+    """
+
+    variavel: str
+    dias: int
+    operacao: str  # 'variacao' | 'media' | 'maximo'
+
+    @property
+    def nome(self):
+        return f'{self.variavel}_{self.operacao}_{self.dias}d'
+
+
+# **Por que janela existe.** O valor instantaneo nao diz a direcao: DHW = 6
+# hoje descreve tanto um recife que subiu de 2 na ultima semana - evento
+# comecando, vai piorar - quanto um que caiu de 10 - evento terminando. Sao
+# situacoes opostas com a mesma feature.
+#
+# A linha de base de persistencia acerta 84% em 7 dias justamente porque
+# episodio longo e estavel no meio; onde ela erra e no comeco e no fim (2026,
+# de episodios curtos, caiu para F1 0,471). E ali que a trajetoria decide.
+# Sem janela, o modelo competiria com a persistencia usando menos informacao
+# do que ela usa implicitamente - e perder assim nao ensinaria nada sobre o
+# fenomeno, so sobre a pobreza das features.
+#
+# **Por que o conjunto padrao e pequeno.** Sao ~4 anos-evento de amostra
+# efetiva (docs/VARIAVEIS.md secao 7.2). Tres operacoes x quatro variaveis x
+# duas janelas dariam 24 features sobre 4 eventos independentes, que e receita
+# de sobreajuste. O padrao fica na hipotese central - trajetoria - e as outras
+# operacoes ficam disponiveis para quem quiser testar explicitamente.
+OPERACOES = ('variacao', 'media', 'maximo')
+
+# Variaveis termicas, que ganham tambem a janela de 14 dias: o sinal delas e
+# mais lento, e e nelas que a trajetoria de medio prazo tem mecanismo conhecido.
+TERMICAS = ('sst', 'dhw')
+
+
+def janelas_para(features):
+    """Conjunto padrao de janelas para as features pedidas.
+
+    Derivado das features, e nao uma lista fixa: um conjunto montado com
+    `features=('sst',)` nao deveria passar a exigir salinidade so porque ela
+    esta no padrao do projeto.
+    """
+    janelas = [Janela(f, 7, 'variacao') for f in features]
+    janelas += [Janela(f, 14, 'variacao') for f in features if f in TERMICAS]
+    return tuple(janelas)
+
+
+JANELAS_PADRAO = janelas_para(FEATURES_PADRAO)
+
+
 class FeatureComVazamento(ValueError):
     """A feature pedida deriva do alvo."""
 
@@ -77,21 +136,33 @@ class ConjuntoSupervisionado:
     horizonte: int
     features: tuple
     alvo: str
+    janelas: tuple = ()
     dias_na_serie: int = 0
     descartadas_sem_alvo: int = 0
     descartadas_sem_feature: int = 0
+    descartadas_sem_janela: int = 0
     conflitos_de_fonte: list = field(default_factory=list)
 
     @property
     def n(self):
         return len(self.quadro)
 
+    @property
+    def colunas_de_entrada(self):
+        """Tudo o que o modelo pode ver. Nao inclui `alvo_atual`."""
+        return (*self.features, *(j.nome for j in self.janelas))
+
     def resumo(self):
+        janela = (
+            f', -{self.descartadas_sem_janela} sem janela completa'
+            if self.janelas
+            else ''
+        )
         return (
             f'horizonte {self.horizonte}d: {self.n} amostras de '
             f'{self.dias_na_serie} dias '
             f'(-{self.descartadas_sem_alvo} sem alvo em t+{self.horizonte}, '
-            f'-{self.descartadas_sem_feature} sem feature em t)'
+            f'-{self.descartadas_sem_feature} sem feature em t{janela})'
         )
 
 
@@ -100,6 +171,60 @@ def _recusar_vazamento(features, alvo):
         motivo = PROIBIDAS_COMO_FEATURE.get(nome)
         if motivo:
             raise FeatureComVazamento(f'"{nome}" nao pode ser feature de "{alvo}": {motivo}')
+
+
+def _validar_janelas(janelas, alvo):
+    """Janela sobre variavel proibida continua sendo vazamento.
+
+    A media de 7 dias do HotSpot nao e menos derivada do alvo que o HotSpot -
+    so e mais dificil de perceber lendo o nome da coluna.
+    """
+    for janela in janelas:
+        motivo = PROIBIDAS_COMO_FEATURE.get(janela.variavel)
+        if motivo:
+            raise FeatureComVazamento(
+                f'janela sobre "{janela.variavel}" nao pode ser feature de '
+                f'"{alvo}": {motivo}'
+            )
+        if janela.operacao not in OPERACOES:
+            raise ValueError(
+                f'Operacao "{janela.operacao}" desconhecida. Disponiveis: '
+                f'{list(OPERACOES)}.'
+            )
+        if janela.dias < 1:
+            raise ValueError(f'Janela precisa ter pelo menos 1 dia, veio {janela.dias}.')
+
+
+def aplicar_janela(serie, janela):
+    """Calcula uma feature retrospectiva sobre uma serie de dias corridos.
+
+    ⚠️ **So funciona sobre indice de dias corridos.** `shift` e `rolling`
+    contam linhas, e as linhas so equivalem a dias porque `carregar_largo`
+    reindexa a serie. Sem isso, uma "media de 7 dias" que atravessasse as 6
+    datas ausentes do CRW seria media de 5 - com o nome dizendo 7.
+
+    `min_periods` igual ao tamanho da janela e deliberado: janela incompleta
+    vira NaN e a amostra e descartada, em vez de virar um numero que mente
+    sobre a propria cobertura. E a decisao que docs/VARIAVEIS.md secao 7.1
+    exigia que fosse explicita.
+
+    ⚠️ **`variacao` e `media`/`maximo` reagem a lacuna de formas diferentes**,
+    e a diferenca e correta, nao descuido:
+
+    - `variacao` compara dois instantes, `t` e `t - dias`. Se os dois existem,
+      a conta e exata mesmo com dias faltando no meio - a diferenca entre 11/01
+      e 04/01 continua sendo de sete dias.
+    - `media` e `maximo` resumem **todos** os dias do intervalo. Um dia
+      faltando muda o resultado, entao a amostra cai.
+    """
+    if janela.operacao == 'variacao':
+        # Diferenca entre hoje e `dias` atras: a trajetoria.
+        return serie - serie.shift(janela.dias)
+    if janela.operacao == 'media':
+        return serie.rolling(window=janela.dias, min_periods=janela.dias).mean()
+    if janela.operacao == 'maximo':
+        return serie.rolling(window=janela.dias, min_periods=janela.dias).max()
+    raise ValueError(f'Operacao "{janela.operacao}" desconhecida.')
 
 
 def carregar_largo(local, variaveis):
@@ -148,36 +273,53 @@ def carregar_largo(local, variaveis):
     return largo, conflitos
 
 
-def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO):
+def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
+           janelas=None):
     """Tabela supervisionada de um local: features em `t`, alvo em `t+horizonte`.
 
-    Colunas devolvidas: `data` (= t), as features, `alvo_data` (= t+horizonte),
-    `alvo`, e `alvo_atual` — o alvo medido em `t`.
+    Colunas devolvidas: `data` (= t), as features, as janelas, `alvo_data`
+    (= t+horizonte), `alvo`, e `alvo_atual` — o alvo medido em `t`.
 
     ⚠️ `alvo_atual` **nao e feature**. Existe para a linha de base de
     persistencia poder ser calculada sobre exatamente as mesmas amostras que o
     modelo ve; compara-los sobre conjuntos diferentes nao diria nada.
+
+    `janelas=None` usa o padrao derivado das proprias features
+    (`janelas_para`); `janelas=()` monta o conjunto sem features
+    retrospectivas, util para medir quanto elas acrescentam.
     """
     import pandas as pd
 
     features = tuple(features)
+    janelas = tuple(janelas_para(features) if janelas is None else janelas)
     _recusar_vazamento(features, alvo)
+    _validar_janelas(janelas, alvo)
 
     if horizonte < 1:
         raise ValueError(f'Horizonte precisa ser de pelo menos 1 dia, veio {horizonte}.')
 
-    largo, conflitos = carregar_largo(local, (*features, alvo))
+    # A janela pode pedir uma variavel que nao esta entre as features - ler
+    # a serie dela e necessario mesmo assim.
+    necessarias = {*features, alvo, *(j.variavel for j in janelas)}
+    largo, conflitos = carregar_largo(local, sorted(necessarias))
     dias = len(largo)
+
+    nomes_janela = [j.nome for j in janelas]
 
     if dias == 0:
         vazio = pd.DataFrame(
-            columns=['data', *features, 'alvo_atual', 'alvo_data', 'alvo']
+            columns=['data', *features, *nomes_janela, 'alvo_atual',
+                     'alvo_data', 'alvo']
         )
-        return ConjuntoSupervisionado(vazio, horizonte, features, alvo)
+        return ConjuntoSupervisionado(vazio, horizonte, features, alvo, janelas)
 
     # shift(-horizonte) sobre indice de dias corridos = deslocamento em dias.
-    # E dessa equivalencia que depende a corretude do horizonte.
+    # E dessa equivalencia que depende a corretude do horizonte - e tambem a
+    # das janelas, que usam shift/rolling pelo mesmo motivo.
     tabela = largo[list(features)].copy()
+    for janela in janelas:
+        tabela[janela.nome] = aplicar_janela(largo[janela.variavel], janela)
+
     tabela['alvo_atual'] = largo[alvo]
     tabela['alvo'] = largo[alvo].shift(-horizonte)
     tabela = tabela.reset_index()
@@ -190,49 +332,71 @@ def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO):
     tabela = tabela.dropna(subset=[*features, 'alvo_atual'])
     sem_feature = antes - len(tabela)
 
-    tabela = tabela[['data', *features, 'alvo_atual', 'alvo_data', 'alvo']]
+    # Contado a parte: a janela custa amostra no comeco da serie e em volta de
+    # cada lacuna, e esse custo precisa ficar visivel na hora de comparar um
+    # conjunto com janela contra um sem.
+    antes = len(tabela)
+    if nomes_janela:
+        tabela = tabela.dropna(subset=nomes_janela)
+    sem_janela = antes - len(tabela)
+
+    tabela = tabela[
+        ['data', *features, *nomes_janela, 'alvo_atual', 'alvo_data', 'alvo']
+    ]
 
     return ConjuntoSupervisionado(
         quadro=tabela.reset_index(drop=True),
         horizonte=horizonte,
         features=features,
         alvo=alvo,
+        janelas=janelas,
         dias_na_serie=dias,
         descartadas_sem_alvo=sem_alvo,
         descartadas_sem_feature=sem_feature,
+        descartadas_sem_janela=sem_janela,
         conflitos_de_fonte=conflitos,
     )
 
 
-def montar_todos(locais, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO):
+def montar_todos(locais, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
+                 janelas=None):
     """Empilha os locais numa tabela so, com a coluna `local`.
 
     ⚠️ As linhas **nao sao independentes entre locais**: os episodios caem nos
     mesmos anos nos tres recifes, por serem o mesmo forcante oceanografico.
     Ver docs/VARIAVEIS.md secao 7.2 antes de tratar isso como n = soma.
+
+    Cada local e montado em separado de proposito: concatenar as series antes
+    de aplicar janela faria o fim de um recife entrar na janela do proximo.
     """
     import pandas as pd
 
-    partes, dias, sem_alvo, sem_feature = [], 0, 0, 0
+    features = tuple(features)
+    janelas = tuple(janelas_para(features) if janelas is None else janelas)
+
+    partes, dias, sem_alvo, sem_feature, sem_janela = [], 0, 0, 0, 0
     for local in locais:
-        conjunto = montar(local, horizonte, features, alvo)
+        conjunto = montar(local, horizonte, features, alvo, janelas)
         quadro = conjunto.quadro.copy()
         quadro.insert(0, 'local', local.slug)
         partes.append(quadro)
         dias += conjunto.dias_na_serie
         sem_alvo += conjunto.descartadas_sem_alvo
         sem_feature += conjunto.descartadas_sem_feature
+        sem_janela += conjunto.descartadas_sem_janela
 
     juntas = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
 
     return ConjuntoSupervisionado(
         quadro=juntas,
         horizonte=horizonte,
-        features=tuple(features),
+        features=features,
         alvo=alvo,
+        janelas=janelas,
         dias_na_serie=dias,
         descartadas_sem_alvo=sem_alvo,
         descartadas_sem_feature=sem_feature,
+        descartadas_sem_janela=sem_janela,
     )
 
 
