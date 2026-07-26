@@ -224,7 +224,109 @@ Não é conclusão — é a próxima coisa a medir.
 
 ---
 
-## 7. O que **não** se pode concluir
+## 7. Importância das variáveis — e o indício do oxigênio **não** se confirmou
+
+Medida em 25/07/2026, dentro do *leave-year-out*: para cada ano com evento,
+treina sem ele e mede a importância **nele**. Duas medidas, porque uma sozinha
+engana — ver [METODOLOGIA.md](METODOLOGIA.md) §5.
+
+### Por grupo (variável + suas trajetórias, embaralhadas juntas)
+
+Queda média do PR-AUC ao destruir a informação daquele grupo:
+
+| Grupo | Logística | Boosting |
+|---|---|---|
+| **DHW** | **+0,492** | **+0,554** |
+| **SST** | **+0,276** | **+0,157** |
+| Oxigênio | +0,021 | +0,017 |
+| Salinidade | −0,002 | +0,025 |
+
+**As variáveis térmicas carregam praticamente tudo.** Juntas, DHW e SST
+respondem por mais de 95% da capacidade preditiva do modelo.
+
+### O indício do oxigênio não sobreviveu
+
+Em [VARIAVEIS.md](VARIAVEIS.md) §3.6 medimos que a **trajetória** do oxigênio
+separava início de fim de episódio em 0,61 σ — melhor que a do DHW — e
+registramos que aquilo *"precisa ser confirmado no modelo treinado"*.
+
+**Não se confirmou.** No modelo, a trajetória do oxigênio contribui:
+
+| | Logística | Boosting |
+|---|---|---|
+| `oxigenio` (nível) | +0,021 | +0,021 |
+| `oxigenio_variacao_7d` (trajetória) | **−0,001** | **−0,006** |
+
+Negativo significa que embaralhar a coluna **melhorou levemente** o modelo — ou
+seja, ela é ruído.
+
+O **nível** de oxigênio contribui algo pequeno e consistente nos dois modelos.
+A **trajetória**, nada.
+
+Três explicações possíveis, nenhuma testada ainda:
+
+1. A separação de 0,61 σ foi medida em 95 e 96 amostras. Pode ter sido ruído
+   desde o início.
+2. A informação existe mas é **redundante**: oxigênio dissolvido depende
+   fortemente da temperatura, e o modelo já tem SST e DHW.
+3. Separar dois grupos não é o mesmo que ajudar a prever — a primeira medida
+   olhou só as transições, a segunda olha o ano inteiro.
+
+**Registrar isso importa mais do que teria importado a confirmação.** Era o
+primeiro indício de variável não-térmica no projeto, e ele não passou no teste
+seguinte. A pergunta da entrega 2 continua em aberto, e agora com uma
+expectativa menor.
+
+### A correlação divide o crédito — e dá para ver
+
+O grupo DHW cai +0,492, mas suas colunas isoladas somam bem menos:
+
+| | Queda |
+|---|---|
+| `dhw` sozinho | +0,003 |
+| `dhw_variacao_7d` sozinho | +0,092 |
+| `dhw_variacao_14d` sozinho | +0,189 |
+| **soma das três** | **+0,284** |
+| **grupo inteiro** | **+0,492** |
+
+Embaralhar uma coluna por vez subestima, porque as irmãs correlacionadas ainda
+carregam parte da informação. **É por isso que a medida por grupo existe** — e
+por que ler só a coluna isolada levaria à conclusão errada de que o `dhw` não
+importa.
+
+### ⚠️ Os coeficientes **não** são interpretáveis aqui
+
+Isto corrige uma afirmação anterior deste projeto.
+
+Coeficientes da logística, na escala padronizada:
+
+| Variável | Coeficiente | |
+|---|---|---|
+| `sst` | +3,259 | |
+| `dhw_variacao_14d` | +2,258 | |
+| `oxigenio` | +1,333 | ⚠️ sinal contraintuitivo |
+| `dhw` | **−0,164** | 🚨 **negativo** |
+
+Ler isso como mecanismo daria duas conclusões absurdas: que **calor acumulado
+reduz o risco** e que **mais oxigênio aumenta o risco**.
+
+Nenhuma das duas é verdade. O que acontece é **colinearidade**: `dhw` e
+`dhw_variacao_14d` andam juntos, o modelo usa a trajetória, e o coeficiente do
+nível vira um termo de correção sem significado físico isolado.
+
+**Consequência para o trabalho:** o argumento de que "a logística é
+interpretável" — registrado em [METODOLOGIA.md](METODOLOGIA.md) §5 — **só vale
+com features não correlacionadas**. As nossas são correlacionadas por
+construção: cada variável entra junto com a própria trajetória.
+
+Para afirmar direção de efeito seria preciso ou remover a correlação (usar só
+nível *ou* só trajetória), ou usar uma medida que a trate explicitamente. Até
+lá, **a importância por grupo é a única leitura defensável**, e ela não dá
+direção — só magnitude.
+
+---
+
+## 8. O que **não** se pode concluir
 
 Estes números orientam decisão de projeto. Não sustentam afirmação científica.
 
@@ -243,11 +345,12 @@ Estes números orientam decisão de projeto. Não sustentam afirmação científ
 
 ---
 
-## 8. Próximos passos que estes resultados indicam
+## 9. Próximos passos que estes resultados indicam
 
 | Prioridade | O quê | Por quê |
 |---|---|---|
-| Alta | Importância das variáveis no modelo treinado | Confirma ou derruba o indício de que o oxigênio contribui |
+| ✅ feito | ~~Importância das variáveis~~ | Feito em 25/07/2026 (§7): derrubou o indício do oxigênio e revelou que os coeficientes não são interpretáveis |
+| Alta | **Resolver a colinearidade** | Sem isso não há como afirmar direção de efeito — nem para o TCC, nem para o painel |
 | Alta | Investigar 2022 | É o único ano em que o modelo perde claramente |
 | Média | Curva de calibração | Brier bom não basta para exibir porcentagem num site |
 | Média | Testar horizontes entre 7 e 21 dias | A vantagem cresce com o horizonte; achar onde ela vira |
@@ -269,5 +372,6 @@ Semente fixa (`42`) em ambos os modelos; o resultado é determinístico.
 
 | Data | Alteração |
 |---|---|
+| 25/07/2026 | **§7 — importância das variáveis medida.** DHW e SST respondem por mais de 95% da capacidade preditiva. **O indício do oxigênio (VARIAVEIS §3.6) não se confirmou**: a trajetória contribui −0,001 e −0,006, ou seja, ruído; só o nível contribui algo pequeno (+0,021). Documentada também a divisão de crédito por correlação (grupo DHW cai 0,492 mas suas colunas isoladas somam 0,284) e — mais importante — que **os coeficientes da logística não são interpretáveis aqui**: `dhw` saiu negativo por colinearidade. Isso corrige o argumento de interpretabilidade da METODOLOGIA §5. |
 | 25/07/2026 | Acrescentada a seção "Entendendo o resultado, com números pequenos": exemplo trabalhado de dois eventos (um de 60 dias, um de 5) mostrando por que contar dias e contar eventos dão respostas opostas, e por que a segunda é a que importa num sistema de aviso. |
 | 25/07/2026 | Primeira rodada. Empate no acerto diário em 7 dias (F1 0,741 contra 0,738), vitória na detecção de episódios (18/19 contra 15/19) e vitória nas duas métricas em 14 dias. Confirmado que as features de trajetória são o que sustenta o resultado: sem elas o F1 cai para 0,489. 2022 identificado como o ano em que o modelo falha. |

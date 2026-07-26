@@ -407,9 +407,14 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Conjunto supervisionado** | features em `t`, alvo em `t+N`, com guardas contra vazamento |
 | **Linha de base** | persistência medida: F1 0,840 em 7 dias |
 | **Modelo treinado e comparado** | primeira rodada em [RESULTADOS.md](RESULTADOS.md): detecta 18 de 19 episódios contra 15 da persistência |
-| **212 testes** | rodam offline |
+| **Importância das variáveis** | medida: DHW e SST respondem por >95% da capacidade preditiva |
+| **227 testes** | rodam offline |
 
 ### Falta
+
+| | |
+|---|---|
+| **Resolver a colinearidade** | ⚠️ hoje os coeficientes não são interpretáveis — o `dhw` sai negativo. Sem isso não há como afirmar direção de efeito |
 | **GCBD** | sem rótulo observado não há entrega 2 |
 | **Projeção do Neo4j** | ⚠️ o grafo ainda mostra dado do caminho legado |
 | **Agendamento** | nada roda sozinho ainda |
@@ -469,4 +474,5 @@ O catálogo completo, com medição de cada um, está em [FONTES.md](FONTES.md) 
 
 | Data | Alteração |
 |---|---|
+| 25/07/2026 | Estado atualizado: importância das variáveis medida (DHW e SST respondem por mais de 95% da capacidade preditiva) e a colinearidade registrada como pendência — hoje os coeficientes não permitem afirmar direção de efeito. |
 | 25/07/2026 | Documento criado como porta de entrada do projeto: o problema biológico, a cadeia MMM→HotSpot→DHW→BAA explicada com exemplo, as fontes e suas naturezas distintas, o caminho do dado, as duas entregas, o que falta e os defeitos herdados. |

@@ -190,10 +190,20 @@ favor de árvore, não contra.** Quem tem dificuldade com isso é o modelo linea
 
 Não é indecisão — cada um responde uma pergunta diferente.
 
-**A logística é interpretável.** Dá um coeficiente por variável, então é
-possível afirmar *"o oxigênio caindo aumenta o risco, nesta magnitude"*. Num
-trabalho acadêmico, isso se defende; um ensemble de árvores, não com a mesma
-facilidade.
+**A logística é interpretável** — *sob uma condição que este projeto não
+cumpre*. Ela dá um coeficiente por variável, o que em princípio permite
+afirmar *"o oxigênio caindo aumenta o risco, nesta magnitude"*.
+
+🚨 **Medido em 25/07/2026: aqui os coeficientes não são interpretáveis.** Cada
+variável entra junto com a própria trajetória, e as duas são correlacionadas
+por construção. O resultado é que o coeficiente do `dhw` saiu **negativo** e o
+do `oxigenio` positivo — o que lido como mecanismo diria que calor acumulado
+protege o coral. É artefato de colinearidade, não física.
+
+Interpretabilidade de coeficiente exige features não correlacionadas. Enquanto
+isso não for resolvido — usando só nível *ou* só trajetória, ou uma medida que
+trate a correlação —, **a leitura defensável é a importância por grupo**, que
+dá magnitude mas não direção. Ver [RESULTADOS.md](RESULTADOS.md) §7.
 
 **O boosting responde "e se um modelo mais expressivo ganhasse?"**. Se ele
 **não** superar a logística, isso é resultado publicável: ou a relação é
@@ -284,5 +294,6 @@ implícito.
 
 | Data | Alteração |
 |---|---|
+| 25/07/2026 | **§5 corrigida — os coeficientes não são interpretáveis neste projeto.** O argumento de que "a logística é interpretável" valia sob uma condição que o projeto não cumpre: features não correlacionadas. Cada variável entra junto com a própria trajetória, e a medição mostrou o coeficiente do `dhw` **negativo** — o que lido como mecanismo diria que calor acumulado protege o coral. Enquanto a colinearidade não for resolvida, a leitura defensável é a importância por grupo, que dá magnitude e não direção. Ver [RESULTADOS.md](RESULTADOS.md) §7. |
 | 25/07/2026 | **§5 criada — quais modelos e por que dois.** Registra que o `boosting` **é** baseado em árvores de decisão e a `logistica` não, e corrige uma inversão comum: variável que influencia "para mais e para menos" é argumento **a favor** de árvore, não contra — quem tem dificuldade com relação em U é o modelo linear. Também por que os dois convivem (interpretabilidade contra expressividade) e por que ambos ficam nos padrões. |
 | 25/07/2026 | Documento criado. Registra o desenho do experimento da entrega 1: alvo binário com horizonte de N dias, persistência como piso, validação *leave-year-out*, métricas de evento raro e por episódio, e as quatro limitações que decorrem de ~4 anos-evento de amostra efetiva. |

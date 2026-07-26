@@ -209,6 +209,47 @@ ficar com o simples e ainda dizer, com honestidade:
 Essa frase é mais forte do que apresentar um modelo só — porque mostra que a
 alternativa foi **testada**, não suposta.
 
+### 🚨 Mas descobrimos um problema com a receita
+
+A vantagem da receita escrita seria poder ler cada linha dela. Fomos ler — e
+**a receita está borrada**.
+
+Ela diz coisas assim:
+
+> *"Mais calor acumulado **diminui** o risco."*
+
+Isso é obviamente falso. Calor acumulado é justamente o que mata coral.
+
+**O motivo é que medimos a mesma coisa duas vezes.** Cada variável entra na
+receita de dois jeitos: *"quanto está"* e *"quanto mudou na última semana"*.
+
+É como uma receita que manda:
+
+> - coloque **2 colheres de sal**
+> - coloque **1 colher a mais de sal que ontem**
+
+As duas instruções se sobrepõem. O prato pode até sair certo, mas **cada linha
+sozinha deixa de fazer sentido** — e uma delas pode até virar negativa para
+compensar a outra.
+
+### O que dá para afirmar mesmo assim
+
+Dá para dizer **quanto cada variável importa** — basta apagá-la e ver o quanto
+o modelo piora:
+
+| Variável | O quanto faz falta |
+|---|---|
+| **Calor acumulado** | muito |
+| **Temperatura** | bastante |
+| Oxigênio | pouquinho |
+| Salinidade | nada |
+
+O que **não** dá é dizer a direção ("subir isso aumenta o risco em tanto") —
+não até separarmos as medidas repetidas.
+
+E é bom que isso tenha aparecido agora: se alguém numa banca lesse o
+"calor acumulado diminui o risco" antes de nós, seria bem pior.
+
 ---
 
 ## 7. Por que o modelo precisa saber a direção
@@ -243,8 +284,21 @@ Quem serve é a direção da **temperatura** e, curiosamente, a do **oxigênio**
 que cai quando o evento começa e sobe quando acaba. Faz sentido: água quente
 segura menos oxigênio.
 
-Esse é o primeiro sinal de que uma variável **que não é temperatura** pode
-ajudar — que é exatamente a pergunta científica do trabalho.
+Esse parecia o primeiro sinal de que uma variável **que não é temperatura**
+pode ajudar — a pergunta científica do trabalho.
+
+**Mas o sinal não se confirmou.** Quando medimos quanto o oxigênio realmente
+ajuda o modelo a prever, a resposta foi: **quase nada**, e a parte de
+"direção do oxigênio" foi **puro ruído**.
+
+Por quê? Provavelmente porque **oxigênio depende de temperatura** — água quente
+segura menos oxigênio. Então o modelo já sabia daquilo por outro caminho.
+
+> Distinguir dois grupos **não é o mesmo** que ajudar a prever. A primeira
+> medida olhou só os momentos de virada; a segunda olhou o ano inteiro.
+
+Ficou registrado assim, e não apagado, de propósito: um indício que não
+sobrevive ao teste seguinte faz parte do trabalho.
 
 ---
 
@@ -287,4 +341,5 @@ de "previsão de branqueamento" seria prometer mais do que ele entrega.
 
 | Data | Alteração |
 |---|---|
+| 25/07/2026 | Acrescentado, em §6 e §7, o resultado da medida de importância: a "receita" **não** se explica neste projeto, porque cada variável é medida duas vezes (nível e mudança) e as linhas individuais deixam de fazer sentido — analogia das duas colheres de sal. E o indício do oxigênio, que a §7 anunciava, **não se confirmou**. |
 | 25/07/2026 | Documento criado como versão sem jargão da METODOLOGIA.md, para leitura e apresentação. Mesmo conteúdo, com analogias: previsão do tempo, prova com as questões vazadas, alarme de incêndio, receita e cozinheiro. |
