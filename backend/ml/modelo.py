@@ -43,17 +43,51 @@ from .baseline import avaliar, avaliar_episodios, prever_persistencia
 #   amostra e pequena demais para sustentar algo maior.
 MODELOS = ('logistica', 'boosting')
 
+# Metodos de recalibracao da probabilidade. `None` = crua, como o estimador
+# devolve.
+#
+# 🚨 **Por que isso e necessario aqui.** `class_weight='balanced'` trata as
+# classes como se fossem do mesmo tamanho. Isso e correto para DECIDIR com 8%
+# de positivos - sem ele o modelo aprende que nunca avisar quase sempre acerta -
+# e **destroi a probabilidade por construcao**. Medido em 27/07/2026: a
+# logistica promete 0,165 quando a taxa real e 0,084, com ECE de **0,081**,
+# praticamente do tamanho do proprio fenomeno.
+#
+# Recalibrar conserta o numero sem desmontar a decisao:
+#
+#   versao                ECE      PR-AUC   R@0.5
+#   log_balanced        0,0811     0,885    0,909   <- o que estava no ar
+#   log_bal_platt       0,0163     0,878    0,721
+#   log_bal_isotonic    0,0039     0,871    0,775
+#
+# ⚠️ O calibrador e ajustado **dentro** da dobra de treino (`cv=3` interno).
+# Ajusta-lo sobre as predicoes que serao avaliadas seria vazamento, e a curva
+# sairia perfeita por construcao.
+#
+# Ver docs/RESULTADOS.md secao 23 e ml/calibracao.py.
+CALIBRACOES = (None, 'isotonic', 'sigmoid')
+
 
 class ColunaAusente(ValueError):
     """O quadro nao tem uma coluna que o modelo viu no treino."""
 
 
-def construir(nome='logistica', semente=42):
-    """Monta o Pipeline. A selecao por nome acontece em `Ajuste.colunas`."""
+def construir(nome='logistica', semente=42, calibrar=None):
+    """Monta o Pipeline. A selecao por nome acontece em `Ajuste.colunas`.
+
+    `calibrar` envolve o estimador num recalibrador de probabilidade. Ver
+    `CALIBRACOES`.
+    """
     from sklearn.ensemble import HistGradientBoostingClassifier
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
+
+    if calibrar not in CALIBRACOES:
+        raise ValueError(
+            f'Calibracao "{calibrar}" desconhecida. '
+            f'Disponiveis: {list(CALIBRACOES)}.'
+        )
 
     if nome == 'logistica':
         # `class_weight='balanced'` porque 8% de positivos: sem isso o modelo
@@ -73,7 +107,15 @@ def construir(nome='logistica', semente=42):
     else:
         raise ValueError(f'Modelo "{nome}" desconhecido. Disponiveis: {list(MODELOS)}.')
 
-    return Pipeline([('escala', escala), ('estimador', estimador)])
+    pipeline = Pipeline([('escala', escala), ('estimador', estimador)])
+    if calibrar is None:
+        return pipeline
+
+    from sklearn.calibration import CalibratedClassifierCV
+
+    # O `cv=3` e interno ao treino: o calibrador so ve dados que o estimador
+    # tambem viu, nunca a dobra de teste de fora.
+    return CalibratedClassifierCV(pipeline, method=calibrar, cv=3)
 
 
 def alvo_binario(serie):
@@ -95,6 +137,7 @@ class Ajuste:
     horizonte: int
     n_treino: int = 0
     positivos_treino: int = 0
+    calibracao: object = None
 
     def prever_probabilidade(self, quadro):
         faltando = [c for c in self.colunas if c not in quadro.columns]
@@ -122,12 +165,16 @@ class Ajuste:
             'alvo': f'baa >= {LIMIAR_ALERTA} em t+{self.horizonte}',
             'n_treino': self.n_treino,
             'positivos_treino': self.positivos_treino,
+            # Sem isto ninguem sabe se a probabilidade gravada e crua ou
+            # recalibrada - e a diferenca vale 0,081 de ECE.
+            'calibracao': self.calibracao,
         }
 
 
-def treinar(quadro, colunas, nome='logistica', horizonte=7, semente=42):
+def treinar(quadro, colunas, nome='logistica', horizonte=7, semente=42,
+            calibrar=None):
     """Treina sobre um quadro ja montado por `ml.dataset`."""
-    pipeline = construir(nome, semente)
+    pipeline = construir(nome, semente, calibrar)
     y = alvo_binario(quadro['alvo'])
 
     pipeline.fit(quadro[list(colunas)], y)
@@ -139,6 +186,7 @@ def treinar(quadro, colunas, nome='logistica', horizonte=7, semente=42):
         horizonte=horizonte,
         n_treino=len(quadro),
         positivos_treino=int(y.sum()),
+        calibracao=calibrar,
     )
 
 

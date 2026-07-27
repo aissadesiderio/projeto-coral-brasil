@@ -6,7 +6,8 @@ está em [METODOLOGIA.md](METODOLOGIA.md). Este documento é só o que saiu.
 | Parte | O quê | Quando | Seções |
 |---|---|---|---|
 | **Entrega 1** | Prever o **BAA** em t+N, nos 3 recifes monitorados | 25/07/2026 | §1–§10 |
-| **Entrega 2, passo 1** | Prever **branqueamento observado**, nos sítios do GCBD | 26/07/2026 | §11–§14 |
+| **Entrega 2, passo 1** | Prever **branqueamento observado** com as térmicas do GCBD | 26/07/2026 | §11–§14 |
+| **Entrega 2, passo 2** | Acrescentar **salinidade e oxigênio** ingeridos | 26/07/2026 | §15–§19 |
 
 ---
 
@@ -19,6 +20,11 @@ está em [METODOLOGIA.md](METODOLOGIA.md). Este documento é só o que saiu.
 > **Entrega 2, passo 1** — A regra de estresse térmico da NOAA, quando dispara,
 > acerta quase sempre; mas dos 88 branqueamentos observados no Brasil ela pega
 > **10**. O sinal térmico sozinho não explica o fenômeno.
+
+> **Entrega 2, passo 2** — Salinidade e oxigênio de reanálise **não preenchem
+> essa lacuna**: separam as classes na direção certa, com metade da força das
+> térmicas, e não viram capacidade de prever. Quem funciona entre as não
+> térmicas é o **vento**.
 
 ---
 
@@ -754,17 +760,22 @@ Logística, PR-AUC agrupada:
 | G — F sem `SSTA` | 3 | 0,703 | 0,686 | 1 |
 | H — G + `Windspeed` | 4 | 0,718 | 0,692 | 1 |
 | I — `TSA_DHW`+`TSA` | 2 | 0,699 | 0,692 | **0** |
-| **J — `TSA_DHW`+`TSA`+`Windspeed`** | **3** | **0,722** | **0,717** | **0** |
+| ~~J — `TSA_DHW`+`TSA`+`Windspeed`~~ | 3 | 0,722 | 0,717 | 0 |
 | K — `TSA_DHW`+`SSTA_Freq`+`Windspeed` | 3 | 0,750 | 0,706 | 1 |
 
-**A versão J é a adotada como conjunto interpretável.** Três entradas, nenhum
-coeficiente invertido:
+~~**A versão J é a adotada como conjunto interpretável.**~~ Três entradas,
+nenhum coeficiente invertido:
 
 | Variável | Coeficiente | Leitura física |
 |---|---|---|
 | `TSA_DHW` | **+0,950** | estresse térmico acumulado piora |
 | `Windspeed` | −0,355 | vento mistura a coluna d'água e resfria — negativo é o esperado |
 | `TSA` | +0,210 | anomalia térmica do dia piora |
+
+🚨 **Superado em 27/07/2026.** A versão adotada passou a ser a **I —
+`TSA_DHW` + `TSA`**, com o `Windspeed` removido. O motivo não é métrica (custa
+0,025, dentro do ruído) e sim que o efeito do vento **não sobrevive à troca por
+vento medido**. Ver §20 e §20.1.
 
 E o mais revelador: **sítio 0,722 contra ano 0,717.** A diferença sumiu. A
 versão A tinha um abismo (0,803 × 0,614); a J generaliza igualmente bem para um
@@ -837,6 +848,634 @@ O custo continua o mesmo: **35.460 medições**, menos que o backfill do
 Copernicus já feito. E agora a comparação tem um baseline forte e medido, que
 era a razão de fazer o passo 1 antes.
 
+*(Executado em 26/07/2026 — ver §15 em diante.)*
+
+---
+
+# Entrega 2, passo 2 — salinidade e oxigênio
+
+Rodado em **26/07/2026**, no mesmo dia do passo 1. É a pergunta que motivou o
+projeto inteiro, feita pela primeira vez sem circularidade: com **branqueamento
+observado** como alvo, e com as variáveis não térmicas efetivamente medidas.
+
+**30.212 valores diários extraídos**, 332 pares (visita, variável), **zero
+falhas**. O método está em [GCBD.md](GCBD.md), "Passo 2 — a ingestão ambiental".
+
+---
+
+## 15. A resposta é não
+
+> **Salinidade e oxigênio, medidos pela reanálise do Copernicus na janela antes
+> de cada visita, não acrescentam capacidade de prever branqueamento observado.
+> Nenhuma combinação testada superou o modelo só-térmico na validação por ano.**
+
+| Conjunto | Features | PR-AUC sítio | **PR-AUC ano** |
+|---|---|---|---|
+| **Térmicas J** (`TSA_DHW`, `TSA`, `Windspeed`) | 3 | 0,722 | **0,717** |
+| J + só salinidade | 5 | 0,760 | 0,711 |
+| J + só médias | 5 | 0,750 | 0,669 |
+| J + só variações | 5 | 0,698 | 0,646 |
+| **J + as 4 ambientais** | 7 | 0,739 | **0,636** |
+| J + só oxigênio | 5 | 0,696 | 0,634 |
+| 8 térmicas + ambientais | 12 | 0,810 | 0,618 |
+| **Só ambientais** | 4 | 0,621 | **0,527** |
+| Só as variações ambientais | 2 | 0,571 | 0,526 |
+
+*(logística; taxa base = 0,530 em todas)*
+
+Duas leituras:
+
+**Acrescentar não ajuda.** O melhor resultado por ano continua sendo o de
+0,717, do modelo com três térmicas e nenhuma variável ambiental. Acrescentar as
+quatro **piora** para 0,636.
+
+**Sozinhas, elas ficam no acaso.** PR-AUC 0,527 contra taxa base 0,530 —
+ganho de **0,99×**. As não térmicas, isoladas, não distinguem nada.
+
+⚠️ Diferenças entre 0,717, 0,711 e 0,669 estão dentro do ruído de 166 visitas.
+O que é robusto é que **nada passa do teto de ~0,72**, e que o conjunto só
+ambiental fica no acaso.
+
+---
+
+## 16. Não é a janela, e não é identidade do sítio
+
+Antes de aceitar o resultado, testei as duas explicações alternativas que eu
+tinha. **Nenhuma se sustentou.**
+
+### 16.1 "90 dias dilui um efeito que é rápido"
+
+Plausível: uma pluma de água doce dura dias, não um trimestre. E o cache guarda
+os 91 valores diários de cada visita, então dá para reconstruir janelas menores
+**sem baixar nada**.
+
+| Janela | PR-AUC sítio | PR-AUC ano |
+|---|---|---|
+| 7 dias | 0,762 | 0,647 |
+| 14 dias | 0,742 | 0,632 |
+| 30 dias | 0,726 | 0,647 |
+| **60 dias** | 0,736 | **0,664** |
+| 90 dias | 0,739 | 0,636 |
+
+*(logística, J + 4 ambientais)*
+
+Todas ficam entre 0,632 e 0,664 — **todas abaixo dos 0,717 do modelo sem
+ambientais**. Nenhum tamanho de janela resgata o sinal.
+
+### 16.2 "Elas são identificador de lugar disfarçado"
+
+Era a minha hipótese principal, e foi o que aconteceu com a climatologia do
+próprio GCBD (§11.5). Dois testes:
+
+**Variam com a visita?** Sim. O desvio-padrão *dentro* de cada sítio, dividido
+pelo total:
+
+| Variável | Razão | |
+|---|---|---|
+| `oxigenio_variacao_90d` | 0,87 | varia com a visita |
+| `salinidade_variacao_90d` | 0,81 | varia com a visita |
+| `oxigenio_media_90d` | 0,61 | varia com a visita |
+| `salinidade_media_90d` | 0,48 | varia com a visita |
+| *(comparação)* `TSA_DHW` | 0,20 | quase fixo do sítio |
+
+**Dá para adivinhar o sítio a partir delas?** Um pouco: 14,9% de acerto contra
+3,0% de acaso — 5× o acaso, mas longe de identificar. Carregam alguma
+assinatura do lugar, e isso não é a explicação.
+
+> **As duas hipóteses caíram. O sinal simplesmente não está lá — ou não está
+> nestes produtos.** A distinção importa, e está em §18.
+
+---
+
+## 17. O que elas *fazem* — separação sem capacidade preditiva
+
+Este é o achado mais interessante do passo 2, e ele não é zero.
+
+As quatro variáveis **separam as classes na direção fisicamente esperada**.
+Diferença de médias em desvios-padrão (*d* de Cohen):
+
+| Variável | Branqueou | Não branqueou | *d* |
+|---|---|---|---|
+| `TSA_DHW` | 0,789 | 0,034 | **+0,602** |
+| `TSA` | −0,573 | −1,142 | **+0,525** |
+| `Windspeed` | 5,50 | 6,13 | **−0,461** |
+| `oxigenio_media_90d` | 203,65 | 204,94 | −0,377 |
+| `oxigenio_variacao_90d` | −2,17 | −1,32 | −0,315 |
+| `salinidade_variacao_90d` | −0,108 | −0,014 | −0,284 |
+| `salinidade_media_90d` | 36,70 | 36,83 | −0,281 |
+
+Lido como mecanismo: os sítios que branquearam tinham **oxigênio mais baixo e
+caindo mais rápido**, e **salinidade mais baixa e caindo**. Exatamente o que a
+hipótese do projeto previa.
+
+**Mas o efeito é cerca de metade do das térmicas, e não vira previsão.**
+
+Na importância por permutação, medida fora da dobra e agrupada por ano:
+
+| Variável | Queda do PR-AUC |
+|---|---|
+| `TSA_DHW` | +0,0681 |
+| `Windspeed` | +0,0426 |
+| `salinidade_media_90d` | +0,0199 |
+| `TSA` | −0,0121 |
+| `oxigenio_variacao_90d` | −0,0182 |
+| `salinidade_variacao_90d` | −0,0297 |
+| `oxigenio_media_90d` | **−0,0449** |
+
+Só `salinidade_media_90d` contribui algo, e pouco. **O oxigênio piora o
+modelo.**
+
+### 🔁 É a segunda vez que o projeto vê exatamente isto
+
+Na entrega 1, [VARIAVEIS.md](VARIAVEIS.md) §3.6 mediu que a trajetória do
+oxigênio separa início de fim de episódio em **0,61 σ** — e §7 mostrou que essa
+separação **não virou capacidade preditiva** (contribuição −0,001).
+
+Agora, com **outro conjunto de dados, outro alvo e outro período**, o mesmo
+padrão: separação descritiva real, contribuição preditiva nula ou negativa.
+
+A repetição é, ela mesma, o resultado. Uma vez é indício; duas vezes em bases
+independentes é um fato sobre o problema.
+
+### E o `Windspeed` continua funcionando — ⚠️ **corrigido, ver §20**
+
+`Windspeed` é a segunda variável mais útil em todas as versões (+0,043), com
+coeficiente **−0,72**: mais vento, menos branqueamento. É **não térmica** e
+funciona.
+
+E a correlação explica parte do resto: `oxigenio_variacao_90d` × `Windspeed`
+tem **r = +0,554**. O vento mistura a coluna d'água e a oxigena — então o vento
+já carrega parte do que o oxigênio diria, e chega antes.
+
+🚨 **Este parágrafo foi escrito em 26/07/2026 e desmentido no mesmo dia.** O
+`Windspeed` usado aqui é uma coluna do próprio GCBD, e ninguém tinha conferido
+se ela descreve o vento. Ao comparar com vento medido do ERA5, o efeito some.
+**Ver §20.** O parágrafo fica com o aviso em cima porque apagá-lo esconderia o
+percurso — mesma regra de [VARIAVEIS.md](VARIAVEIS.md) §3.6.
+
+---
+
+## 18. ⚠️ A explicação concorrente que estes dados não descartam
+
+**O resultado negativo é sobre estes produtos nesta resolução, não sobre o
+mecanismo.**
+
+A grade do produto de oxigênio é **0,25° ≈ 28 km**. Medido em
+[FONTES.md](FONTES.md) §6.18: **69 das 166 visitas estão a menos de 1 km da
+costa**, e **20 sítios só encontram oxigênio a até 33 km do recife**.
+
+Uma pluma de água doce ou um evento de hipóxia num recife costeiro raso é
+exatamente o tipo de fenômeno que uma célula de 28 km de lado **calcula a média
+para fora**. O que foi medido foi a salinidade e o oxigênio *do oceano ao redor*,
+não *do recife*.
+
+Então há duas explicações vivas, e estes dados não separam:
+
+1. Salinidade e oxigênio não explicam o branqueamento brasileiro observado.
+2. Eles explicam, mas a reanálise global não os enxerga na escala do recife.
+
+**Escolher a primeira sem declarar a segunda seria erro.** O que se pode
+afirmar é o enunciado condicional:
+
+> Com salinidade e oxigênio de reanálise global (0,083° e 0,25°), numa janela
+> de 7 a 90 dias antes da observação, não há ganho preditivo sobre um modelo
+> térmico, em 166 visitas a recifes brasileiros entre 1994 e 2010.
+
+O que resolveria: dado *in situ*, de sonda no recife. Não existe para estes 119
+sítios neste período.
+
+---
+
+## 19. O que fica das duas entregas
+
+| Pergunta | Resposta | Onde |
+|---|---|---|
+| Dá para prever estresse térmico com antecedência? | **Sim** — 18 de 19 episódios em 7 dias | §1–§7 |
+| Variáveis não térmicas ajudam a prever o **BAA**? | **Não** — mas a pergunta era circular | §8 |
+| O sinal térmico explica o branqueamento **observado**? | **Não** — a regra da NOAA pega 10 de 88 | §11 |
+| Salinidade e oxigênio **de reanálise** explicam o resto? | **Não** — nenhuma combinação supera o só-térmico | §15 |
+| Alguma variável não térmica funciona? | ~~Sim, o vento~~ → **não se confirmou** | **§20** |
+
+O produto honesto continua se chamando **previsão de estresse térmico**. O que
+mudou é que agora se sabe, com número, o quanto isso deixa de fora: **78 dos 88
+branqueamentos brasileiros observados**.
+
+---
+
+## 20. 🚨 O vento também não se confirma
+
+Medido em **26/07/2026**, poucas horas depois de §17 ser escrita.
+
+§17 e §12.2 afirmaram que o vento é a variável não térmica que funciona, e essa
+afirmação promoveu o ERA5 a prioridade máxima do projeto. **Ela não sobreviveu à
+primeira verificação independente.**
+
+### O furo do argumento original
+
+Toda a evidência vinha de **uma única coluna**: o `Windspeed` do próprio GCBD.
+Ninguém tinha conferido se aquela coluna descreve o vento — foi assumido.
+
+O teste: baixar vento real do ERA5 para os **mesmos 166 pontos e as mesmas
+datas**, e comparar.
+
+### As duas fontes concordam sobre o vento
+
+| | |
+|---|---|
+| Correlação | **r = +0,708** |
+| Erro absoluto médio | 1,20 m/s |
+| Dentro de 2 m/s | 80,7% |
+| Razão mediana | 0,905 |
+
+✅ Confirma também a **unidade**: m/s, não nós — se fossem nós a razão seria ~1,94.
+
+### E discordam completamente sobre o coral
+
+| Fonte do vento | *d* de Cohen | IC 95% *(bootstrap, 2.000)* |
+|---|---|---|
+| `Windspeed` do GCBD | **−0,461** | [−0,783, −0,160] — não inclui zero |
+| **ERA5** | **−0,057** | [−0,358, +0,254] — **inclui zero** |
+
+No modelo, que é o que decide:
+
+| Features | PR-AUC sítio | **PR-AUC ano** |
+|---|---|---|
+| `TSA_DHW` + `TSA`, **sem vento** | 0,699 | 0,692 |
+| \+ `Windspeed` do GCBD | 0,722 | **0,717** |
+| \+ **vento do ERA5** | 0,698 | **0,673** |
+
+> **Trocar a coluna do GCBD por vento medido de verdade deixa o modelo pior do
+> que não ter vento nenhum.**
+
+### Três hipóteses testadas
+
+| Hipótese | Resultado |
+|---|---|
+| A coluna do GCBD carrega variável escondida | ⛔ **não** — as duas correlacionam quase igual com tudo (mês, latitude, turbidez); maior diferença 0,16 |
+| É o arredondamento para inteiro | ⛔ **não** — ERA5 arredondado dá *d* = −0,040 |
+| É ruído de 166 amostras | ✅ **é o que sobra** — os dois IC se sobrepõem largamente |
+
+### O que isso estabelece
+
+**Estabelece:** o efeito do vento **não é robusto à escolha do produto**. Um
+ganho de +0,025 no PR-AUC — que §15 já classificava explicitamente como **dentro
+do ruído** — vira −0,019 ao trocar a fonte.
+
+**Não estabelece** que não existe efeito do vento. Os intervalos se sobrepõem;
+com 166 visitas nenhuma das duas estimativas é precisa.
+
+### 💡 E fica um achado positivo, que não é sobre vento
+
+**28 km serve para vento.** Duas fontes independentes concordando em r = 0,71,
+uma delas arredondada para inteiro.
+
+Isso torna a ressalva de §18 **mais específica e mais forte**: a resolução
+grosseira não é problema para campos suaves — o problema é com variáveis
+**irregulares e costeiras**, como oxigênio e nutrientes. A ressalva deixa de ser
+"28 km é grosseiro" e passa a ser "28 km é grosseiro *para este tipo de
+variável*", que é uma afirmação melhor.
+
+### ⚠️ A lição, que não é sobre vento nem sobre ERA5
+
+> Uma diferença **dentro do ruído declarado** não deve virar prioridade de
+> projeto, por mais que o mecanismo faça sentido.
+
+O ruído foi declarado em §15 — *"diferenças abaixo de ~0,05 são ruído"* — e
+depois raciocinei como se não estivesse, porque o mecanismo do vento é
+convincente. Mecanismo plausível é justamente o que faz um número de ruído
+parecer um achado.
+
+### 20.1 ✅ Consequência aplicada: o `Windspeed` saiu do conjunto interpretável
+
+Decidido e aplicado em **27/07/2026**. O conjunto interpretável passa de três
+para **duas** colunas:
+
+```
+FEATURES_INTERPRETAVEIS = ('TSA_DHW', 'TSA')
+```
+
+| Conjunto | PR-AUC sítio | PR-AUC ano | Brier | Coef. invertidos |
+|---|---|---|---|---|
+| `TSA_DHW`, `TSA`, `Windspeed` *(antes)* | 0,722 | 0,717 | 0,225 | 0 |
+| **`TSA_DHW`, `TSA`** *(agora)* | **0,699** | **0,692** | **0,229** | **0** |
+
+**Custa 0,025 de PR-AUC — exatamente a diferença que §15 classifica como
+ruído.** E compra uma coisa que não é métrica: cada entrada passa a ter
+mecanismo defensável sem ressalva anexada.
+
+Os coeficientes ficam limpos e o sinal é o físico:
+
+| Variável | Coeficiente | Importância (por ano) | Leitura |
+|---|---|---|---|
+| `TSA_DHW` | **+1,011** | +0,076 | estresse térmico acumulado piora |
+| `TSA` | **+0,374** | +0,040 | anomalia térmica do dia piora |
+
+E as duas passam a contribuir positivamente na validação por ano — antes o `TSA`
+ficava em +0,006, quase apagado pelo vento.
+
+**O critério que orientou a escolha**, e que vale para decisões futuras:
+
+> Entre um conjunto com número melhor dentro do ruído e um conjunto em que toda
+> entrada se defende sozinha, escolher o segundo. Num trabalho que precisa ser
+> defendido, duas variáveis com mecanismo claro valem mais que três em que uma
+> exige duas páginas de ressalva.
+
+⚠️ O `Windspeed` **continua** na versão de 8 features (`FEATURES_PADRAO`), e
+deve continuar: ali ele não foi escolhido por nós, é o que o GCBD oferece. O que
+saiu foi a escolha deliberada de mantê-lo. Há teste travando a remoção, com o
+motivo escrito.
+
+---
+
+## 21. Qualidade da água — clorofila, nitrato e silicato
+
+Rodado em **27/07/2026**. Extraídas **45.318 valores diários**, 498 pares
+(visita, variável), **zero falhas**.
+
+**Custo quase nulo, e esse foi o motivo de fazer:** as três saem do **mesmo
+arquivo** de onde já vinha o oxigênio (`cmems_mod_glo_bgc_my_0.25deg_P1D-m`).
+Nenhuma fonte nova, credencial nova ou código novo — só mais nomes numa tupla.
+
+**A hipótese que justificava:** o `silicato` marca **aporte continental**, isto
+é, água de rio chegando ao recife. A salinidade deveria detectar isso — rio é
+água doce — e não detectou (§15). O silicato pergunta a mesma coisa por outro
+caminho.
+
+### 21.1 A resposta é não, pela terceira vez
+
+| Conjunto | Features | PR-AUC sítio | **PR-AUC ano** |
+|---|---|---|---|
+| **Só as 3 térmicas** | 3 | 0,722 | **0,717** |
+| \+ nitrato | 5 | 0,733 | 0,697 |
+| \+ silicato | 5 | 0,710 | 0,679 |
+| \+ clorofila | 5 | 0,707 | 0,617 |
+| \+ as 6 de água | 9 | 0,724 | 0,630 |
+| \+ água e salinidade/O₂ (tudo) | 13 | 0,751 | 0,630 |
+| **Só ambientais, sem térmica** | 10 | **0,753** | 0,624 |
+
+**Nenhuma combinação melhora a validação por ano.** Todas pioram.
+
+E repare no padrão que já apareceu duas vezes: **por sítio o resultado sobe**
+(0,722 → 0,753, o melhor de todos) **enquanto por ano cai**. É a assinatura de
+um modelo que reconhece o evento em vez de aprender o fenômeno (§11.4).
+
+### 21.2 O silicato é o único que passa no teste estatístico
+
+Diferença entre branqueou e não branqueou, com intervalo por reamostragem
+(2.000 vezes):
+
+| Variável | *d* | IC 95% | |
+|---|---|---|---|
+| `TSA_DHW` | +0,602 | [+0,422, +0,788] | exclui zero |
+| `TSA` | +0,525 | [+0,229, +0,846] | exclui zero |
+| `Windspeed` | −0,461 | [−0,780, −0,166] | exclui zero *(mas ver §20)* |
+| **`silicato_variacao_90d`** | **+0,396** | **[+0,077, +0,746]** | **exclui zero** |
+| `silicato_media_90d` | +0,205 | [−0,112, +0,549] | inclui zero |
+| `clorofila_media_90d` | +0,120 | [−0,207, +0,415] | inclui zero |
+| `nitrato_variacao_90d` | +0,108 | [−0,180, +0,492] | inclui zero |
+| `nitrato_media_90d` | −0,058 | [−0,314, +0,295] | inclui zero |
+| `clorofila_variacao_90d` | +0,037 | [−0,254, +0,358] | inclui zero |
+
+**`silicato_variacao_90d` é a única variável de qualidade da água cujo efeito se
+distingue de zero.** Direção: o silicato estava **subindo** nos sítios que
+branquearam — isto é, mais aporte continental chegando.
+
+⚠️ **Mas o intervalo começa em +0,077, colado no zero.** E foram 9 variáveis
+testadas: com esse número, esperar que uma cruze o limiar por acaso é o
+esperado, não a exceção. Isto é indício fraco, e tratá-lo como achado seria
+repetir exatamente o erro do vento (§20).
+
+### 21.3 🚨 E a hipótese do rio **não** se sustenta
+
+Se o silicato marcasse água de rio, ele deveria andar **contra** a salinidade —
+rio dilui o sal. Medido:
+
+| Par | r | O que se esperava |
+|---|---|---|
+| `silicato` × `salinidade` | **+0,363** | 🚨 **negativo** |
+| `silicato` × `Distance_to_Shore` | −0,233 | negativo ✅ |
+| `nitrato` × `silicato` | **+0,733** | positivo ✅ |
+| `nitrato` × `clorofila` | +0,481 | positivo ✅ |
+
+O silicato **sobe junto com a salinidade**, o oposto do que uma pluma de água
+doce produziria. Ele se comporta como enriquecimento costeiro genérico — cai com
+a distância da costa, anda junto com o nitrato — mas **não como marcador de água
+de rio**.
+
+> **A hipótese que motivou incluir o silicato foi testada e não se sustentou.**
+> O efeito existe, é fraco, e não é o mecanismo que se supôs.
+
+### 21.4 A colinearidade voltou, previsivelmente
+
+`nitrato` × `silicato` dá **r = 0,733**. Excluí o fosfato justamente para evitar
+isso — e as duas que entraram são quase a mesma coluna assim mesmo.
+
+Os coeficientes voltam a ficar ininterpretáveis:
+
+| Variável | Coeficiente | |
+|---|---|---|
+| `salinidade_media_90d` | −0,678 | |
+| `silicato_media_90d` | +0,660 | |
+| `TSA_DHW` | +0,651 | |
+| `nitrato_media_90d` | **−0,607** | 🚨 mais nutriente, menos branqueamento |
+
+`nitrato` negativo diria que **adubo protege o coral**. É falso, e é o mesmo
+sintoma de §8 e §12: com 13 features sobre 166 visitas, o modelo reparte crédito
+arbitrariamente entre colunas que dizem a mesma coisa.
+
+### 21.5 A ressalva de §18, na sua forma mais forte
+
+Tudo o que §18 diz sobre oxigênio **vale mais aqui**.
+
+A grade é 0,25° ≈ **28 km**. §20 mostrou que isso **serve para vento**, um campo
+suave e de grande escala. Nutriente é o oposto: uma pluma de rio tem poucos
+quilômetros de largura e vive colada na costa — exatamente o que uma célula de
+28 km calcula a média para fora.
+
+E há evidência disso no próprio resultado: **84 das 498 extrações precisaram de
+raio de 0,30°** (~33 km) para achar célula de oceano.
+
+> Este resultado negativo é, entre todos os do projeto, o **menos conclusivo**.
+> Não distingue "nutriente não importa" de "não conseguimos medir nutriente na
+> escala do recife".
+
+---
+
+## 22. 🚨 A probabilidade que o painel ia exibir estava mentindo
+
+Medido em **27/07/2026**. É o item que bloqueava o go-live.
+
+O painel vai mostrar **"risco 37%"**. Para esse número não ser decorativo, ele
+precisa cumprir uma promessa verificável:
+
+> Entre os dias em que o modelo disse 37%, o alerta aconteceu em cerca de 37%
+> deles.
+
+### 22.1 Não cumpria — e por uma margem do tamanho do fenômeno
+
+| | |
+|---|---|
+| Taxa real de evento | **0,084** |
+| Probabilidade média que o modelo dizia | **0,165** |
+| Viés | **+0,081** — promete o dobro |
+| Erro esperado (ECE) | **0,081** |
+| Erro máximo (MCE) | 0,213 |
+
+**O erro de calibração (0,081) é praticamente do tamanho da taxa base
+(0,084).** Ou seja: o número exibido erraria, em média, tanto quanto o próprio
+fenômeno acontece.
+
+A curva mostra o padrão, e ele é sistemático — **todas** as faixas prometem
+demais:
+
+| Prometido | Observado | Desvio |
+|---|---|---|
+| 0,027 | 0,006 | +0,021 |
+| 0,069 | 0,004 | +0,065 |
+| **0,084** | **0,000** | **+0,084** |
+| 0,101 | 0,015 | +0,085 |
+| 0,961 | 0,748 | +0,213 |
+
+Na faixa em que o modelo dizia exatamente 8,4% — a taxa base —, o alerta
+aconteceu **zero vezes**.
+
+### 22.2 Não é defeito a descobrir; é consequência conhecida a medir
+
+A causa está no próprio `ml/modelo.py`: `class_weight='balanced'`.
+
+Esse parâmetro instrui o estimador a tratar as duas classes como se fossem do
+mesmo tamanho. Isso é **correto para decidir** com 8% de positivos — sem ele o
+modelo aprende que nunca avisar quase sempre acerta ([METODOLOGIA.md](METODOLOGIA.md)
+§4) — e **destrói a probabilidade por construção**.
+
+O que a medição acrescenta é o tamanho do estrago, que não era óbvio.
+
+### 22.3 Por que o Brier "bom" escondia isso
+
+O Brier era 0,043 e parecia ótimo. A decomposição de Murphy separa o que ele
+mistura:
+
+```
+Brier = confiabilidade − resolução + incerteza
+```
+
+| Termo | Valor | Leitura |
+|---|---|---|
+| confiabilidade | 0,0098 | é a **calibração** — quanto menor, melhor |
+| resolução | 0,0493 | quanto o modelo **separa** — quanto maior, melhor |
+| **incerteza** | **0,0769** | a dificuldade do **problema**, não do modelo |
+
+**A incerteza sozinha é o dobro do Brier.** O número parecia bom porque 92% dos
+dias não têm alerta, não porque o modelo acertasse a probabilidade.
+
+> Brier baixo pode vir de problema fácil. Só a decomposição distingue.
+
+### 22.4 O conserto, com o custo medido
+
+Quatro caminhos testados, todos com predição **fora da dobra** e com o
+recalibrador ajustado **dentro** do treino (`cv=3` interno — ajustá-lo sobre as
+predições avaliadas seria vazamento, e a curva sairia perfeita por construção):
+
+| Versão | ECE | Viés | PR-AUC | R @ 0,5 | Confiabilidade |
+|---|---|---|---|---|---|
+| `balanced` *(o que estava no ar)* | **0,0811** | +0,081 | 0,885 | 0,909 | 0,0098 |
+| sem `class_weight` | 0,0084 | −0,002 | 0,866 | 0,716 | 0,0002 |
+| `balanced` + Platt | 0,0163 | −0,002 | 0,878 | 0,721 | 0,0005 |
+| **`balanced` + isotônica** | **0,0039** | −0,001 | 0,871 | 0,775 | **0,0000** |
+
+**Adotada a isotônica** — ECE 20× menor, e a curva passa a fechar:
+
+| Prometido | Observado | Desvio |
+|---|---|---|
+| 0,003 | 0,003 | +0,001 |
+| 0,081 | 0,079 | +0,001 |
+| 0,723 | 0,737 | −0,015 |
+
+### 22.5 Calibrar não custa detecção — custa mudar o corte
+
+O PR-AUC quase não muda entre as versões (0,841 a 0,885). PR-AUC só depende da
+**ordem**. Isso já sugeria que o `class_weight` não detectava mais — ele
+**empurrava a probabilidade para cima**, o que equivale a baixar o limiar sem
+declarar.
+
+Confirmado, comparando pontos de operação:
+
+| | Limiar | Precisão | Revocação | F1 |
+|---|---|---|---|---|
+| `balanced` | 0,50 | 0,721 | 0,909 | 0,804 |
+| **isotônica** | **0,20** | 0,705 | **0,903** | 0,792 |
+
+**No corte equivalente, o desempenho é o mesmo.** O que muda é onde fica o
+corte — e agora ele é uma decisão declarada, em vez de efeito colateral de um
+parâmetro de treino.
+
+⚠️ Uma ressalva de método: os limiares ótimos foram escolhidos olhando as mesmas
+predições que os avaliam. Serve para comparar as versões entre si, **não** como
+estimativa de desempenho futuro — mesmo viés declarado em §12.3.
+
+### 22.6 A separação que isso estabelece para o painel
+
+> **Probabilidade calibrada para exibir. Limiar declarado para avisar.**
+> São decisões diferentes e devem ser tomadas em lugares diferentes.
+
+`treinar_final` passa a gravar o modelo **recalibrado por padrão**, e a
+recalibração viaja nos metadados — sem isso ninguém saberia se a probabilidade
+gravada é crua ou corrigida, e a diferença vale 0,081 de ECE.
+
+### 22.7 Um defeito no próprio medidor, achado por teste
+
+Ao escrever os testes, um caso quebrou: **predição constante produzia curva
+vazia e ECE = 0,0** — que se lê como calibração perfeita.
+
+Um modelo que responde sempre 30% sobre 8% de eventos é o pior calibrado
+possível, e passava como o melhor. A causa era o agrupamento por quantil
+colapsando todas as bordas quando não há variação.
+
+Corrigido com um recuo para agrupamento por valores distintos, e travado por
+teste. É o tipo de defeito que só aparece no caso degenerado — e o caso
+degenerado é justamente o que se quer denunciar.
+
+---
+
+## 23. O que estes resultados indicam fazer
+
+| Prioridade | O quê | Por quê |
+|---|---|---|
+| ✅ feito | ~~Persistir um modelo~~ | Feito em 27/07/2026: `manage.py treinar_final`. Ver [VISAO_GERAL.md](VISAO_GERAL.md) §7.4 |
+| **Alta** | Declarar §18 e §20 em qualquer texto | Os dois resultados negativos são condicionais, e omitir as condições seria afirmar demais |
+| ✅ feito | ~~Curva de calibração~~ | Feito em 27/07/2026 (§22): o modelo prometia **o dobro** do que acontecia. Corrigido com recalibração isotônica, ECE de 0,081 para **0,0039** |
+| Média | Investigar 2022 (entrega 1) | Único ano em que o modelo perde claramente |
+| Baixa | Dado *in situ* | Resolveria §18 e §21.5, mas não existe para estes sítios |
+| ⛔ | **Conector do ERA5** | §20 — o vento medido piora o modelo. Ver [ERA5.md](ERA5.md) |
+| ⛔ | ~~Qualidade da água~~ | §21 — feita, e nenhuma combinação melhora |
+| ⛔ | Mais variáveis ambientais | §21.4 — com 13 features sobre 166 visitas os coeficientes já não se sustentam |
+| ⛔ | Ampliar a janela ambiental | Testado de 7 a 90 dias; nenhum tamanho ajuda (§16.1) |
+
+### O padrão que se repete, e o que ele diz
+
+Quatro famílias de variável não térmica foram testadas contra branqueamento
+observado. **Todas descrevem; nenhuma prevê.**
+
+| Variável | *d* distinguível de zero? | Melhora a previsão por ano? |
+|---|---|---|
+| Salinidade | não | não |
+| Oxigênio | não | não |
+| Vento | sim na coluna do GCBD, **não em vento medido** (§20) | não |
+| Clorofila, nitrato | não | não |
+| Silicato (variação) | **sim, mas colado no zero** (§21.2) | não |
+
+Três leituras possíveis, e **estes dados não separam**:
+
+1. Variáveis não térmicas realmente não preveem branqueamento no Brasil.
+2. Preveem, mas a **resolução** de 28 km não as enxerga na escala do recife
+   (§18, §21.5) — mais provável para nutriente que para vento, já que §20
+   mostrou que 28 km serve para campo suave.
+3. **166 visitas é pouco** para detectar um efeito de tamanho moderado. Todos os
+   intervalos são largos; o próprio efeito térmico só se destaca por ser grande.
+
+> A explicação 3 vale para as três leituras, e nenhuma fonte nova a resolve. O
+> que resolveria é mais rótulo observado — e o GCBD brasileiro termina em 2010.
+
 ---
 
 ## Reprodução
@@ -861,12 +1500,32 @@ O arquivo do GCBD não é versionado. Baixe pelo DOI de [GCBD.md](GCBD.md) e
 coloque em `dados/global_bleaching_environmental.csv`, ou aponte `GCBD_CSV`
 para ele.
 
+Entrega 2, passo 2 (§15–§19) — o primeiro comando **usa rede** e exige a
+credencial do Copernicus; leva alguns minutos e é retomável:
+
+```bash
+python backend\manage.py ingerir_gcbd
+```
+
+```bash
+python backend\manage.py treinar_gcbd --interpretavel --ambiental --importancia
+```
+
+```bash
+python backend\manage.py treinar_gcbd --so-ambiental --importancia
+```
+
 ---
 
 ## Histórico
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | 🚨 **§22 criada — a probabilidade que o painel ia exibir estava mentindo, e o bloqueio de go-live caiu.** O modelo dizia **0,165** onde a taxa real é **0,084**: ECE de **0,081**, praticamente do tamanho do próprio fenômeno, com **todas** as faixas prometendo demais — na faixa que dizia 8,4% o alerta aconteceu **zero vezes**. A causa não era defeito a descobrir e sim consequência conhecida a medir: `class_weight="balanced"` corrige a **decisão** e destrói a **probabilidade**. A decomposição de Murphy mostrou por que o Brier de 0,043 escondia isso — a **incerteza (0,0769) sozinha é o dobro do Brier**, ou seja o número parecia bom porque o problema é fácil. Testados quatro consertos; **adotada a recalibração isotônica** (ECE 0,0039, 20× melhor), com o calibrador ajustado **dentro** da dobra de treino. E medido que **calibrar não custa detecção**: no corte equivalente (0,20 em vez de 0,50) a revocação é a mesma — o `class_weight` não detectava mais, apenas baixava o limiar sem declarar. Fica a separação: **probabilidade calibrada para exibir, limiar declarado para avisar**. §22.7 registra um defeito no próprio medidor, achado por teste: predição constante produzia curva vazia e ECE 0,0, que se lê como calibração perfeita quando é o pior caso possível. |
+| 27/07/2026 | **§20.1 — `Windspeed` removido do conjunto interpretável, e o critério registrado.** `FEATURES_INTERPRETAVEIS` passa de três para duas colunas: `TSA_DHW` e `TSA`. Custa **0,025** de PR-AUC por ano (0,717 → 0,692) — exatamente a diferença que §15 classifica como ruído — e compra que **toda entrada tenha mecanismo defensável sem ressalva**. Coeficientes limpos e no sinal físico (`TSA_DHW` +1,011, `TSA` +0,374), e as duas passam a contribuir positivamente na validação por ano, contra o `TSA` quase apagado antes. O `Windspeed` **continua** na versão de 8 features, onde não foi escolha nossa. Teste travando a remoção, com o motivo escrito. Critério para decisões futuras: *entre um número melhor dentro do ruído e um conjunto em que toda entrada se defende sozinha, escolher o segundo*. |
+| 27/07/2026 | **§21 criada — qualidade da água testada, e a resposta é não pela terceira vez.** Extraídos **45.318 valores diários** de clorofila, nitrato e silicato, 498 pares, zero falhas, do **mesmo produto** de onde já vinha o oxigênio — custo quase nulo. **Nenhuma combinação melhora a validação por ano**; todas pioram, e reaparece a assinatura já conhecida de subir por sítio (0,753, o melhor de todos) enquanto cai por ano. O `silicato_variacao_90d` é a **única** variável de qualidade da água com efeito distinguível de zero (*d* = +0,396, IC [+0,077, +0,746]) — mas o intervalo começa colado no zero e foram 9 variáveis testadas, então tratá-lo como achado repetiria o erro do vento. 🚨 **E a hipótese que justificava o silicato não se sustentou**: ele correlaciona **+0,363 com a salinidade**, o oposto do que uma pluma de água doce produziria — comporta-se como enriquecimento costeiro genérico, não como marcador de rio. Colinearidade de volta (`nitrato` × `silicato` r = 0,733) com `nitrato` saindo em −0,607, o que diria que adubo protege coral. §21.5 registra que este é o resultado negativo **menos conclusivo** do projeto, porque 28 km é a pior escala possível para nutriente — e §20 já mostrou que essa grade serve para campo suave, o que torna a ressalva específica em vez de genérica. §22 acrescenta o quadro das quatro famílias testadas e as três leituras que os dados não separam. |
+| 26/07/2026 | 🚨 **§20 criada — o vento também não se confirma, e §17 fica corrigida.** Poucas horas depois de §17 afirmar que o vento é a variável não térmica que funciona, o teste independente derrubou a afirmação. Toda a evidência vinha de **uma única coluna** — o `Windspeed` do próprio GCBD —, e ninguém tinha conferido se ela descreve o vento. Baixado vento real do ERA5 para os mesmos 166 pontos e datas: as duas fontes **concordam sobre o vento** (r = +0,708, 80,7% dentro de 2 m/s, razão 0,905 confirmando m/s) e **discordam sobre o coral** (*d* = −0,461 contra −0,057, com o IC do ERA5 incluindo zero). **Trocar a coluna do GCBD por vento medido deixa o modelo pior que não ter vento**: 0,717 → 0,673, contra 0,692 sem vento. Descartadas variável escondida e arredondamento; sobra ruído de 166 amostras. Fica um achado positivo — **28 km serve para vento** —, o que torna a ressalva de §18 específica de variáveis irregulares em vez de geral. E a lição: *uma diferença dentro do ruído declarado não deve virar prioridade de projeto*, que foi exatamente o erro cometido, já que §15 declarava o ruído. O conector do ERA5 fica **cancelado** ([ERA5.md](ERA5.md)). |
+| 26/07/2026 | **Entrega 2, passo 2 rodado (§15–§19) — a resposta é não.** 30.212 valores diários de salinidade e oxigênio extraídos para os 90 dias antes de cada uma das 166 visitas, 332 pares, **zero falhas**. **Nenhuma combinação supera o modelo só-térmico na validação por ano** (0,717); acrescentar as quatro ambientais piora para 0,636, e sozinhas elas ficam em 0,527 contra taxa base 0,530 — acaso. As duas explicações alternativas foram testadas e caíram: **nenhum tamanho de janela** de 7 a 90 dias resgata o sinal (§16.1), e elas **não são identificador de sítio** (§16.2). O achado positivo é em §17: as quatro **separam as classes na direção fisicamente esperada** (oxigênio mais baixo e caindo nos sítios que branquearam, *d* = −0,38), com metade da força das térmicas, e essa separação **não vira previsão** — exatamente o que já acontecera com o oxigênio na entrega 1, agora repetido em base independente. §18 registra a explicação concorrente que estes dados **não descartam**: a grade do oxigênio é 28 km e 20 sítios só têm dado a até 33 km, então pode ser resolução e não mecanismo. O `Windspeed` segue como a única não térmica que funciona, o que promove o **ERA5** a prioridade alta. |
 | 26/07/2026 | **Entrega 2, passo 1 rodado (§11–§14).** Alvo passa a ser branqueamento observado. Três correções ao levantamento inicial: a unidade amostral é a **visita** (166, não 313 amostras), `ClimSST` tem **sentinela** em 115 de 313 registros e saiu do baseline, e o equilíbrio de 53% **não** é artefato do limiar (só 2 dos 88 positivos têm < 0,1%). O resultado central: a regra da NOAA tem precisão 1,000 mas revocação 0,114 — **78 dos 88 branqueamentos ocorreram com `TSA_DHW` = 0**. Modelos térmicos ficam em 1,16×–1,35× o acaso ao serem testados num ano não visto, e o abismo sítio (0,803) × ano (0,614) mostra que a versão com 8 features reconhecia o evento, não o fenômeno. Adotada a versão **J** (`TSA_DHW`, `TSA`, `Windspeed`) como conjunto interpretável — 3 entradas, zero coeficientes invertidos, sítio 0,722 × ano 0,717 —, com ressalva de viés de seleção declarada em §12.3. `Windspeed` aparece como segunda variável mais útil: o primeiro sinal não térmico do projeto. |
 | 25/07/2026 | **Versão D aplicada ao código.** `FEATURES_PADRAO` vazio e uma janela por variável — 4 entradas. Coeficientes todos com sinal fisicamente correto, e importância por coluna igual à por grupo, já que a colinearidade sumiu. Revelou o retrato honesto que a versão C disfarçava: **o modelo é essencialmente um modelo da trajetória do DHW** (+0,670 de 0,67 total), e as variáveis não térmicas não contribuem. Reforça a necessidade do GCBD para a entrega 2. |
 | 25/07/2026 | **§8 — colinearidade diagnosticada, e o diagnóstico anterior estava errado.** Não é nível×trajetória (r ≈ 0,10) e sim **as duas janelas da mesma variável** (`dhw_variacao_7d` × `dhw_variacao_14d`, **r = 0,976**). Cinco versões comparadas: a **D — uma janela por variável** resolve, com 4 entradas em vez de 10, F1 0,728 contra 0,707, o melhor PR-AUC (0,790) e **nenhum coeficiente térmico invertido**. Custo: 16 episódios em vez de 18, dentro do ruído. Recomendação registrada: adotar D — ainda **não aplicada ao código**. |
