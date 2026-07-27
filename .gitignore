@@ -40,6 +40,14 @@ media/
 #   git rm --cached backend/dados/*.csv
 backend/dados/*.csv
 dados/*.csv
+
+# Modelos treinados. Artefato DERIVADO: reconstruivel com
+#   python backend/manage.py treinar_final
+# Nao versionar. Um .joblib no repositorio envelhece em silencio — em duas
+# semanas o arquivo diz uma coisa e o codigo diz outra, e ninguem sabe qual
+# vale. Mesma decisao do .docx da documentacao e da projecao do Neo4j.
+# Ver backend/ml/persistencia.py.
+dados/modelos/
 calcular_dhw.py
 aquaculture/management/calcular_dhw.py
 
@@ -58,3 +66,8 @@ desktop.ini
 # Dump de migracao SQLite -> PostgreSQL. Gerado por dumpdata, nao versionar:
 # tem 20 MB e e reconstruivel com "manage.py dumpdata".
 backend/dados_sqlite.json
+
+# Documentacao exportada para .docx. Artefato derivado do Markdown,
+# regeravel com "manage.py exportar_docs". Nao versionar: copia versionada
+# envelhece e ninguem sabe qual das duas vale.
+docs/exportado/
