@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
+from .models import (
+    DatasetCatalogo,
+    Especie,
+    LocalRecife,
+    MedicaoAmbiental,
+    StatusPredicao,
+)
 
 
 class StatusPredicaoSerializer(serializers.ModelSerializer):
@@ -148,4 +154,37 @@ class DatasetCatalogoSerializer(serializers.ModelSerializer):
             'periodo_rotulo',
             'tamanho_mb',
             'url_download',
+        ]
+
+
+class MedicaoAmbientalSerializer(serializers.ModelSerializer):
+    """Uma medicao, **com a proveniencia junto**.
+
+    ⚠️ `fonte`, `dataset_id` e `quality_flag` nao sao campos opcionais nem
+    ficam atras de um parametro. Proveniencia por valor e a contribuicao central
+    do projeto (docs/VISAO_GERAL.md secao 8); servir o numero sem dizer de onde
+    ele veio entregaria exatamente o que este projeto existe para nao fazer.
+
+    `valor` pode ser **nulo**, e o nulo e informacao: significa que a validacao
+    fisica reprovou o valor, e `observacao` diz por que. O codigo legado
+    preenchia essas lacunas com zero — gravando pH 0 e salinidade 0, que sao
+    fisicamente impossiveis. Aqui o nulo sai como nulo.
+    """
+
+    local = serializers.SlugField(source='local_recife.slug', read_only=True)
+
+    class Meta:
+        model = MedicaoAmbiental
+        fields = [
+            'id',
+            'local',
+            'data',
+            'variavel',
+            'valor',
+            'unidade',
+            # --- proveniencia ---
+            'fonte',
+            'dataset_id',
+            'quality_flag',
+            'observacao',
         ]

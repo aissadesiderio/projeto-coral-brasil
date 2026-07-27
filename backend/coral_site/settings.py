@@ -243,3 +243,30 @@ COPERNICUS_SERIES = env.list(
 NEO4J_URI = env('NEO4J_URI', default='bolt://localhost:7687')
 NEO4J_USER = env('NEO4J_USER', default='neo4j')
 NEO4J_PASSWORD = env('NEO4J_PASSWORD', default='')
+
+# ---------------------------------------------------------------------------
+# Django REST Framework
+# ---------------------------------------------------------------------------
+# 🚨 **Paginacao e por view, e NAO global. A decisao tem historia.**
+#
+# `MedicaoAmbiental` tem 57.420 linhas e cresce 24 por dia. Sem paginacao, o
+# endpoint devolveria a serie inteira numa resposta - alguns MB de JSON,
+# montados em memoria antes de sair. Ate 27/07/2026 o projeto nao tinha
+# `REST_FRAMEWORK` configurado, ou seja, paginacao desligada.
+#
+# A primeira tentativa foi ligar `DEFAULT_PAGINATION_CLASS` aqui. **Errado**, e
+# tres testes existentes flagraram: isso troca a resposta de TODA lista de um
+# array cru para um envelope `{count, results, ...}`. Os endpoints
+# `/api/locais/`, `/api/datasets/`, `/api/especies/` e `/api/monitoramento/`
+# ja sao consumidos pelo frontend como array — seria **quebra de contrato
+# disfarcada de configuracao**.
+#
+# E eles nao precisam: tem 3, 9, 9 e 3 registros. O unico com volume e o das
+# medicoes, que e novo e portanto nao tem contrato a quebrar.
+#
+# Regra que fica: **paginacao se liga onde ha volume**, declarada na view.
+DRF_PAGE_SIZE = env.int('DRF_PAGE_SIZE', default=100)
+
+# Teto de `page_size`. O parametro vem da query string: sem limite,
+# `?page_size=999999` desfaz a paginacao a pedido do cliente.
+DRF_MAX_PAGE_SIZE = env.int('DRF_MAX_PAGE_SIZE', default=1000)

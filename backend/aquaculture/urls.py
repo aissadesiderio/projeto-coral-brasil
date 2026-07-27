@@ -15,6 +15,10 @@ urlpatterns = [
     path('especies/', views.EspecieList.as_view(), name='especie_list'),
     path('especies/<int:pk>/', views.EspecieDetail.as_view(), name='especie_detail'),
     path('monitoramento/', views.StatusPredicaoList.as_view(), name='monitoramento_list'),
+    # A serie ambiental de verdade. O `monitoramento/` acima devolve
+    # `StatusPredicao`, o modelo legado com 3 registros, e fica no ar so
+    # enquanto o frontend nao migrar.
+    path('medicoes/', views.MedicaoAmbientalList.as_view(), name='medicao_list'),
     path('grafo/localizacoes/', views.GrafoLocalizacaoList.as_view(), name='grafo_localizacoes'),
     path(
         'grafo/localizacoes/<slug:slug>/',

@@ -6,7 +6,14 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
+from .models import (
+    DatasetCatalogo,
+    Especie,
+    LocalRecife,
+    MedicaoAmbiental,
+    StatusPredicao,
+)
+from .paginacao import PaginacaoPadrao
 from .neo4j_service import (
     Neo4jServiceError,
     listar_localizacoes_grafo,
@@ -17,6 +24,7 @@ from .serializers import (
     EspecieSerializer,
     LocalRecifeDetailSerializer,
     LocalRecifeListSerializer,
+    MedicaoAmbientalSerializer,
     StatusPredicaoSerializer,
 )
 
@@ -177,3 +185,91 @@ class GrafoLocalizacaoDetail(OfflineModeMixin, APIView):
             )
 
         return Response(payload)
+
+
+class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
+    """A serie ambiental — 57.420 medicoes, com proveniencia por valor.
+
+    Ate 27/07/2026 **este endpoint nao existia**. As medicoes que a ingestao
+    grava desde 25/07 nao eram servidas por nada: o `monitoramento/` devolve
+    `StatusPredicao`, o modelo legado, com 3 registros. Mesmo padrao que o grafo
+    tinha — o dado novo no PostgreSQL e ninguem lendo.
+
+    **Filtros** (todos opcionais, todos combinaveis):
+
+    | Parametro | Exemplo | O que faz |
+    |---|---|---|
+    | `local` | `abrolhos-ba` | so um recife |
+    | `variavel` | `sst` | pode repetir: `?variavel=sst&variavel=dhw` |
+    | `fonte` | `noaa_crw` | so uma fonte |
+    | `de` / `ate` | `2026-01-01` | recorte de periodo, inclusivo |
+    | `qualidade` | `ok` | filtra pelo flag |
+
+    ⚠️ **`valor` pode vir nulo, e isso e informacao.** Significa que a
+    validacao fisica reprovou o valor; `observacao` diz por que. Quem consome
+    **nao deve** tratar nulo como zero — foi exatamente o defeito do pipeline
+    legado, que gravava pH 0 e salinidade 0.
+    """
+
+    serializer_class = MedicaoAmbientalSerializer
+    # Declarada na view, e nao em `DEFAULT_PAGINATION_CLASS`: liga-la
+    # globalmente trocaria a resposta de toda lista de array para envelope, e
+    # quatro endpoints ja sao consumidos como array. Ver settings.py.
+    pagination_class = PaginacaoPadrao
+
+    # A ordem e explicita e nao herdada do Meta do modelo: paginacao sobre
+    # queryset sem ordem determinista repete e pula linhas entre paginas, e o
+    # Django avisa isso com UnorderedObjectListWarning.
+    ORDEM = ('-data', 'local_recife__slug', 'variavel', 'fonte')
+
+    def get_queryset(self):
+        parametros = self.request.query_params
+        queryset = (
+            MedicaoAmbiental.objects
+            .select_related('local_recife')
+            .order_by(*self.ORDEM)
+        )
+
+        local = parametros.get('local')
+        if local:
+            queryset = queryset.filter(local_recife__slug=local)
+
+        variaveis = parametros.getlist('variavel')
+        if variaveis:
+            queryset = queryset.filter(variavel__in=variaveis)
+
+        fonte = parametros.get('fonte')
+        if fonte:
+            queryset = queryset.filter(fonte=fonte)
+
+        qualidade = parametros.get('qualidade')
+        if qualidade:
+            queryset = queryset.filter(quality_flag=qualidade)
+
+        de = parametros.get('de')
+        if de:
+            queryset = queryset.filter(data__gte=de)
+
+        ate = parametros.get('ate')
+        if ate:
+            queryset = queryset.filter(data__lte=ate)
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Recusa data invalida em vez de devolver a serie inteira.
+
+        Sem isto, `?de=ontem` seria ignorado pelo filtro e o cliente receberia
+        **tudo**, achando que recebeu o recorte que pediu. Falhar alto e melhor
+        que responder o numero errado em silencio.
+        """
+        from django.core.exceptions import ValidationError
+
+        try:
+            return super().list(request, *args, **kwargs)
+        except (ValidationError, ValueError) as erro:
+            return Response(
+                {'detail': f'Parametro de data invalido: {erro}. '
+                           'Use o formato AAAA-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
