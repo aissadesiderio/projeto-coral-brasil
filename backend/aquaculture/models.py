@@ -371,6 +371,40 @@ class DatasetCatalogo(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
+    # --- ponte para o que o projeto realmente guarda -----------------------
+    # 🚨 Estes dois campos existem por causa de um defeito medido em
+    # 27/07/2026: o catalogo anunciava **9 datasets** e o projeto so espelha
+    # **3** deles. pH, clorofila, nitrato, thetao, KD490 e o SST do Met Office
+    # aparecem na pagina "Banco de Dados" como se estivessem disponiveis, e nao
+    # existe uma unica medicao deles no banco. Alem disso, os tres reais
+    # declaravam `data_fim` em 2025 enquanto a serie ja ia ate 24/07/2026.
+    #
+    # A causa nao e descuido de quem cadastrou: e que **cobertura estava
+    # guardada a mao**, e copia guardada envelhece em silencio. Com estes
+    # campos, o serializer deriva a cobertura real do `MedicaoAmbiental` a cada
+    # resposta, e ela nao tem como divergir.
+    #
+    # ⚠️ `fonte_medicao` vazio significa **referencia externa**: o dataset
+    # existe no provedor e o projeto nao o espelha. Isso e legitimo num
+    # catalogo — o que nao era legitimo e nao dizer.
+    fonte_medicao = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text=(
+            'Valor de MedicaoAmbiental.fonte que este dataset alimenta '
+            '(ex.: noaa_crw, copernicus). Vazio = referencia externa, nao '
+            'espelhada no banco.'
+        ),
+    )
+    variaveis_medicao = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text=(
+            'Variaveis canonicas separadas por virgula (ex.: "sst,dhw"). '
+            'Vazio com fonte preenchida = todas as variaveis daquela fonte.'
+        ),
+    )
+
     class Meta:
         ordering = ['ordem_exibicao', 'titulo']
         verbose_name = 'Dataset do catalogo'
@@ -378,3 +412,17 @@ class DatasetCatalogo(models.Model):
 
     def __str__(self):
         return self.titulo
+
+    @property
+    def variaveis(self):
+        """As variaveis declaradas, ja como tupla limpa."""
+        return tuple(
+            parte.strip()
+            for parte in self.variaveis_medicao.split(',')
+            if parte.strip()
+        )
+
+    @property
+    def espelhado(self):
+        """O projeto guarda este dado, ou so aponta para ele?"""
+        return bool(self.fonte_medicao)

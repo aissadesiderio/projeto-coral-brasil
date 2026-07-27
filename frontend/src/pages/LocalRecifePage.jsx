@@ -1,14 +1,13 @@
-import { Activity, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import CardEspecie from '../components/CardEspecie';
 import DatasetCard from '../components/DatasetCard';
 import ImagemRecife from '../components/ImagemRecife';
-import PainelRisco from '../components/PainelRisco';
+import PainelPredicao from '../components/PainelPredicao';
 import SectionTitle from '../components/SectionTitle';
 import { formatarData, formatarLocal } from '../utils/formatters';
 import { ROTAS_APP } from '../utils/navigation';
-import { possuiPainelCompleto } from '../utils/recifes';
 
 export default function LocalRecifePage({
   recife,
@@ -22,8 +21,6 @@ export default function LocalRecifePage({
   erroDatasetsRelacionados = false,
   usandoFallbackDatasets = false,
 }) {
-  const medicaoAmbientalAtual = recife.monitoramento_recente;
-  const painelDisponivel = possuiPainelCompleto(medicaoAmbientalAtual);
   const especiesAssociadas = recife.especies || [];
 
   return (
@@ -74,34 +71,15 @@ export default function LocalRecifePage({
 
       <section className="space-y-4">
         <SectionTitle
-          titulo="Painel de predicao"
-          descricao={`Painel consolidado de predicao de risco e monitoramento associado a ${recife.nome}.`}
+          titulo="Previsao de estresse termico"
+          descricao={`Probabilidade de alerta termico em ${recife.nome} nos proximos 7 dias, calculada a partir da serie do satelite.`}
         />
 
-        {painelDisponivel ? (
-          <PainelRisco dados={medicaoAmbientalAtual} />
-        ) : (
-          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            O painel de predicao permanece desabilitado para este recife ate que as
-            variaveis obrigatorias sejam completadas.
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
-          <p className="inline-flex items-center gap-2 text-sm font-medium text-ocean-dark">
-            {painelDisponivel ? (
-              <>
-                <CheckCircle2 size={16} />
-                Variaveis minimas disponiveis para predicao nesta localizacao.
-              </>
-            ) : (
-              <>
-                <AlertTriangle size={16} />
-                Ainda faltam variaveis essenciais para liberar a predicao.
-              </>
-            )}
-          </p>
-        </div>
+        {/* O proprio painel decide o que mostrar em cada estado — inclusive
+            quando falta dado. O portao anterior (`possuiPainelCompleto`) exigia
+            sete campos do modelo legado, dois deles de variaveis que o projeto
+            nem coleta mais, e por isso nunca liberava com dado real. */}
+        <PainelPredicao slug={recife.slug} publicOffline={siteOffline} />
       </section>
 
       <section className="space-y-4">

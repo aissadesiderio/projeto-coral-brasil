@@ -6,6 +6,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+from . import cobertura
 from .models import (
     DatasetCatalogo,
     Especie,
@@ -95,14 +96,39 @@ class StatusPredicaoList(OfflineModeMixin, generics.ListAPIView):
         return queryset
 
 
-class DatasetCatalogoList(OfflineModeMixin, generics.ListAPIView):
+class CoberturaNoContextoMixin:
+    """Injeta a cobertura real de todos os datasets da pagina de uma vez.
+
+    🚨 Sem isto o catalogo anunciaria periodo e volume gravados a mao. Medido
+    em 27/07/2026: seis dos nove datasets nao tinham **nenhuma** medicao no
+    banco, e os tres reais declaravam fim em 2025 com a serie ja em 2026.
+
+    Uma consulta agrupada serve a lista inteira; calcular por item daria uma
+    consulta por linha.
+
+    ⚠️ O que viaja no contexto e o **resumo das medicoes**, e nao o mapa ja
+    montado por dataset. A diferenca custava uma consulta: montar o mapa aqui
+    obrigava a avaliar o queryset uma segunda vez, so para saber quais datasets
+    descrever. O resumo nao depende disso.
+    """
+
+    def get_serializer_context(self):
+        contexto = super().get_serializer_context()
+        contexto['medicoes'] = cobertura.resumo()
+        return contexto
+
+
+class DatasetCatalogoList(CoberturaNoContextoMixin, OfflineModeMixin,
+                          generics.ListAPIView):
     serializer_class = DatasetCatalogoSerializer
 
     def get_queryset(self):
         return DatasetCatalogo.objects.filter(ativo=True)
 
 
-class LocalRecifeDatasetRelacionadosList(OfflineModeMixin, generics.ListAPIView):
+class LocalRecifeDatasetRelacionadosList(CoberturaNoContextoMixin,
+                                         OfflineModeMixin,
+                                         generics.ListAPIView):
     serializer_class = DatasetCatalogoSerializer
 
     def get_local(self):

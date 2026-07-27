@@ -1,6 +1,86 @@
-import { AlertTriangle, CalendarRange, Download, MapPin } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarRange,
+  Database,
+  Download,
+  ExternalLink,
+  HelpCircle,
+  MapPin,
+} from 'lucide-react';
 
 import { formatarLocal, formatarPeriodo } from '../utils/formatters';
+import { formatarDataBr } from '../utils/painelRisco';
+
+/**
+ * Diz se o projeto **tem** este dado, ou apenas aponta para ele.
+ *
+ * 🚨 Medido em 27/07/2026: a pagina anunciava nove datasets e a API servia
+ * tres. pH, clorofila, nitrato, thetao, KD490 e o SST do Met Office apareciam
+ * com titulo, formato e periodo sem uma unica medicao no banco — e nada na
+ * tela distinguia um caso do outro.
+ *
+ * ⚠️ Os tres estados sao diferentes e nenhum pode virar os outros:
+ *
+ * | Estado | Significa |
+ * |---|---|
+ * | disponivel | o projeto serve este dado, com o link que prova |
+ * | referencia externa | existe no provedor; o projeto nao espelha |
+ * | nao verificado | o servidor nao informou (catalogo antigo ou fallback) |
+ */
+function Cobertura({ cobertura }) {
+  if (!cobertura) {
+    return (
+      <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+        <HelpCircle size={15} />
+        Disponibilidade nao verificada
+      </p>
+    );
+  }
+
+  if (!cobertura.espelhado || cobertura.nMedicoes === 0) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <ExternalLink size={15} />
+          Referencia externa
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">
+          O conjunto existe na fonte original. Este projeto{' '}
+          <strong>nao o serve pela API</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+      <p className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
+        <Database size={15} />
+        Disponivel nesta API
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-emerald-900">
+        {cobertura.nMedicoes.toLocaleString('pt-BR')} medicoes de{' '}
+        {formatarDataBr(cobertura.dataInicio)} a{' '}
+        {formatarDataBr(cobertura.dataFim)}
+        {cobertura.variaveis.length > 0
+          ? ` (${cobertura.variaveis.join(', ')})`
+          : ''}
+        .
+      </p>
+      {cobertura.consulta && (
+        // O recibo do numero acima. Sem ele, "14.346 medicoes" e uma
+        // afirmacao que ninguem consegue conferir.
+        <a
+          href={cobertura.consulta}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 underline"
+        >
+          Conferir na API
+          <ExternalLink size={12} />
+        </a>
+      )}
+    </div>
+  );
+}
 
 export default function DatasetCard({ item, compact = false }) {
   const padding = compact ? 'p-4' : 'p-5';
@@ -36,11 +116,18 @@ export default function DatasetCard({ item, compact = false }) {
         </p>
         <p className="inline-flex items-center gap-2">
           <CalendarRange size={15} />
-          {formatarPeriodo(item)}
+          {/* ⚠️ Este periodo e o do ARQUIVO inventariado, nao o da API. Sao
+              coisas diferentes, e apresentar so um deles como "o periodo do
+              dataset" foi exatamente o defeito corrigido em 27/07/2026. */}
+          Arquivo: {formatarPeriodo(item)}
         </p>
         <p>
           <strong>Tamanho:</strong> {item.tamanho}
         </p>
+      </div>
+
+      <div className="mt-4">
+        <Cobertura cobertura={item.cobertura} />
       </div>
 
       <div className="mt-5 flex flex-1 items-end">

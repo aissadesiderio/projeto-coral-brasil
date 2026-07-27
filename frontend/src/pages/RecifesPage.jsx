@@ -1,9 +1,38 @@
+import { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 
 import CardRecife from '../components/CardRecife';
+import { buscarPredicoes } from '../utils/painelRisco';
 
-export default function RecifesPage({ locais, carregando = false, erroCarregamento = false }) {
+export default function RecifesPage({
+  locais,
+  carregando = false,
+  erroCarregamento = false,
+  siteOffline = false,
+}) {
   const possuiLocais = locais.length > 0;
+
+  // Uma requisicao para a lista inteira, e nao uma por cartao: o endpoint ja
+  // devolve os tres recifes de uma vez, e chamar por cartao multiplicaria
+  // leituras do mesmo artefato sem nenhum ganho.
+  const [predicoes, setPredicoes] = useState({});
+
+  useEffect(() => {
+    if (siteOffline) {
+      return undefined;
+    }
+
+    let ativo = true;
+    buscarPredicoes().then((resposta) => {
+      if (ativo) {
+        setPredicoes(resposta.porLocal || {});
+      }
+    });
+
+    return () => {
+      ativo = false;
+    };
+  }, [siteOffline]);
 
   return (
     <section className="py-8 sm:py-10 lg:py-12">
@@ -30,7 +59,11 @@ export default function RecifesPage({ locais, carregando = false, erroCarregamen
         {possuiLocais ? (
           <div className="grid gap-x-6 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
             {locais.map((local) => (
-              <CardRecife key={local.slug} local={local} />
+              <CardRecife
+                key={local.slug}
+                local={local}
+                predicao={predicoes[local.slug] || null}
+              />
             ))}
           </div>
         ) : carregando ? (

@@ -628,6 +628,97 @@ Em 17/05/2024 a nova regra grava BAA 4 e `baa_area_alerta` = 115/121 = **0,950**
 
 A ingestão sofreu 10 `ReadTimeout` do PACIOOS, todos absorvidos pela retentativa. Nenhum bloco perdido.
 
+### 6.20 O catálogo anunciava nove conjuntos; a API servia três — ✅ RESOLVIDO em 27/07/2026
+
+Descoberto ao verificar se o endpoint `banco-de-dados` do checklist de go-live
+existia. Ele existia (`/api/datasets/`), e servia **9 registros honestos sobre
+os arquivos** — mas a página os apresentava como se fossem o acervo consultável
+do projeto. Não eram.
+
+| Dataset do catálogo | Medições no banco |
+|---|---|
+| `noaa_crw_dhw_abrolhos` | **14.346** |
+| `cmems_salinidade_abrolhos` | **2.397** |
+| `cmems_oxigenio_abrolhos` | **2.397** |
+| `metoffice_sst_l4_abrolhos` | **0** |
+| `cmems_thetao_abrolhos` | **0** |
+| `cmems_clorofila_abrolhos` | **0** |
+| `cmems_ph_abrolhos` | **0** |
+| `cmems_nitrato_abrolhos` | **0** |
+| `cmems_kd490_abrolhos` | **0** |
+
+**Seis dos nove não têm uma única linha em `MedicaoAmbiental`**, e apareciam na
+página com título, resumo, formato, período e tamanho — indistinguíveis dos
+três reais.
+
+#### A distinção que faltava, e por que ela é sutil
+
+Nenhum dos seis é invenção — este é o ponto que separa 6.20 de [6.14](#614-catálogo-público-fictício--resolvido-em-24072026). Os arquivos
+existem em `backend/dados/`, e o inventário lê deles o tamanho e o período. O
+que estava errado **não era nenhum número**: era a página não dizer que
+*"período do arquivo em disco"* e *"até quando a API tem dado"* são perguntas
+diferentes.
+
+E há um caso em que os dois divergem de forma alarmante: `noaa_crw_dhw` declara
+fim em **2025-11-30**, porque é onde o CSV termina. A série no banco vai até
+**2026-07-24** — sete meses adiante. O catálogo estava, ao mesmo tempo,
+anunciando dado que não existe e **escondendo dado que existe**.
+
+#### A causa é estrutural
+
+Cobertura estava **gravada**. É o mesmo padrão que já custou caro três vezes
+neste projeto — o `.docx`, o `.joblib` e o grafo do Neo4j — e a regra que saiu
+de lá vale aqui sem emenda: **cópia guardada envelhece em silêncio**.
+
+Agora a cobertura é **derivada a cada resposta**, em
+`backend/aquaculture/cobertura.py`, a partir de uma agregação sobre
+`MedicaoAmbiental`. Ela não tem como divergir do banco porque não é guardada em
+lugar nenhum.
+
+#### O que a API passou a devolver
+
+```json
+"cobertura": {
+  "espelhado": true,
+  "n_medicoes": 14346,
+  "variaveis": ["baa", "baa_area_alerta", "dhw", "hotspot", "sst", "sst_anomalia"],
+  "data_inicio": "2020-01-01",
+  "data_fim": "2026-07-24",
+  "consulta": "/api/medicoes/?fonte=noaa_crw&local=abrolhos-ba&variavel=baa&..."
+}
+```
+
+⚠️ **`consulta` não é conveniência — é o recibo.** Sem ele, "14.346 medições" é
+uma afirmação que ninguém consegue conferir. Verificado nos três: o `count` do
+`/api/medicoes/` bate exatamente com o `n_medicoes` anunciado, e há teste
+travando a igualdade.
+
+Os seis externos devolvem `espelhado: false` com o motivo, e **não** oferecem
+consulta. Um catálogo pode e deve apontar para produtos que o projeto não
+espelha; o que não podia era não dizer qual é qual.
+
+#### Três estados na tela, e nenhum implica o outro
+
+| Estado | Significa |
+|---|---|
+| **Disponível nesta API** | o projeto serve, com o link que prova |
+| **Referência externa** | existe na fonte original; o projeto não espelha |
+| **Não verificada** | o servidor não informou (catálogo antigo, ou o fallback local) |
+
+O terceiro existe porque afirmar ausência a partir de silêncio seria o mesmo
+erro em outra direção.
+
+#### Uma pendência que isto revela
+
+`backend/dados/` é a pasta legada que nada mais lê e que o roadmap manda apagar
+(~260 MB). No dia em que ela sumir, **os nove registros viram `ativo=False`**
+pela regra 2 do inventário, e a única cobertura que sobrevive é a derivada. Ou
+seja: apagar a pasta esvazia a página do catálogo. Isso precisa ser decidido, e
+não descoberto.
+
+29 testes: 21 em `aquaculture/testes_cobertura.py` e 8 em
+`frontend/src/components/DatasetCard.test.jsx`.
+
 ### 6.15 DOIs dos produtos CMEMS não coletados
 Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
 
@@ -885,6 +976,7 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | 🚨 **§6.20 criada — o catálogo anunciava nove conjuntos e a API servia três.** Descoberto ao verificar se o endpoint `banco-de-dados` do checklist existia: ele existia, e o problema era outro. **Seis dos nove datasets não têm uma única linha em `MedicaoAmbiental`** — pH, clorofila, nitrato, `thetao`, KD490 e o SST do Met Office apareciam na página com título, formato, período e tamanho, indistinguíveis dos três reais. Nenhum é invenção (ao contrário da §6.14): os arquivos existem em `backend/dados/` e o inventário lê deles. **O erro não era número nenhum** — era a página não dizer que *"período do arquivo em disco"* e *"até quando a API tem dado"* são perguntas diferentes. E os dois divergem no pior sentido: `noaa_crw_dhw` declarava fim em **2025-11-30** enquanto a série no banco vai a **2026-07-24**, ou seja o catálogo ao mesmo tempo anunciava dado inexistente e **escondia dado existente**. A causa é estrutural: cobertura estava **gravada**, e cópia guardada envelhece em silêncio — quarta vez que essa mesma regra cobra o preço, depois do `.docx`, do `.joblib` e do grafo. Agora é derivada a cada resposta em `aquaculture/cobertura.py`. Cada número anunciado vem com **`consulta`, o recibo**: a URL do `/api/medicoes/` que devolve exatamente aquilo, conferida nos três. Na tela, três estados que não se implicam: *disponível*, *referência externa* e *não verificada* — o terceiro porque afirmar ausência a partir de silêncio seria o mesmo erro invertido. ⚠️ Fica registrado o efeito colateral: **apagar `backend/dados/` esvazia a página do catálogo**, porque a regra 2 do inventário desativa registro sem arquivo. Isso precisa ser decidido, não descoberto. 29 testes. |
 | 24/07/2026 | Criação do documento. Auditoria inicial de proveniência dos 19 CSVs, das imagens e das referências: 15 problemas registrados na §6. |
 | 24/07/2026 | Fase A do roadmap. Adicionadas coordenadas aos três locais de recife (§2.3) — duas delas aproximadas e pendentes de verificação. `django-environ` incluída na §5. |
 | 24/07/2026 | Merge do commit `34879bf` (react-router, split de componentes, `DatasetCatalogo`, serviço Neo4j). §6.14 **agravada**: os 8 datasets fictícios saíram do frontend e foram semeados no banco, passando a ser servidos por API real. `react-router-dom` 6.30.1 incluída na §5. |

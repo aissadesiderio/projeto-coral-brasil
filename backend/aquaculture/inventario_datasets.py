@@ -48,6 +48,21 @@ class FonteDataset:
     ordem: int = 0
     ressalvas: tuple = field(default=())
 
+    # 🚨 Vinculo com o que o projeto **serve pela API**, acrescentado em
+    # 27/07/2026. Medido: a pagina anunciava os nove datasets abaixo, e o banco
+    # tinha medicao de **tres**. Os outros seis apareciam com titulo, formato e
+    # periodo sem uma unica linha em `MedicaoAmbiental`.
+    #
+    # ⚠️ **O periodo lido do CSV nao e a cobertura da API.** Ele descreve o
+    # arquivo em `backend/dados/`, uma pasta legada que nada mais le e que o
+    # roadmap manda apagar. Enquanto ela existir, os dois convivem — mas quem
+    # responde "ate quando o projeto tem dado" e `aquaculture/cobertura.py`,
+    # derivando do banco.
+    #
+    # Vazio = referencia externa: legitimo num catalogo, desde que declarado.
+    fonte_medicao: str = ''
+    variaveis_medicao: str = ''
+
     def resumo(self):
         partes = [
             self.descricao,
@@ -70,6 +85,8 @@ URL_CRW = 'https://coralreefwatch.noaa.gov/product/5km/'
 DATASETS_REAIS = [
     FonteDataset(
         id='noaa_crw_dhw_abrolhos',
+        fonte_medicao='noaa_crw',
+        variaveis_medicao='sst,sst_anomalia,hotspot,dhw,baa,baa_area_alerta',
         arquivo='dhw.csv',
         titulo='Estresse termico coralino (CoralTemp/DHW) - Abrolhos',
         fonte='NOAA',
@@ -121,6 +138,8 @@ DATASETS_REAIS = [
     ),
     FonteDataset(
         id='cmems_salinidade_abrolhos',
+        fonte_medicao='copernicus',
+        variaveis_medicao='salinidade',
         arquivo='salinidade.csv',
         titulo='Salinidade da agua do mar - Abrolhos',
         fonte='Copernicus',
@@ -167,6 +186,8 @@ DATASETS_REAIS = [
     ),
     FonteDataset(
         id='cmems_oxigenio_abrolhos',
+        fonte_medicao='copernicus',
+        variaveis_medicao='oxigenio',
         arquivo='oxigenio.csv',
         titulo='Oxigenio dissolvido - Abrolhos',
         fonte='Copernicus',
@@ -309,6 +330,8 @@ def construir_inventario(local=None):
                         'periodo_rotulo': 'Indisponivel',
                         'tamanho_mb': None,
                         'url_download': '',
+                        'fonte_medicao': fonte.fonte_medicao,
+                        'variaveis_medicao': fonte.variaveis_medicao,
                         'ordem_exibicao': fonte.ordem,
                         'ativo': False,
                     },
@@ -336,7 +359,9 @@ def construir_inventario(local=None):
                     'periodo_rotulo': _rotulo_periodo(inicio, fim),
                     'tamanho_mb': tamanho_mb,
                     'url_download': '',
-                    'ordem_exibicao': fonte.ordem,
+                    'fonte_medicao': fonte.fonte_medicao,
+                        'variaveis_medicao': fonte.variaveis_medicao,
+                        'ordem_exibicao': fonte.ordem,
                     'ativo': True,
                 },
             }

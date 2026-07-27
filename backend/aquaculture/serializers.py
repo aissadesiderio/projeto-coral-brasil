@@ -132,7 +132,19 @@ class LocalRecifeDetailSerializer(LocalRecifeListSerializer):
 
 
 class DatasetCatalogoSerializer(serializers.ModelSerializer):
+    """Um item do catalogo, **com a cobertura real medida ao lado**.
+
+    ⚠️ `data_inicio`/`data_fim` descrevem o produto **no provedor**;
+    `cobertura` descreve o que **este projeto** tem. Sao perguntas diferentes,
+    e antes de 27/07/2026 so a primeira era respondida — o que fazia a pagina
+    anunciar seis datasets sem uma unica medicao no banco.
+
+    A view coloca o resumo das medicoes em `context['medicoes']`, numa consulta
+    so para a lista inteira. Sem ele, cada item mede sozinho.
+    """
+
     tamanho_mb = serializers.FloatField(allow_null=True)
+    cobertura = serializers.SerializerMethodField()
 
     class Meta:
         model = DatasetCatalogo
@@ -154,7 +166,16 @@ class DatasetCatalogoSerializer(serializers.ModelSerializer):
             'periodo_rotulo',
             'tamanho_mb',
             'url_download',
+            'cobertura',
         ]
+
+    def get_cobertura(self, obj):
+        from . import cobertura
+
+        # Sem contexto, mede este item sozinho. Custa uma consulta, e e melhor
+        # que devolver `null` — campo ausente seria lido como "sem cobertura",
+        # que e uma afirmacao diferente de "nao medido".
+        return cobertura.para(obj, self.context.get('medicoes'))
 
 
 class MedicaoAmbientalSerializer(serializers.ModelSerializer):
