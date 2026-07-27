@@ -273,3 +273,166 @@ class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
                            'Use o formato AAAA-MM-DD.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class ModeloIndisponivel(Exception):
+    """O artefato do modelo nao esta utilizavel. Vira 503."""
+
+
+class PainelRiscoBase(OfflineModeMixin, APIView):
+    """O primeiro endpoint do projeto que **faz conta** em vez de servir dado.
+
+    Todos os outros devolvem linha guardada. Este carrega o modelo persistido,
+    monta a janela de 7 dias a partir da serie do PostgreSQL e responde uma
+    probabilidade — e por isso e o unico ponto onde o artefato, a serie e o
+    limiar declarado se encontram.
+
+    **O contrato nao e escolhido aqui.** As colunas, o horizonte, o alvo e os
+    locais vem dos metadados gravados por `treinar_final`. A view obedece ao
+    artefato; nao ha lista de features duplicada neste arquivo.
+
+    Tres comportamentos que sao decisao, e nao acidente:
+
+    | Situacao | Resposta | Por que |
+    |---|---|---|
+    | artefato ausente | **503** | derivado e regeravel; servir predicao de origem desconhecida seria pior |
+    | janela incompleta | item com `disponivel: false` | zero e valor legitimo de variacao; preencher mentiria |
+    | local fora do treino | **404** com motivo | o modelo viu tres recifes; o quarto seria extrapolacao |
+    """
+
+    def modelo(self):
+        """Carrega artefato e metadados, ou levanta com recado acionavel."""
+        from ml import persistencia, predicao
+
+        nome = getattr(settings, 'PAINEL_MODELO', 'entrega1_baa')
+        try:
+            return predicao.carregar_modelo(nome)
+        except (persistencia.ArtefatoAusente, persistencia.ArtefatoIncompativel) as erro:
+            raise ModeloIndisponivel(str(erro)) from erro
+
+    def limiar(self):
+        return float(getattr(settings, 'PAINEL_LIMIAR', 0.20))
+
+    def cabecalho(self, metadados):
+        """O bloco `modelo`: o que a probabilidade quer dizer.
+
+        ⚠️ `alvo` e `calibracao` nao sao metadado decorativo. O primeiro diz
+        que a previsao e de **estresse termico** e nao de branqueamento
+        observado — a regua da NOAA perde 78 dos 88 branqueamentos brasileiros
+        (docs/RESULTADOS.md secao 11). O segundo diz se o numero exibido e cru
+        ou recalibrado, diferenca que vale 0,081 de ECE.
+        """
+        return {
+            'nome': metadados.get('nome'),
+            'algoritmo': metadados.get('modelo'),
+            'alvo': metadados.get('alvo'),
+            'horizonte_dias': metadados.get('horizonte_dias'),
+            'calibracao': metadados.get('calibracao'),
+            # A isotonica e funcao escada: dois recifes com entradas diferentes
+            # podem sair com a mesma probabilidade, e isso parece defeito sem
+            # este aviso. Sao 313 valores distintos sobre 7.095 amostras.
+            'probabilidade_em_degraus': metadados.get('calibracao') == 'isotonic',
+            'colunas': metadados.get('colunas', []),
+            'treinado_em': metadados.get('gerado_em'),
+            'n_treino': metadados.get('n_treino'),
+            'limiar': self.limiar(),
+        }
+
+    def avaliar(self, local, ajuste):
+        """Um item da resposta. Nunca levanta por falta de dado."""
+        from ml import predicao
+
+        base = {'local': local.slug, 'nome': local.nome}
+        try:
+            risco = predicao.calcular(local, ajuste, self.limiar())
+        except predicao.SemDadoSuficiente as erro:
+            # Falta de dado e estado normal de um recife, nao erro da
+            # requisicao: o local existe, a serie e que nao fecha. Devolver 500
+            # aqui derrubaria os outros dois recifes junto.
+            return {
+                **base,
+                'disponivel': False,
+                'motivo': str(erro),
+                'faltando': [
+                    {'variavel': v, 'data': d.isoformat()} for v, d in erro.faltando
+                ],
+            }
+
+        return {
+            **base,
+            'disponivel': True,
+            'data_base': risco.data_base.isoformat(),
+            'data_alvo': risco.data_alvo.isoformat(),
+            # ⚠️ Vai no payload de proposito. A serie tem latencia, e ela
+            # varia; sem isto um risco calculado sobre dado de tres semanas
+            # atras se apresenta igualzinho a um calculado sobre ontem.
+            'dias_de_atraso': risco.dias_de_atraso,
+            'probabilidade': round(risco.probabilidade, 4),
+            'limiar': risco.limiar,
+            'alerta': risco.alerta,
+            # 🚨 A probabilidade saiu 0 ou 1 exatos. A recalibracao isotonica
+            # e funcao escada: 12,2% das amostras de treino caem em p = 0,000.
+            # Isso significa "nenhum alerta neste degrau", e nao "impossivel".
+            # A interface **nao deve** exibir "0%" nem "100%" quando for true.
+            # Ver ml/predicao.py::Risco.no_extremo.
+            'no_extremo': risco.no_extremo,
+            'entradas': {k: round(v, 4) for k, v in risco.entradas.items()},
+        }
+
+
+class PainelRiscoList(PainelRiscoBase):
+    """Risco dos recifes que o modelo viu no treino."""
+
+    def get(self, request):
+        try:
+            ajuste, metadados = self.modelo()
+        except ModeloIndisponivel as erro:
+            return Response(
+                {'detail': str(erro)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        slugs = metadados.get('locais') or []
+        locais = {
+            local.slug: local
+            for local in LocalRecife.objects.filter(slug__in=slugs)
+        }
+
+        # A ordem segue os metadados, e nao o banco: e a lista que o modelo
+        # declara ter visto, e ela e o contrato.
+        resultados = [
+            self.avaliar(locais[slug], ajuste) for slug in slugs if slug in locais
+        ]
+
+        return Response({
+            'modelo': self.cabecalho(metadados),
+            'results': resultados,
+        })
+
+
+class PainelRiscoDetail(PainelRiscoBase):
+    """Risco de um recife. 404 com motivo quando o modelo nao o viu."""
+
+    def get(self, request, slug):
+        try:
+            ajuste, metadados = self.modelo()
+        except ModeloIndisponivel as erro:
+            return Response(
+                {'detail': str(erro)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        treinados = metadados.get('locais') or []
+        if slug not in treinados:
+            # 🚨 Nao extrapolar e o ponto. O modelo viu tres pontos do litoral
+            # brasileiro; responder sobre um quarto seria inventar cobertura
+            # que nenhuma medicao sustenta.
+            return Response(
+                {'detail': f'O modelo nao foi treinado em "{slug}". '
+                           f'Locais disponiveis: {treinados}.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        local = get_object_or_404(LocalRecife, slug=slug)
+        return Response({
+            'modelo': self.cabecalho(metadados),
+            **self.avaliar(local, ajuste),
+        })

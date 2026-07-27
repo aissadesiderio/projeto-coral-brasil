@@ -270,3 +270,27 @@ DRF_PAGE_SIZE = env.int('DRF_PAGE_SIZE', default=100)
 # Teto de `page_size`. O parametro vem da query string: sem limite,
 # `?page_size=999999` desfaz a paginacao a pedido do cliente.
 DRF_MAX_PAGE_SIZE = env.int('DRF_MAX_PAGE_SIZE', default=1000)
+
+# ---------------------------------------------------------------------------
+# Painel de risco
+# ---------------------------------------------------------------------------
+# Qual artefato o endpoint /api/painel-risco/ carrega. E derivado e nao
+# versionado: se nao existir no disco, o endpoint responde 503 pedindo
+# "manage.py treinar_final" em vez de servir predicao de origem desconhecida.
+PAINEL_MODELO = env('PAINEL_MODELO', default='entrega1_baa')
+
+# 🚨 **O limiar de alerta e decisao de produto, e por isso mora aqui e vai no
+# payload — nao esta escondido no codigo do modelo.**
+#
+# Nao existe corte natural. Ate a recalibracao, `class_weight='balanced'`
+# empurrava a probabilidade para cima, o que **equivale a baixar o limiar sem
+# declarar**: o 0,50 aparente operava como 0,20. Com a probabilidade calibrada,
+# o ponto de desempenho equivalente e 0,20 — medido em 27/07/2026:
+#
+#   versao        limiar   precisao   revocacao
+#   balanced       0,50      0,721      0,909
+#   isotonica      0,20      0,705      0,903
+#
+# Subir o numero troca alarme falso por evento perdido, e essa troca e de quem
+# opera o site, nao de quem treina o modelo. Ver docs/RESULTADOS.md secao 22.5.
+PAINEL_LIMIAR = env.float('PAINEL_LIMIAR', default=0.20)

@@ -19,11 +19,12 @@ Aqui a pergunta é outra: *o que essas pastas e comandos estão fazendo?*
 5. [Onde os dados moram — são três lugares](#5-onde-os-dados-moram--são-três-lugares)
 6. [Dado e modelo são coisas diferentes](#6-dado-e-modelo-são-coisas-diferentes)
 7. [Artefatos derivados, e por que não guardamos no Git](#7-artefatos-derivados-e-por-que-não-guardamos-no-git)
-8. [O que é um teste, e por que existem 387](#8-o-que-é-um-teste-e-por-que-existem-387)
+8. [O que é um teste, e por que existem 441](#8-o-que-é-um-teste-e-por-que-existem-441)
 9. [Por que dois bancos de dados](#9-por-que-dois-bancos-de-dados)
 10. [O que o Docker faz aqui](#10-o-que-o-docker-faz-aqui)
 11. [Por que as senhas ficam fora do projeto](#11-por-que-as-senhas-ficam-fora-do-projeto)
 12. [Vocabulário](#12-vocabulário)
+13. [O endpoint que faz conta, e a escada escondida nele](#13-o-endpoint-que-faz-conta-e-a-escada-escondida-nele)
 
 ---
 
@@ -140,9 +141,14 @@ diante"*.
 | `/api/monitoramento/` | ⚠️ o **modelo antigo** | 3 |
 | `/api/grafo/localizacoes/` | os recifes, vindos do Neo4j | 3 |
 | **`/api/medicoes/`** | ✅ **a série ambiental** | **57.420** |
+| **`/api/painel-risco/`** | 🆕 **o risco calculado** | 3 |
 
-Repare no contraste: tudo tem unidades ou dezenas de registros. **Só o último
-tem dezenas de milhares.**
+Repare no contraste: tudo tem unidades ou dezenas de registros. **Só o
+`/api/medicoes/` tem dezenas de milhares.**
+
+E repare numa diferença maior, que não aparece na coluna dos números: **todos
+menos o último entregam algo que já estava guardado.** O `painel-risco` é o
+único que *faz uma conta* na hora em que alguém pergunta. Ver a seção 13.
 
 ### Por que o `/api/medicoes/` precisou existir
 
@@ -337,7 +343,7 @@ se foi este projeto que gerou, e só então abre. Se não reconhecer, recusa.
 
 ---
 
-## 8. O que é um teste, e por que existem 387
+## 8. O que é um teste, e por que existem 441
 
 Um **teste automatizado** é um pedacinho de código que faz uma pergunta e
 confere a resposta. Todos rodam com um comando, em cerca de 75 segundos:
@@ -488,6 +494,100 @@ nunca na linha de comando (que fica no histórico do terminal).
 | **Teste** | código que confere se outro código faz o esperado |
 | **Ingestão** | o processo de buscar dados de fora e gravar |
 | **Proveniência** | o registro de de onde cada valor veio |
+| **Calibrar** | ajustar a probabilidade para que "30%" aconteça 30% das vezes |
+| **Limiar** | o número a partir do qual se decide avisar |
+
+---
+
+## 13. O endpoint que faz conta, e a escada escondida nele
+
+Todos os endpoints das seções anteriores fazem a mesma coisa: **procuram uma
+linha guardada e devolvem**. Nenhum calcula nada.
+
+O `/api/painel-risco/` é o primeiro diferente. Quando alguém o chama, ele:
+
+1. abre o arquivo do modelo treinado,
+2. busca no banco os últimos dias de temperatura, DHW, salinidade e oxigênio,
+3. calcula o quanto cada uma **mudou em sete dias**,
+4. entrega isso ao modelo, e
+5. devolve a probabilidade de haver alerta daqui a sete dias.
+
+### Uma armadilha silenciosa que quase ninguém veria
+
+O modelo foi treinado com quatro números chamados, por exemplo,
+`sst_variacao_7d` — *"quanto a temperatura mudou em 7 dias"*.
+
+Agora imagine que, na hora de responder, o código calculasse esse número de
+um jeito ligeiramente diferente — sete dias contados de outro jeito, ou uma
+falta de dado tratada de outra forma. O modelo receberia **um número com o
+nome certo e o conteúdo errado**.
+
+E aqui está o problema: **nada quebraria.** Não apareceria erro nenhum. O
+modelo aceitaria os quatro números, faria a conta e devolveria uma
+probabilidade de aparência perfeitamente normal — só que errada, e sem nada
+indicando isso.
+
+> A defesa não foi "prestar atenção". Foi fazer com que **não exista um segundo
+> jeito de calcular**: o código que responde chama exatamente a mesma função
+> que o código que treinou. Não há duas versões para divergirem.
+
+### Se falta dado, ele se recusa a responder
+
+Se um dos dias necessários não estiver no banco, o endpoint responde
+*"indisponível"* e diz **qual dia faltou** — em vez de completar com zero.
+
+O motivo parece sutil e não é. O número que o modelo recebe é uma **variação**.
+Preencher com zero não produz um valor estranho que alguém note: produz a
+afirmação *"a temperatura não mudou nada"* — a mais tranquilizadora de todas,
+exatamente no momento em que o dado sumiu.
+
+E há uma distinção que custou um teste para ficar clara:
+
+| Situação | O que acontece | Por quê |
+|---|---|---|
+| a série **termina** dois dias atrás | responde, avisando o atraso | é só a ingestão de hoje não ter rodado ainda |
+| a série vai até hoje mas **falta um dia no meio** | recusa | é um buraco no que já foi coletado |
+
+### 🚨 A escada: por que três recifes deram o mesmo número
+
+Na primeira vez que rodamos o endpoint de verdade, os três recifes voltaram
+com **exatamente o mesmo valor**: 0,0029. Com temperaturas e salinidades bem
+diferentes. Parecia defeito.
+
+Não era. É consequência de como a probabilidade foi **calibrada**.
+
+Lembre da seção sobre calibração no [METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md):
+o modelo prometia o dobro do que acontecia, e o conserto foi reajustar os
+números. Esse reajuste funciona por **faixas** — como uma escada:
+
+> Todos os casos que caem no mesmo degrau saem com o mesmo número.
+
+Os três recifes tinham valores originais diferentes (0,083 e 0,066, por
+exemplo), mas caíam no mesmo degrau. Então saem iguais. Sobre os 7.095 dias
+usados no treino, existem só **313 valores possíveis** de probabilidade.
+
+### E o degrau mais baixo vale exatamente zero
+
+Essa é a parte que **muda o que a tela pode mostrar**.
+
+O degrau mais baixo da escada vale **0,000 exato** — e 12,2% dos casos caem
+nele. O mais alto vale **1,000 exato**.
+
+Mas o que "0,000" significa aqui não é *"impossível"*. Significa: *"entre os
+dias de treino que caíram neste degrau, nenhum virou alerta"*. É uma
+afirmação sobre um punhado de dias, não sobre a natureza.
+
+Se o site exibir **"risco de branqueamento: 0%"**, estará dizendo ao público
+que branqueamento é impossível ali. E **"100%"** diria que é certo. Nenhum dos
+dois é verdade, e nenhum dos dois é defensável num site que quer ser levado a
+sério.
+
+**O que fizemos — e o que decidimos não fazer.** A API avisa: junto da
+probabilidade vai um campo dizendo *"este valor está no extremo"*. O que
+**não** fizemos foi trocar o 0 por 0,001 para ficar mais apresentável. Isso
+seria inventar uma precisão que o modelo não tem — mentir na direção oposta —
+e ainda esconderia da tela justamente a informação de que ela precisa para
+decidir como mostrar.
 
 ---
 
@@ -506,4 +606,5 @@ nunca na linha de comando (que fica no histórico do terminal).
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **Seção 13 acrescentada, sobre o `/api/painel-risco/`** — o primeiro endpoint que faz conta em vez de servir linha guardada. Três coisas ficaram explicadas em linguagem comum: a armadilha de recalcular a mesma variável de outro jeito (o modelo receberia **o nome certo com o conteúdo errado** e responderia sem erro nenhum), a diferença entre série que *termina* mais cedo e série *furada*, e 🚨 **a escada da calibração** — por que os três recifes voltaram com exatamente o mesmo número, e por que o degrau mais baixo valer 0,000 significa "nenhum alerta entre estes dias", e não "impossível". Daí sai um requisito de tela: **o site não pode exibir "0%" nem "100%"**. Registrado também o que decidimos **não** fazer: trocar o 0 por 0,001 para ficar apresentável seria inventar precisão inexistente. |
 | 27/07/2026 | Documento criado como par de software do [METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md), que cobre só a ciência. Reúne, em linguagem comum, as explicações que foram sendo pedidas ao longo da reconstrução: a separação entre backend e frontend e por que o navegador não acessa o banco, o que é JSON e por que a diferença entre lista e caixa quebrou três testes, os nove endpoints e por que só um precisa de paginação, os três lugares onde os dados moram, a distinção entre **dado** e **modelo**, a regra dos artefatos derivados (cópia guardada envelhece em silêncio), o que um teste realmente compra, por que há dois bancos e o segundo nunca recebe escrita direta, o papel do Docker e por que as credenciais ficam fora do projeto — sendo que essa última é irreversível, porque chave que entra no Git precisa ser revogada e não apagada. |

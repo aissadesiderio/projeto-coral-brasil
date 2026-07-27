@@ -344,12 +344,20 @@ Corrigido com uma copia explicita, e comentado no ponto.
 
 ---
 
-## O `painel-risco` — contrato decidido antes de escrever
+## ✅ O `painel-risco`, construido em 27/07/2026
 
-Os nove endpoints que existem hoje **entregam dado guardado**. Nenhum faz conta.
+Os nove endpoints anteriores **entregam dado guardado**. Nenhum faz conta.
 O `painel-risco` e o primeiro que carrega o modelo e responde uma probabilidade,
 e por isso e o unico ponto do sistema onde o artefato do modelo, a serie do
 PostgreSQL e o limiar declarado se encontram.
+
+Verificado ao vivo contra o PostgreSQL: os tres recifes respondem com
+`data_base` 24/07/2026, alvo 31/07, atraso de 3 dias. 54 testes.
+
+```
+GET /api/painel-risco/            lista os locais que o modelo viu
+GET /api/painel-risco/<slug>/     um recife; 404 com motivo se ele nao treinou
+```
 
 ### O contrato ja esta fixado — pelo proprio artefato
 
@@ -407,6 +415,50 @@ Por isso o endpoint devolve **a probabilidade e o limiar usado**, lado a lado, e
 nao apenas um rotulo "alto/baixo". Quem consome precisa poder discordar do corte
 sem precisar refazer a conta.
 
+O limiar mora em `settings.PAINEL_LIMIAR`, e nao no codigo do modelo — subir o
+numero troca alarme falso por evento perdido, e essa troca e de quem opera o
+site.
+
+### O que a execucao ensinou, e que o contrato nao previa
+
+**1. 🚨 A probabilidade e uma escada, e a escada toca 0 e 1.** Os tres recifes
+voltaram com **exatamente 0,0029**, apesar de entradas diferentes. Nao e
+defeito: a recalibracao isotonica e funcao escada por construcao, e as
+probabilidades cruas 0,083 e 0,066 caem no mesmo degrau. Medido sobre o treino:
+313 valores distintos em 7.095 amostras, **864 (12,2%) em `p = 0,000` exato**.
+
+Isso e problema de comunicacao, nao de estatistica. `p = 0` afirma "nenhum
+alerta neste degrau", nao "impossivel" — e um painel publico que exibe **"0% de
+risco"** traduz um degrau finito em impossibilidade. A API sinaliza com
+`no_extremo: true` e **nao corta** o numero para 0,001: falsificar na direcao
+oposta inventaria precisao inexistente e esconderia da interface exatamente o
+que ela precisa para decidir como exibir. Ver [RESULTADOS.md](RESULTADOS.md)
+secao 22.8.
+
+**2. Serie que acaba mais cedo nao e a mesma coisa que serie furada.** A
+distincao so apareceu quando um teste escrito como "recife sem dado nao derruba
+os outros" passou onde deveria falhar — e estava certo o codigo, nao o teste:
+
+| Estado | Resposta | Por que |
+|---|---|---|
+| a serie acaba em `t-2` | responde, `data_base = t-2`, atraso 2 | indistinguivel de "a ingestao de hoje ainda nao rodou" |
+| a serie vai ate `t` mas falta `t-7` | **recusa** | e um buraco no meio do que ja foi coletado |
+
+O primeiro caso e operacao normal com atraso declarado; o segundo nao tem
+numero honesto a dar. Sem essa separacao, ou o painel recusaria toda vez que a
+ingestao atrasasse um dia, ou aceitaria janela furada.
+
+**3. O `Ajuste` voltava do disco sem a calibracao.** Defeito real achado ao
+montar o payload: `persistencia.carregar` nao repassava o campo, entao o
+artefato isotonico se apresentava como `calibracao: None`. O pipeline carregado
+estava certo — quem mentia era o metadado, e ele e justamente o que o painel
+exibe para dizer se a probabilidade e crua ou recalibrada.
+
+**4. O artefato e lido uma vez, com cache invalidado por mtime.** `joblib.load`
+a cada visita seria desserializar o pickle por requisicao. ⚠️ O cache **nao** e
+por tempo: um TTL continuaria servindo o modelo antigo por N minutos depois de
+`treinar_final`, sem nada indicando isso.
+
 ## O que ainda nao esta materializado
 
 - **`Predicao` nao entra ainda.** O `StatusPredicao` tem 3 registros do caminho
@@ -441,6 +493,7 @@ sem precisar refazer a conta.
 
 | Data | Decisao |
 |---|---|
+| 27/07/2026 | ✅ **`painel-risco` construido — o primeiro endpoint que faz conta.** Os tres recifes respondem contra o PostgreSQL real, com data-base, atraso, entradas e limiar no payload. 54 testes. Quatro coisas que a execucao ensinou e o contrato nao previa. A mais seria: 🚨 **a probabilidade calibrada e uma escada que toca 0 e 1** — os tres recifes voltaram com o mesmo 0,0029 apesar de entradas diferentes, e 12,2% das amostras de treino saem em `p = 0,000` exato. Exibir "0% de risco" traduziria um degrau finito em impossibilidade; a API sinaliza com `no_extremo` e **nao falsifica o numero** para 0,001. Segunda: **serie que acaba mais cedo nao e serie furada** — a primeira responde com atraso declarado, a segunda recusa, e sem essa separacao o painel recusaria toda vez que a ingestao atrasasse um dia. Terceira: defeito real corrigido — `persistencia.carregar` devolvia `calibracao: None` para artefato isotonico. Quarta: cache do artefato invalidado por **mtime** e nao por TTL, que continuaria servindo o modelo antigo depois do retreino. |
 | 27/07/2026 | **Contrato do `painel-risco` fixado antes de escrever a view.** A decisao que importa: **o contrato nao e escolha de quem implementa** — o `entrega1_baa.json` gravado por `treinar_final` ja declara as quatro colunas, o horizonte de 7 dias, o alvo `baa >= 3` e os tres locais. A view obedece ao artefato. Registrado o risco silencioso associado: recomputar a janela com outra convencao produz uma coluna com **o nome certo e o conteudo errado**, e o `Pipeline` aceita sem erro; a defesa e view e treino chamarem o mesmo codigo. Tres decisoes tomadas: recusar em vez de preencher lacuna (zero e valor legitimo de variacao, entao preencher com zero devolve a afirmacao mais tranquilizadora possivel justo quando o dado sumiu), data-base sempre no payload, e local fora do treino como 404 com motivo. O **limiar vai no payload junto da probabilidade** — a recalibracao moveu o corte de 0,50 para 0,20, e quem consome precisa poder discordar sem refazer a conta. |
 | 27/07/2026 | ✅ **Projecao executada — o grafo deixou de estar atrasado.** `manage.py neo4j_projetar` substitui o `neo4j_seed`, que derivava de `StatusPredicao` (3 registros do caminho legado). Projetados **57.420 medicoes, 5 fontes, 9 especies e 3 locais — 172.286 elementos em 16 s**, conferidos item a item contra o PostgreSQL. **Escopo medido antes de escrever**, como este documento exigia: as tres opcoes custam 172 mil, 21 mil e 5 mil elementos, e as duas menores **destroem a proveniencia por valor** — um no que junta SST do NOAA com salinidade do Copernicus so aponta para uma fonte. O temor de volume nao se confirmou: o teto de nos era do **Neo4j 3.x**, e a instancia e 5.26 Community, sem teto. 🚨 **O id canonico da medicao mudou** de `slug:data` para `slug:data:variavel:fonte` — com o antigo, o `MERGE` sobrescreveria sete das oito variaveis do dia **sem erro nenhum**. Demonstrado pela primeira vez o ganho concreto do grafo: a emenda reanalise→analise fica auditavel numa consulta so. Um defeito real foi achado por teste — a lista passada ao driver era a mesma que o `clear()` esvaziava. |
 | 25/07/2026 | **Migracao concluida: SQLite → PostgreSQL.** 57.463 objetos importados via `dumpdata`/`loaddata`, incluindo as 57.420 medicoes (43.038 NOAA + 14.382 Copernicus), 3 locais, 9 especies, 18 execucoes de ingestao e 9 datasets. Contagens e distribuicao do BAA identicas as do SQLite. 181 testes passam contra o PostgreSQL. O `db.sqlite3` fica no disco como backup e deixa de ser lido. |

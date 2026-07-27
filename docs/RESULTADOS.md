@@ -1435,6 +1435,51 @@ Corrigido com um recuo para agrupamento por valores distintos, e travado por
 teste. É o tipo de defeito que só aparece no caso degenerado — e o caso
 degenerado é justamente o que se quer denunciar.
 
+### 22.8 🚨 O preço da isotônica: a probabilidade vira escada, e a escada toca 0 e 1
+
+Medido em 27/07/2026, ao aplicar o modelo persistido aos três recifes pela
+primeira vez. Os três voltaram com **exatamente 0,0029** — apesar de entradas
+bem diferentes:
+
+| Recife | `sst_variacao_7d` | probabilidade crua | probabilidade calibrada |
+|---|---|---|---|
+| Abrolhos | +0,093 | 0,083 | **0,0029** |
+| Picãozinho | −0,312 | — | **0,0029** |
+| Porto de Galinhas | −0,321 | 0,066 | **0,0029** |
+
+Parece defeito e não é. **A regressão isotônica é uma função escada por
+construção**: ela ajusta um degrau por faixa, e tudo que cai no mesmo degrau
+sai com o mesmo número. As probabilidades cruas 0,083 e 0,066 são diferentes;
+o degrau que as contém é o mesmo.
+
+Sobre as 7.095 amostras de treino:
+
+| | Valor |
+|---|---|
+| valores distintos de probabilidade | **313** (de 7.095 amostras) |
+| amostras em `p = 0,000` **exato** | **864 (12,2%)** |
+| amostras em `p = 1,000` **exato** | 121 (1,7%) |
+| fração no degrau mais baixo | 12,2% |
+
+**O 0,000 e o 1,000 exatos são o problema real, e são de comunicação, não de
+estatística.** O que a isotônica afirma em `p = 0` é *"no degrau mais baixo,
+nenhuma das amostras de treino virou alerta"*. Isso limita a probabilidade;
+não a zera. Um painel público que exibe **"risco de branqueamento: 0%"** está
+traduzindo um degrau finito em impossibilidade — e **"100%"**, em certeza.
+Nenhum dos dois é defensável.
+
+**O que foi feito, e o que deliberadamente não foi.** A API devolve o número
+como ele é e sinaliza o caso com `no_extremo: true`, mais
+`probabilidade_em_degraus` no bloco do modelo. **Não** houve corte para 0,001 e
+0,999: falsificar o número na direção oposta inventaria precisão que o modelo
+não tem, e esconderia da interface exatamente a informação que ela precisa para
+decidir como exibir. A decisão de apresentação fica em quem apresenta, com o
+aviso na mão.
+
+⚠️ Isto é um custo da recalibração que a §22.4 não tinha medido. Ele **não**
+reverte a decisão — ECE de 0,081 para 0,0039 continua valendo muito mais que a
+granularidade perdida —, mas passa a acompanhá-la.
+
 ---
 
 ## 23. O que estes resultados indicam fazer
@@ -1443,6 +1488,7 @@ degenerado é justamente o que se quer denunciar.
 |---|---|---|
 | ✅ feito | ~~Persistir um modelo~~ | Feito em 27/07/2026: `manage.py treinar_final`. Ver [VISAO_GERAL.md](VISAO_GERAL.md) §7.4 |
 | **Alta** | Declarar §18 e §20 em qualquer texto | Os dois resultados negativos são condicionais, e omitir as condições seria afirmar demais |
+| **Alta** | **A interface não pode exibir "0%" nem "100%"** | §22.8 — a isotônica devolve 0 e 1 exatos por construção (12,2% e 1,7% das amostras). A API sinaliza com `no_extremo`; traduzir isso em impossibilidade ou certeza é decisão de exibição, e seria errada |
 | ✅ feito | ~~Curva de calibração~~ | Feito em 27/07/2026 (§22): o modelo prometia **o dobro** do que acontecia. Corrigido com recalibração isotônica, ECE de 0,081 para **0,0039** |
 | Média | Investigar 2022 (entrega 1) | Único ano em que o modelo perde claramente |
 | Baixa | Dado *in situ* | Resolveria §18 e §21.5, mas não existe para estes sítios |
@@ -1521,6 +1567,7 @@ python backend\manage.py treinar_gcbd --so-ambiental --importancia
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **§22.8 acrescentada — o custo da isotônica, achado ao aplicar o modelo pela primeira vez.** Os três recifes voltaram com **exatamente 0,0029**, apesar de entradas bem diferentes. Não é defeito: a isotônica é **função escada**, e as probabilidades cruas 0,083 e 0,066 caem no mesmo degrau. Medido sobre o treino: **313 valores distintos em 7.095 amostras, 864 (12,2%) em `p = 0,000` exato e 121 em `p = 1,000` exato**. O problema real é de comunicação — `p = 0` significa "nenhum alerta neste degrau", e exibir isso como "0% de risco" traduz um degrau finito em impossibilidade. **Deliberadamente não houve corte para 0,001/0,999**: falsificar o número na direção oposta inventaria precisão inexistente e esconderia da interface justamente o que ela precisa saber. A API sinaliza com `no_extremo`. O custo não reverte a decisão da §22.4 — 0,081 → 0,0039 de ECE continua valendo muito mais que a granularidade perdida — mas passa a acompanhá-la. |
 | 27/07/2026 | 🚨 **§22 criada — a probabilidade que o painel ia exibir estava mentindo, e o bloqueio de go-live caiu.** O modelo dizia **0,165** onde a taxa real é **0,084**: ECE de **0,081**, praticamente do tamanho do próprio fenômeno, com **todas** as faixas prometendo demais — na faixa que dizia 8,4% o alerta aconteceu **zero vezes**. A causa não era defeito a descobrir e sim consequência conhecida a medir: `class_weight="balanced"` corrige a **decisão** e destrói a **probabilidade**. A decomposição de Murphy mostrou por que o Brier de 0,043 escondia isso — a **incerteza (0,0769) sozinha é o dobro do Brier**, ou seja o número parecia bom porque o problema é fácil. Testados quatro consertos; **adotada a recalibração isotônica** (ECE 0,0039, 20× melhor), com o calibrador ajustado **dentro** da dobra de treino. E medido que **calibrar não custa detecção**: no corte equivalente (0,20 em vez de 0,50) a revocação é a mesma — o `class_weight` não detectava mais, apenas baixava o limiar sem declarar. Fica a separação: **probabilidade calibrada para exibir, limiar declarado para avisar**. §22.7 registra um defeito no próprio medidor, achado por teste: predição constante produzia curva vazia e ECE 0,0, que se lê como calibração perfeita quando é o pior caso possível. |
 | 27/07/2026 | **§20.1 — `Windspeed` removido do conjunto interpretável, e o critério registrado.** `FEATURES_INTERPRETAVEIS` passa de três para duas colunas: `TSA_DHW` e `TSA`. Custa **0,025** de PR-AUC por ano (0,717 → 0,692) — exatamente a diferença que §15 classifica como ruído — e compra que **toda entrada tenha mecanismo defensável sem ressalva**. Coeficientes limpos e no sinal físico (`TSA_DHW` +1,011, `TSA` +0,374), e as duas passam a contribuir positivamente na validação por ano, contra o `TSA` quase apagado antes. O `Windspeed` **continua** na versão de 8 features, onde não foi escolha nossa. Teste travando a remoção, com o motivo escrito. Critério para decisões futuras: *entre um número melhor dentro do ruído e um conjunto em que toda entrada se defende sozinha, escolher o segundo*. |
 | 27/07/2026 | **§21 criada — qualidade da água testada, e a resposta é não pela terceira vez.** Extraídos **45.318 valores diários** de clorofila, nitrato e silicato, 498 pares, zero falhas, do **mesmo produto** de onde já vinha o oxigênio — custo quase nulo. **Nenhuma combinação melhora a validação por ano**; todas pioram, e reaparece a assinatura já conhecida de subir por sítio (0,753, o melhor de todos) enquanto cai por ano. O `silicato_variacao_90d` é a **única** variável de qualidade da água com efeito distinguível de zero (*d* = +0,396, IC [+0,077, +0,746]) — mas o intervalo começa colado no zero e foram 9 variáveis testadas, então tratá-lo como achado repetiria o erro do vento. 🚨 **E a hipótese que justificava o silicato não se sustentou**: ele correlaciona **+0,363 com a salinidade**, o oposto do que uma pluma de água doce produziria — comporta-se como enriquecimento costeiro genérico, não como marcador de rio. Colinearidade de volta (`nitrato` × `silicato` r = 0,733) com `nitrato` saindo em −0,607, o que diria que adubo protege coral. §21.5 registra que este é o resultado negativo **menos conclusivo** do projeto, porque 28 km é a pior escala possível para nutriente — e §20 já mostrou que essa grade serve para campo suave, o que torna a ressalva específica em vez de genérica. §22 acrescenta o quadro das quatro famílias testadas e as três leituras que os dados não separam. |

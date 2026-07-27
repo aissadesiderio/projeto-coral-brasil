@@ -155,6 +155,12 @@ def carregar(nome, pasta=None, exigir_mesma_versao=True):
         horizonte=metadados.get('horizonte_dias', 0),
         n_treino=metadados.get('n_treino', 0),
         positivos_treino=metadados.get('positivos_treino', 0),
+        # ⚠️ Sem esta linha o `Ajuste` voltava do disco com `calibracao=None`
+        # mesmo quando o artefato era isotonico. O pipeline carregado estava
+        # certo — quem mentia era o campo, e ele e justamente o que o painel
+        # exibe para dizer se a probabilidade e crua ou recalibrada. A
+        # diferenca vale 0,081 de ECE (docs/RESULTADOS.md secao 22).
+        calibracao=metadados.get('calibracao'),
     )
 
 
