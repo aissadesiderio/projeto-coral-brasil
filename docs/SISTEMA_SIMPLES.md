@@ -589,6 +589,38 @@ seria inventar uma precisão que o modelo não tem — mentir na direção opost
 e ainda esconderia da tela justamente a informação de que ela precisa para
 decidir como mostrar.
 
+### Como a tela resolveu isso
+
+Quando cai no extremo, a tela **não mostra número**. Mostra a faixa, com a
+frase por extenso:
+
+> **Faixa mais baixa da escala**
+> O modelo coloca este dia no degrau mais baixo da escala calibrada. Isso quer
+> dizer que nenhum dia semelhante do período de treino virou alerta — não que
+> seja impossível.
+
+E apareceu um **segundo caminho para o mesmo erro**, que ninguém tinha
+previsto. Uma probabilidade de 0,04% arredondada para uma casa decimal vira
+`"0,0%"` — que se lê como zero, mesmo sem o modelo ter dito zero. Agora esse
+caso sai como `"< 0,1%"`: é uma afirmação sobre o arredondamento, não sobre o
+mar.
+
+### Uma regra que precisou valer em dois lugares
+
+O risco aparece em **duas** telas: no painel de cada recife e no cartão da
+lista. Enquanto o painel já usava o modelo novo e o cartão ainda mostrava o
+número antigo, o mesmo recife aparecia com **dois valores diferentes**, cada
+um de um modelo, e nada na tela dizia qual valia.
+
+A correção não foi escrever a regra duas vezes com cuidado — foi fazer as duas
+telas **chamarem a mesma função** de formatação. Uma regra escrita duas vezes
+é uma regra que um dia vai divergir.
+
+Pelo mesmo motivo, a tela **não decide sozinha** se deve avisar. Ela poderia
+comparar a probabilidade com o limiar e concluir — mas então existiriam duas
+respostas para a mesma pergunta, uma no servidor e outra no navegador. Quem
+decide é o servidor; a tela mostra a decisão.
+
 ---
 
 ## Onde ver mais
