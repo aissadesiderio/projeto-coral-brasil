@@ -40,6 +40,16 @@ h5netcdf==1.8.1
 erddapy==3.1.1          # cliente ERDDAP (NOAA Coral Reef Watch)
 copernicusmarine==2.3.0 # cliente oficial Copernicus Marine Service
 
+# Climate Data Store (ECMWF/Copernicus) - vento do ERA5.
+# A credencial fica em ~/.cdsapirc, FORA do repositorio: chave que entra no
+# historico do git precisa ser revogada, nao apenas apagada. Ver docs/ERA5.md.
+#
+# Nao adicionamos `gcsfs`: o espelho ARCO do ERA5 na Google Cloud foi testado
+# em 26/07/2026 e descartado - e fatiado por instante de tempo, entao a serie
+# de um ponto ao longo de anos exigiria dezenas de milhares de leituras.
+# Ver docs/FONTES.md secao 6.19.
+cdsapi==0.7.6
+
 # Raizes de CA. Ja vinha como dependencia transitiva, mas agora e usada
 # diretamente: no Windows o urllib (por onde o pandas busca o CSV do ERDDAP)
 # nao monta a cadeia sozinho. Ver backend/ingestao/certificados.py.
@@ -57,6 +67,11 @@ joblib==1.5.3
 # --- Midia e relatorios ---
 pillow==12.2.0
 matplotlib==3.10.8
+
+# Exporta a documentacao Markdown para .docx (manage.py exportar_docs).
+# O .docx e artefato derivado e nao versionado - o Markdown segue sendo a
+# unica fonte. Ver backend/documentacao/.
+python-docx==1.2.0
 
 # ---------------------------------------------------------------------------
 # Neo4j - configuracao e comandos uteis

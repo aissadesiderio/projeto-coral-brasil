@@ -323,7 +323,10 @@ banca:
 | [`backend/ml/modelo.py`](../backend/ml/modelo.py) | O modelo e a comparação ano a ano contra a persistência |
 | [`backend/ml/tests.py`](../backend/ml/tests.py) | Testes que travam cada regra acima |
 | [`backend/ml/gcbd.py`](../backend/ml/gcbd.py) | **Entrega 2:** conjunto de branqueamento observado, validação agrupada (§3.1), régua da NOAA |
-| [`backend/ml/testes_gcbd.py`](../backend/ml/testes_gcbd.py) | 26 testes — inclusive o que garante que **nenhum sítio cai nos dois lados** da divisão |
+| [`backend/ml/gcbd_ambiental.py`](../backend/ml/gcbd_ambiental.py) | A janela ambiental antes de cada visita, com proveniência por valor |
+| [`backend/ml/persistencia.py`](../backend/ml/persistencia.py) | Grava e carrega o modelo treinado — com as guardas contra pickle de origem desconhecida |
+| [`backend/ml/calibracao.py`](../backend/ml/calibracao.py) | Curva de confiabilidade, ECE/MCE e decomposição de Murphy do Brier |
+| [`backend/ml/testes_gcbd.py`](../backend/ml/testes_gcbd.py) | 29 testes — inclusive o que garante que **nenhum sítio cai nos dois lados** da divisão |
 
 O modelo é encapsulado num `Pipeline` do sklearn que **seleciona features por
 nome**. Não é preciosismo: o modelo antigo do projeto predizia `0.0` para todos
@@ -337,6 +340,7 @@ implícito.
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | §8 atualizada com `ml/persistencia.py` e `ml/calibracao.py`. A calibração introduz uma distinção que a metodologia não fazia: **ordenar e calibrar são propriedades diferentes**, e só a primeira aparece no PR-AUC. Um modelo pode ordenar perfeitamente e ainda mentir no número exibido — foi o caso, com ECE de 0,081 sobre taxa base de 0,084. Ver [RESULTADOS.md](RESULTADOS.md) §22. |
 | 26/07/2026 | **§3.1 e §3.2 criadas — a validação da entrega 2.** O princípio de nunca testar no que o modelo já viu continua, mas numa base transversal ele se desdobra em **dois agrupamentos que discordam**: por sítio (recife novo) e por ano (evento novo). Registrado que a discordância é diagnóstico — no passo 1 foi 0,803 contra 0,614 —, e que **para um sistema de aviso vale o número do ano**. Também por que aqui as predições fora-da-dobra são reunidas numa métrica única em vez de promediadas: as dobras vão de 1 a 33 visitas, e a média daria peso igual às duas. §8 atualizada com os arquivos novos. |
 | 25/07/2026 | **§5 corrigida — os coeficientes não são interpretáveis neste projeto.** O argumento de que "a logística é interpretável" valia sob uma condição que o projeto não cumpre: features não correlacionadas. Cada variável entra junto com a própria trajetória, e a medição mostrou o coeficiente do `dhw` **negativo** — o que lido como mecanismo diria que calor acumulado protege o coral. Enquanto a colinearidade não for resolvida, a leitura defensável é a importância por grupo, que dá magnitude e não direção. Ver [RESULTADOS.md](RESULTADOS.md) §7. |
 | 25/07/2026 | **§5 criada — quais modelos e por que dois.** Registra que o `boosting` **é** baseado em árvores de decisão e a `logistica` não, e corrige uma inversão comum: variável que influencia "para mais e para menos" é argumento **a favor** de árvore, não contra — quem tem dificuldade com relação em U é o modelo linear. Também por que os dois convivem (interpretabilidade contra expressividade) e por que ambos ficam nos padrões. |

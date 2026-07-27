@@ -18,7 +18,8 @@ encaixam, sem pressupor oceanografia nem aprendizado de máquina.
 | [docs/VISAO_GERAL.md](docs/VISAO_GERAL.md) | **Porta de entrada.** O projeto explicado do início: branqueamento, DHW, BAA, o caminho do dado e o que falta |
 | [docs/FONTES.md](docs/FONTES.md) | Toda fonte de dados: origem, licença, citação e problemas de proveniência conhecidos |
 | [docs/VARIAVEIS.md](docs/VARIAVEIS.md) | Por que cada variável entra ou fica de fora do modelo |
-| [docs/METODOLOGIA_SIMPLES.md](docs/METODOLOGIA_SIMPLES.md) | **Sem jargão.** Como o modelo funciona e é testado, para ler e explicar |
+| [docs/METODOLOGIA_SIMPLES.md](docs/METODOLOGIA_SIMPLES.md) | **Sem jargão — a ciência.** Como o modelo funciona e é testado, para ler e explicar |
+| [docs/SISTEMA_SIMPLES.md](docs/SISTEMA_SIMPLES.md) | **Sem jargão — o software.** Backend e frontend, endpoints, onde os dados moram, o que é cada arquivo estranho |
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | O mesmo, com os termos técnicos: a régua, o teste sem trapaça e por que acurácia não serve |
 | [docs/RESULTADOS.md](docs/RESULTADOS.md) | O que o experimento produziu, e o que ainda não dá para concluir |
 | [docs/GCBD.md](docs/GCBD.md) | A base de branqueamento observado: o que contém, o que custa integrar, seus defeitos e o resultado do passo 1 |
@@ -576,6 +577,50 @@ Os testes do GCBD também não precisam do CSV de 16 MB: montam quadros pequenos
 
 Usa o banco. Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) §1–§10.
 
+#### Gravar o modelo que o painel vai usar
+
+**Dois comandos, com propósitos opostos.** Para *medir* se o modelo presta:
+
+```bash
+python backend\manage.py treinar_modelo
+```
+
+Para *gravar* o que será servido — treina uma vez sobre todos os dados:
+
+```bash
+python backend\manage.py treinar_final
+```
+
+⚠️ **`treinar_final` não reporta desempenho, de propósito.** Um número calculado
+sobre os mesmos dados do treino mediria memória, não previsão.
+
+O artefato vai para `dados/modelos/`, **não versionado** — é derivado e
+regerável. Consequência prática: **quem publicar precisa rodar este comando**.
+
+```bash
+python backend\manage.py treinar_final --listar
+```
+
+Opções: `--horizonte 14`, `--modelo boosting`, `--nome outro`, `--semente 7`.
+
+#### Conferir se a probabilidade exibida é honesta
+
+```bash
+python backend\manage.py calibrar
+```
+
+Compara a probabilidade prometida com a frequência observada, por faixa, sobre
+predição **fora da dobra**.
+
+🚨 **Isto já pegou um defeito grave:** o modelo prometia **16,5%** onde a taxa
+real é **8,4%** — porque `class_weight='balanced'` conserta a *decisão* e
+distorce a *probabilidade*. Por isso `treinar_final` grava **recalibrado por
+padrão** (`--calibrar isotonic`). Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) §22.
+
+⚠️ Consequência para o painel: **probabilidade calibrada para exibir, limiar
+declarado para avisar**. No modelo recalibrado o corte equivalente ao antigo
+fica em **0,20**, não em 0,50.
+
 ### Entrega 2 — prever branqueamento observado (GCBD)
 
 **Não usa o banco nem a rede** — lê só o CSV do GCBD.
@@ -598,7 +643,62 @@ O arquivo **não é versionado** (16 MB). Baixe pelo DOI registrado em
 Opções úteis: `--modelo boosting`, `--limiar 10` (percentual de branqueamento
 que conta como positivo), `--com-climatologia`, `--com-contexto`.
 
+#### Janela ambiental (passo 2)
+
+Baixa salinidade e oxigênio nos 90 dias antes de cada visita. **Usa rede** e
+exige a credencial do Copernicus, a mesma de `ingerir`.
+
+```bash
+python backend\manage.py ingerir_gcbd
+```
+
+Leva alguns minutos e **grava a cada visita**: pode ser interrompido, e rodar de
+novo continua de onde parou. O resultado vai para
+`dados/gcbd_janelas_ambientais.csv`, não para o banco — o porquê está em
+[docs/GCBD.md](docs/GCBD.md).
+
+Depois, para treinar com as variáveis não térmicas junto:
+
+```bash
+python backend\manage.py treinar_gcbd --interpretavel --ambiental --importancia
+```
+
+E o experimento espelho, só com as não térmicas:
+
+```bash
+python backend\manage.py treinar_gcbd --so-ambiental --importancia
+```
+
 Resultados em [docs/RESULTADOS.md](docs/RESULTADOS.md) §11–§14.
+
+---
+
+## Grafo (Neo4j)
+
+O Neo4j é **projeção derivada**: nunca recebe escrita que não venha do
+PostgreSQL. Se divergir ou for perdido, reconstrua.
+
+```bash
+python backend\manage.py neo4j_projetar
+```
+
+Reconstrói o grafo do zero — 57.420 medições, **172 mil elementos em ~16 s** —
+e **confere item a item** contra o PostgreSQL ao terminar. Projetar sem
+conferir não vale: uma projeção que falha no meio deixa o grafo parcial e
+silencioso, e a consulta seguinte responde incompleto sem avisar.
+
+Só conferir, sem escrever:
+
+```bash
+python backend\manage.py neo4j_projetar --conferir
+```
+
+⚠️ **Substitui o `neo4j_seed`**, que derivava de `StatusPredicao` — o modelo
+legado, com 3 registros.
+
+O que o grafo responde e a tabela não responde bem: **a proveniência de cada
+valor exibido**, e a emenda entre produtos do Copernicus, numa travessia só.
+Ver [docs/arquitetura.md](docs/arquitetura.md).
 
 ---
 

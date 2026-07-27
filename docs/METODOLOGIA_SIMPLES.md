@@ -6,6 +6,11 @@ comum. É a versão para ler, explicar para alguém ou defender numa apresentaç
 A versão técnica, com os nomes formais e os detalhes de implementação, está em
 [METODOLOGIA.md](METODOLOGIA.md). O conteúdo é o mesmo — muda só a linguagem.
 
+📖 **Este documento fala só da ciência.** Se a dúvida for sobre o *software* —
+o que é um endpoint, onde os dados ficam salvos, por que existem dois bancos —
+o documento é o [SISTEMA_SIMPLES.md](SISTEMA_SIMPLES.md), escrito na mesma
+linguagem.
+
 ## Índice
 
 1. [O que estamos tentando fazer](#1-o-que-estamos-tentando-fazer)
@@ -17,6 +22,9 @@ A versão técnica, com os nomes formais e os detalhes de implementação, está
 7. [Por que o modelo precisa saber a direção](#7-por-que-o-modelo-precisa-saber-a-direção)
 8. [O que ainda não dá para afirmar](#8-o-que-ainda-não-dá-para-afirmar)
 9. [O que descobrimos quando finalmente olhamos branqueamento de verdade](#9-o-que-descobrimos-quando-finalmente-olhamos-branqueamento-de-verdade)
+10. [Fomos buscar salinidade e oxigênio. Não era isso.](#10-fomos-buscar-salinidade-e-oxigênio-não-era-isso)
+11. [Última tentativa: poluição da água](#11-última-tentativa-poluição-da-água)
+12. [O número que o site ia mostrar estava mentindo](#12-o-número-que-o-site-ia-mostrar-estava-mentindo)
 
 ---
 
@@ -528,6 +536,395 @@ temperatura não explicou.
 
 ---
 
+## 10. Fomos buscar salinidade e oxigênio. Não era isso.
+
+Este é o resultado que o projeto inteiro estava perseguindo, e ele veio
+**negativo**. Vale contar com cuidado, porque um resultado negativo bem medido
+é resultado — e porque a forma como ele é negativo tem nuance.
+
+### O que fizemos
+
+Para cada uma das 166 visitas, buscamos como estavam a **salinidade** (quanto
+sal tem a água) e o **oxigênio dissolvido** nos 90 dias anteriores. Foram
+**30.212 medições diárias**, baixadas de um modelo oceanográfico europeu que
+reconstrói o passado do oceano. Nenhuma falhou.
+
+Depois comparamos três modelos:
+
+| Modelo | O que ele vê |
+|---|---|
+| **A** | só temperatura e vento |
+| **B** | temperatura, vento, **e mais** salinidade e oxigênio |
+| **C** | **só** salinidade e oxigênio |
+
+Se a hipótese do projeto estivesse certa, **B** seria melhor que **A**, e **C**
+teria algum valor sozinho.
+
+### O que aconteceu
+
+**B não foi melhor que A. Foi pior.** E **C ficou no chute** — literalmente:
+acertou tanto quanto sortear.
+
+Nós então testamos as duas desculpas que tínhamos:
+
+**"Talvez 90 dias seja muito tempo."** Faz sentido: uma enxurrada de água doce
+dura dias, não três meses; uma janela longa demais diluiria o efeito. Refizemos
+com 7, 14, 30 e 60 dias. **Nenhuma ajudou.**
+
+**"Talvez essas variáveis só estejam dizendo *qual recife é*, não *como ele
+estava*."** Testamos. Elas mudam de visita para visita no mesmo recife, e mal
+conseguem identificar o lugar. **Não era isso também.**
+
+### Mas elas *não* são inúteis — e essa é a parte interessante
+
+Quando olhamos só a descrição, sem pedir previsão, elas **funcionam**:
+
+> Os recifes que branquearam tinham, nos meses anteriores, **oxigênio mais
+> baixo e caindo** e **salinidade mais baixa e caindo** — exatamente o que a
+> biologia previa.
+
+O efeito existe e aponta para o lado certo. Ele é só **cerca de metade da
+força** do efeito da temperatura — e essa metade não é suficiente para
+transformar em previsão útil.
+
+**A diferença entre descrever e prever é o coração deste resultado.** Dizer
+"nos recifes que branquearam o oxigênio estava mais baixo" é verdade. Dizer
+"consigo saber se vai branquear olhando o oxigênio" é falso. Uma diferença
+média entre dois grupos pode ser real e ainda assim pequena demais para decidir
+casos individuais — é a mesma razão pela qual saber que fumantes vivem menos
+não permite prever quando uma pessoa específica vai morrer.
+
+### 🔁 E já tínhamos visto isso antes
+
+Na primeira parte do projeto, o oxigênio também tinha aparecido como promessa —
+ele separava bem o começo do fim de um episódio — e também não virou capacidade
+de prever.
+
+Agora aconteceu de novo, com **dados diferentes, período diferente e pergunta
+diferente**. Uma vez é coincidência; duas vezes em bases independentes é uma
+característica do problema.
+
+### ⚠️ A ressalva honesta, que muda a conclusão
+
+**Nós não medimos a salinidade e o oxigênio do recife. Medimos os do oceano ao
+redor dele.**
+
+O modelo europeu divide o oceano em quadrados. Para o oxigênio, cada quadrado
+tem **28 km de lado**. E **69 das nossas 166 visitas ficam a menos de 1 km da
+costa** — em 20 sítios, o oxigênio mais próximo disponível está a até 33 km de
+distância.
+
+Uma pluma de água doce saindo de um rio, ou uma faixa de água sem oxigênio
+junto a um recife raso, é exatamente o tipo de coisa que some quando você tira
+a média de uma área de 28 por 28 km. É como tentar detectar uma poça medindo a
+umidade média do bairro.
+
+Então ficam **duas explicações vivas**, e nossos dados não escolhem entre elas:
+
+1. Salinidade e oxigênio realmente não explicam o branqueamento brasileiro.
+2. Eles explicam, mas o instrumento que usamos não os enxerga nessa escala.
+
+**Afirmar a primeira sem mencionar a segunda seria desonesto.** O que dá para
+dizer é a frase completa: *com dados de reanálise global, nessa resolução, não
+há ganho.* Resolver isso exigiria sensores no próprio recife — que não existem
+para esses 119 sítios naquele período.
+
+### O que parecia sobrar: o vento — e a lição de checar
+
+Entre todas as variáveis que não são temperatura, **uma parecia funcionar**: o
+vento. Segunda mais importante do modelo, e na direção que faz sentido — mais
+vento, menos branqueamento. Vento mexe a água, quebra a camada quente parada na
+superfície e traz água mais fria de baixo.
+
+Ficamos animados. Fomos criar conta num serviço europeu de dados de clima para
+buscar vento de verdade.
+
+**E aí veio a parte importante.**
+
+Antes de escrever o programa que baixaria tudo, resolvemos fazer uma conferência
+simples: pegar vento de verdade nos **mesmos 166 lugares e nas mesmas datas**, e
+comparar com o número que o GCBD trazia.
+
+Porque tinha uma coisa que ninguém tinha checado: **o "vento" que estávamos
+usando era só uma coluna numa planilha.** Ninguém sabia de onde ela vinha nem se
+descrevia mesmo o vento.
+
+O resultado:
+
+| | |
+|---|---|
+| Os dois medem a mesma coisa? | **Sim** — concordam bem |
+| Os dois dizem que vento protege o coral? | **Não.** A planilha diz que sim; o vento de verdade não diz nada |
+
+E quando trocamos um pelo outro dentro do modelo, ele ficou **pior do que não
+ter vento nenhum**.
+
+> **Ou seja: o vento não funcionava. Funcionava aquela coluna específica — e
+> provavelmente por acaso.**
+
+### Então o placar honesto é este
+
+Testamos três coisas que não são temperatura: **salinidade, oxigênio e vento**.
+
+As três descrevem o branqueamento — nos lugares que branquearam, as três
+estavam diferentes, e na direção que a biologia previa. **Nenhuma das três
+consegue prever.**
+
+Não é o resultado que a gente queria. É o resultado que tem.
+
+### E a lição vale mais que o vento
+
+O ganho que o vento dava era de **0,025** numa escala em que nós mesmos já
+tínhamos escrito, em outro documento, que *"diferença abaixo de 0,05 é ruído"*.
+
+Sabíamos que era ruído. E mesmo assim viramos o projeto de cabeça para baixo
+atrás dele — porque a explicação fazia sentido demais.
+
+> **Explicação convincente é justamente o que faz um número de ruído parecer
+> uma descoberta.** Foi barato descobrir isso: uma tarde e uma conta gratuita.
+> Teria sido caro descobrir depois de escrever o programa inteiro.
+
+### Uma coisa boa saiu disso
+
+Descobrimos que **o tamanho do quadrado de 28 km não atrapalha para o vento** —
+as duas fontes concordaram bem.
+
+Isso melhora a nossa ressalva anterior. Antes dizíamos "28 km é grosseiro
+demais". Agora dá pra dizer melhor: **28 km é grosseiro demais para coisas
+irregulares e coladas na costa — como nutriente e oxigênio — mas serve bem para
+coisas grandes e espalhadas, como vento e temperatura.**
+
+Afirmação mais precisa, e sustentada por medição.
+
+---
+
+## 11. Última tentativa: poluição da água
+
+Faltava testar uma coisa: **poluição**. Adubo de plantação, esgoto, água de rio.
+
+E deu pra testar quase de graça — porque o mesmo arquivo de onde tiramos o
+oxigênio já tinha, do lado, mais três medidas:
+
+| | O que é |
+|---|---|
+| **Clorofila** | Quanta alga microscópica tem na água. Muita alga = água poluída |
+| **Nitrato** | Adubo, de plantação e de esgoto |
+| **Silicato** | Marca **água de rio** — rio traz silicato, mar aberto não tem |
+
+O silicato era o que interessava, e por um motivo específico.
+
+### A hipótese do rio
+
+Água de rio é doce. Então, se rio chega no recife, a **salinidade** deveria
+cair — e a salinidade não mostrou nada.
+
+Mas talvez a salinidade seja um jeito ruim de detectar isso: chuva também
+dessalga, o mar mistura rápido. **Silicato é outro jeito de perguntar a mesma
+coisa**, e mais específico: rio carrega silicato de rocha moída, e o mar aberto
+praticamente não tem.
+
+Se silicato aparecesse onde salinidade falhou, aprenderíamos algo real.
+
+### Não apareceu — e a hipótese caiu junto
+
+**Nenhuma das três melhora a previsão.** Todas pioram.
+
+E o silicato falhou de um jeito que vale explicar, porque é bonito de ver:
+
+> Se o silicato estivesse marcando água de rio, ele teria que **subir quando a
+> salinidade desce** — é a mesma água doce fazendo as duas coisas.
+>
+> Medimos: **os dois sobem juntos.** Exatamente o contrário.
+
+Ou seja, o silicato que estamos medindo não é água de rio. É outra coisa —
+provavelmente enriquecimento costeiro genérico, que sobe perto da costa por
+vários motivos.
+
+**A hipótese foi testada e não sobreviveu.** Que é o que se quer de uma
+hipótese: que ela possa morrer.
+
+### Um detalhe honesto que preciso registrar
+
+Houve **uma** medida que passou no teste estatístico: a *variação* do silicato.
+Nos recifes que branquearam, ele estava subindo mais.
+
+Mas eu **não** vou chamar isso de descoberta, por dois motivos:
+
+1. O resultado passou por muito pouco — ficou colado no limite.
+2. Testamos **nove** medidas. Quando você testa nove coisas, é esperado que uma
+   pareça significativa por puro acaso.
+
+E o principal: **é exatamente o mesmo erro que cometi com o vento** ontem — pegar
+um número fraco, achar uma explicação bonita e transformar em prioridade. Não
+duas vezes no mesmo dia.
+
+### 🚨 E aqui a ressalva do tamanho do quadrado é a pior de todas
+
+Lembra dos quadrados de 28 km?
+
+**Para nutriente, é o pior caso possível.** Uma mancha de adubo saindo de um rio
+tem uns 2 ou 3 km, colada na praia. Medir isso pela média de 28 por 28 km é
+como tentar achar uma mancha de café numa mesa medindo a cor média da mesa
+inteira.
+
+E tem evidência disso no próprio processo: em **84 das 498 buscas**, o
+computador teve que procurar até **33 km de distância** do recife para achar um
+quadrado que fosse mar e não terra.
+
+> **Este é o resultado negativo menos confiável do projeto.** Ele não distingue
+> "poluição não importa" de "não conseguimos enxergar poluição no tamanho certo".
+
+### O placar final das variáveis que não são temperatura
+
+| Testamos | Descreve o branqueamento? | Consegue prever? |
+|---|---|---|
+| Salinidade | sim | **não** |
+| Oxigênio | sim | **não** |
+| Vento | ~~sim~~ (era a coluna, não o vento) | **não** |
+| Clorofila e nitrato | não | **não** |
+| Silicato | mal e mal | **não** |
+
+Quatro famílias testadas. **Nenhuma prevê.**
+
+E as três explicações possíveis, sendo honesta — os dados não escolhem entre
+elas:
+
+1. Essas coisas realmente não preveem branqueamento no Brasil.
+2. Preveem, mas nossos instrumentos são grossos demais para enxergá-las.
+3. **166 mergulhos é pouco.** Só a temperatura aparece porque o efeito dela é
+   grande. Um efeito médio ficaria invisível nesse tamanho de amostra.
+
+A terceira vale para as outras duas. E ela não se resolve com dado novo de
+satélite — se resolveria com **mais mergulhos**. Os do Brasil param em 2010.
+
+---
+
+## 12. O número que o site ia mostrar estava mentindo
+
+Esta é a parte que quase foi para o ar errada.
+
+### A promessa que uma porcentagem faz
+
+O site vai mostrar algo como **"risco de branqueamento: 37%"**. Esse número faz
+uma promessa bem específica, e verificável:
+
+> Se você juntar todos os dias em que o site disse 37%, o alerta tem que ter
+> acontecido em mais ou menos 37 de cada 100 deles.
+
+Se acontecer em 5, o número é enfeite.
+
+### E ele estava prometendo o dobro
+
+Fomos conferir. Juntamos todos os dias, agrupamos pelo que o modelo tinha dito,
+e olhamos o que de fato aconteceu:
+
+| O modelo dizia | Aconteceu de verdade |
+|---|---|
+| 2,7% | 0,6% |
+| 6,9% | 0,4% |
+| **8,4%** | **0%** |
+| 10,1% | 1,5% |
+| 96,1% | 74,8% |
+
+Na média, ele dizia **16,5%** quando a realidade era **8,4%**. Prometia o dobro.
+
+Repare na linha do meio: nos dias em que o modelo disse "8,4% de risco",
+**nunca** houve alerta. Nenhuma vez.
+
+### Por que isso acontecia — e não era bug
+
+Aqui está a parte interessante: **não era um defeito. Era um efeito colateral
+conhecido de uma decisão que está certa.**
+
+Lembra que só 8% dos dias têm alerta? Um modelo deixado sozinho aprende o
+caminho preguiçoso: *"responder sempre não dá 92% de acerto"*. Para impedir
+isso, dissemos a ele para tratar os dois casos como se fossem igualmente
+comuns.
+
+Funciona — ele passa a avisar. Mas, como consequência, **ele passa a achar que
+alerta é muito mais comum do que é.** O número que ele cospe vem inflado.
+
+Ou seja: a decisão de *quando avisar* ficou boa, e a de *quanto dizer* ficou
+ruim. São duas coisas, e nós só tínhamos cuidado de uma.
+
+### O outro número que nos enganou
+
+Tem uma medida chamada **Brier**, que a gente vinha olhando. Estava em 0,043 —
+parecia ótimo.
+
+Só que o Brier mistura três coisas, e existe uma conta que as separa:
+
+| Parte | O que mede | O nosso |
+|---|---|---|
+| Confiabilidade | se o número prometido bate | 0,0098 |
+| Resolução | se o modelo separa os casos | 0,0493 |
+| **Incerteza** | **o quanto o problema é difícil** | **0,0769** |
+
+**A incerteza sozinha é o dobro do Brier inteiro.** Ou seja, aquele número bonito
+vinha principalmente de o problema ser fácil de acertar por omissão — 92% dos
+dias não têm nada acontecendo —, e não de o modelo ser bom.
+
+> É como se orgulhar de acertar 92% das provas quando 92% das respostas são
+> "não".
+
+### O conserto
+
+Existe uma técnica que pega a probabilidade torta e endireita: olha o histórico,
+descobre que "quando ele diz 30%, na verdade acontece 8%", e passa a traduzir.
+
+Resultado, na mesma tabela de antes:
+
+| O modelo diz | Acontece de verdade |
+|---|---|
+| 0,3% | 0,3% |
+| 8,1% | 7,9% |
+| 72,3% | 73,7% |
+
+O erro médio caiu de **8,1 pontos para 0,4** — vinte vezes menor.
+
+⚠️ Um cuidado que precisou ser tomado: o tradutor é montado **usando só os anos
+que o modelo estudou**, nunca o ano que está sendo testado. Senão ele estaria
+consertando usando o gabarito, e a conferência sairia perfeita sem valer nada.
+
+### E não custou nada em capacidade de avisar
+
+Essa era a preocupação óbvia: se a probabilidade encolhe, o modelo não vai
+deixar de avisar?
+
+Não. Porque **o que ele fazia não era detectar mais — era gritar mais alto.**
+Inflar a probabilidade equivale a baixar o ponto de corte sem dizer a ninguém.
+
+Conferido:
+
+| | Corte | Avisa quantos dos alertas reais |
+|---|---|---|
+| Antes | 50% | 90,9% |
+| Depois | **20%** | **90,3%** |
+
+Mesma detecção. O que mudou é que **agora o corte é uma decisão declarada**, e
+não um efeito colateral escondido dentro do treino.
+
+> **Probabilidade honesta para mostrar. Corte declarado para avisar.**
+> São duas decisões, e agora estão em dois lugares.
+
+### E achamos um defeito no nosso próprio medidor
+
+Ao escrever os testes do medidor de calibração, um caso quebrou.
+
+Se o modelo respondesse **sempre o mesmo número**, o medidor devolvia "erro
+zero" — ou seja, **calibração perfeita**.
+
+Mas um modelo que responde sempre 30% quando a realidade é 8% é o pior possível.
+Ele passaria como o melhor.
+
+O motivo era técnico e chato (o agrupamento colapsava quando não havia
+variação), mas a lição não é: **o caso degenerado é justamente o que um medidor
+existe para denunciar** — e era exatamente onde ele estava cego.
+
+Corrigido, e travado com teste.
+
+---
+
 ## Onde ver mais
 
 | Documento | O que tem |
@@ -543,6 +940,10 @@ temperatura não explicou.
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **§12 criada — o número que o site ia mostrar estava mentindo.** Contada a promessa que uma porcentagem faz e por que ela não estava sendo cumprida: o modelo dizia 16,5% onde a realidade era 8,4%, e nos dias em que dizia "8,4%" **nunca** houve alerta. Explicado que não era bug e sim efeito colateral de uma decisão correta — mandar o modelo tratar as duas classes como igualmente comuns conserta *quando avisar* e estraga *quanto dizer*. Registrado por que o Brier de 0,043 enganava (a **incerteza sozinha é o dobro dele** — o problema é fácil de acertar por omissão), o conserto que levou o erro de 8,1 pontos a 0,4, e que **calibrar não custou detecção**, só mudou o corte de 50% para 20%. Fecha com o defeito encontrado no próprio medidor: predição constante dava "calibração perfeita", quando é o pior caso possível. |
+| 27/07/2026 | **§11 criada — a última tentativa, poluição da água, também não deu.** Contada a hipótese do rio e por que ela caiu de um jeito verificável: se o silicato marcasse água de rio, teria que subir quando a salinidade desce, e **os dois sobem juntos**. Registrado, com o motivo, por que **não** estou chamando de descoberta a única medida que passou no teste estatístico — passou colado e foram nove medidas testadas, e seria repetir o erro do vento no mesmo dia. E que esta é a ressalva de resolução na sua forma pior: 28 km é o tamanho errado para uma mancha de rio de 2 km, com 84 das 498 buscas precisando ir a 33 km de distância. Fecha com o placar das quatro famílias testadas e as três explicações que os dados não separam — incluindo a de que **166 mergulhos é pouco**, que não se resolve com satélite. |
+| 26/07/2026 | 🚨 **§10 corrigida — o vento também caiu, e a lição virou a parte principal.** Contada a conferência que derrubou a animação com o vento: o "vento" que o modelo usava era só uma coluna de planilha que ninguém tinha checado, e vento de verdade não mostra o efeito. Registrado o placar honesto — salinidade, oxigênio e vento descrevem o branqueamento, nenhum prevê — e a lição de que **explicação convincente é o que faz um número de ruído parecer descoberta**, já que o ganho de 0,025 estava abaixo do limiar de ruído que o próprio projeto tinha escrito. Acrescentado o achado positivo: 28 km serve para vento, então a ressalva de resolução passa a ser específica de variáveis irregulares e costeiras. |
+| 26/07/2026 | **§10 criada — o resultado negativo, em linguagem comum.** Salinidade e oxigênio foram buscados (30.212 medições) e **não explicam o que a temperatura não explica**. Contadas as duas desculpas testadas e derrubadas (tamanho da janela; "só dizem qual recife é"), e a distinção que é o coração do resultado: **descrever não é prever** — as duas variáveis apontam para o lado certo com metade da força da temperatura, e isso não basta. Registrada a ressalva de resolução com a analogia da poça e da umidade do bairro, e o achado positivo: **o vento funciona**, e hoje o vento do projeto é um número inventado. |
 | 26/07/2026 | **§9 criada — o resultado da segunda parte, em linguagem comum.** Por que a pergunta antiga era viciada (a resposta que o modelo adivinhava era feita de temperatura — analogia da régua feita de peso), e o que apareceu quando o alvo passou a ser branqueamento visto por mergulhador: **a regra da NOAA acerta 10 de 10 quando fala, mas fica calada em 78 dos 88 branqueamentos brasileiros**. Acrescentado também, em §3, o exemplo de quatro visitas mostrando por que esconder um recife e esconder um ano dão respostas diferentes, e por que a do ano é a honesta. |
 | 25/07/2026 | Acrescentado, em §6 e §7, o resultado da medida de importância: a "receita" **não** se explica neste projeto, porque cada variável é medida duas vezes (nível e mudança) e as linhas individuais deixam de fazer sentido — analogia das duas colheres de sal. E o indício do oxigênio, que a §7 anunciava, **não se confirmou**. |
 | 25/07/2026 | Documento criado como versão sem jargão da METODOLOGIA.md, para leitura e apresentação. Mesmo conteúdo, com analogias: previsão do tempo, prova com as questões vazadas, alarme de incêndio, receita e cozinheiro. |
