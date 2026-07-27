@@ -297,9 +297,20 @@ completude inverteria o que cada uma vale como evidência.
    [ dataset ]         backend/ml/dataset.py
           ↓            features em t, alvo em t+N, guardas contra vazamento
    [ modelo ]          backend/ml/modelo.py
-          ↓
-   [ API + site ]
+          ↓            treina, mede, recalibra
+   [ artefato ]        dados/modelos/entrega1_baa.joblib
+          ↓            gravado uma vez por manage.py treinar_final
+   [ predição ]        backend/ml/predicao.py
+          ↓            monta a janela de HOJE — sem alvo, que ainda não existe
+   [ API + site ]      /api/painel-risco/
 ```
+
+⚠️ **O ramo `dataset → modelo` e o ramo `artefato → predição` fazem a mesma
+conta e por isso não podem ser dois códigos.** O primeiro monta a janela para
+aprender; o segundo, para responder. Se divergirem, o modelo recebe colunas com
+o nome certo e o conteúdo errado — e responde sem erro nenhum. Por isso
+`predicao.py` **não recalcula nada**: ele traduz o nome da coluna de volta numa
+`dataset.Janela` e chama o mesmo `dataset.aplicar_janela`.
 
 Cada etapa tem uma responsabilidade só, e isso é deliberado: o conector **não**
 decide nomes nem unidades, a normalização **não** fala com a rede, a validação
@@ -627,21 +638,28 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **A pergunta científica respondida** | com os dados disponíveis, e com a ressalva de resolução declarada |
 | **Documentação em .docx** | artefato derivado, regerável com `manage.py exportar_docs` |
 | **Projeção do Neo4j** | 57.420 medições no grafo, com proveniência por valor, conferidas contra o Postgres |
-| **365 testes** | rodam offline |
+| **Modelo persistido** | `manage.py treinar_final` grava `.joblib` + metadados legíveis; o carregamento recusa artefato de outra origem ou versão (§7.4) |
+| **Calibração medida e corrigida** | o modelo prometia **o dobro** do que acontecia; recalibração isotônica levou o ECE de 0,081 a **0,0039** ([RESULTADOS.md](RESULTADOS.md) §22) |
+| **API da série ambiental** | `/api/medicoes/`, com proveniência por valor, filtros combináveis e paginação com teto |
+| **Predição servida** | `/api/painel-risco/` — o primeiro endpoint que **faz conta**: carrega o artefato, monta a janela de hoje e devolve probabilidade calibrada com data-base e limiar |
+| **441 testes** | rodam offline |
 
 ### Falta
 
 | | |
 |---|---|
-| **Passo de deploy que treine o modelo** | ⬆️ O artefato é derivado e não versionado (§7.4), então **quem publicar precisa rodar `treinar_final`** — e esse passo não existe em lugar nenhum |
-| ⛔ ~~ERA5 — vento real~~ | **Cancelado em 26/07/2026.** O vento medido piora o modelo ([RESULTADOS.md](RESULTADOS.md) §20). A infraestrutura medida fica registrada em [ERA5.md](ERA5.md) |
-
-| **API e site** | endpoints, paginação, mapa, séries temporais |
-| **Curva de calibração** | antes de o site exibir porcentagem |
+| **O site consumir o `painel-risco`** | O backend responde; a tela ainda mostra o caminho legado. 🚨 E ela **não pode exibir "0%" nem "100%"** — a isotônica devolve extremos exatos por construção ([RESULTADOS.md](RESULTADOS.md) §22.8) |
+| **Nome honesto do produto na interface** | O modelo prevê **estresse térmico**, não branqueamento observado — a régua da NOAA perde 78 dos 88 branqueamentos brasileiros (§11) |
+| **Passo de deploy que reconstrua os derivados** | São **três** agora, todos não versionados: o `.docx`, o `.joblib` e o grafo do Neo4j. Quem publicar precisa rodar os três comandos, e esse passo não existe |
+| **Aprovar o limiar de alerta** | 0,20 está em `settings.PAINEL_LIMIAR` porque é o ponto equivalente ao antigo 0,50 — não porque alguém escolheu a troca entre alarme falso e evento perdido |
+| **Variáveis canônicas aprovadas** | item de go-live ainda aberto |
 | **Apagar `backend/dados/`** | ~260 MB de CSV legado que nada lê, incluindo os arquivos defeituosos de [FONTES.md](FONTES.md) §6 |
+| **Apagar `backend/ml_models/modelo_coral_rf.pkl`** | o modelo legado que predizia `0.0` para tudo, ainda no repositório |
+| **DOIs dos produtos CMEMS** | bloqueia submissão, não o site |
 | **Agendamento** | nada roda sozinho ainda |
 | **CI** | não existe |
 | **Dado *in situ* de salinidade e O₂** | resolveria a ressalva de §18, mas não existe para os sítios do GCBD |
+| ⛔ ~~ERA5 — vento real~~ | **Cancelado em 26/07/2026.** O vento medido piora o modelo ([RESULTADOS.md](RESULTADOS.md) §20). A infraestrutura medida fica registrada em [ERA5.md](ERA5.md) |
 
 ---
 
@@ -695,6 +713,7 @@ O catálogo completo, com medição de cada um, está em [FONTES.md](FONTES.md) 
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | ✅ **§7 e §10 atualizadas — o caminho do dado chegou até a tela.** O diagrama ganhou os dois passos que faltavam: **artefato** (`dados/modelos/*.joblib`) e **predição** (`ml/predicao.py`), este último montando a janela de **hoje**, para a qual o alvo ainda não existe. Registrado por que os dois ramos — treinar e responder — não podem ser dois códigos: se divergirem, o modelo recebe colunas com o nome certo e o conteúdo errado e responde sem erro nenhum, então `predicao.py` traduz o nome da coluna de volta numa `dataset.Janela` e chama o mesmo `aplicar_janela`. Em §10 entram como prontos a **API da série ambiental** e a **predição servida**; entram como pendências o site consumir o painel — com a proibição nova de exibir "0%" ou "100%" (§22.8 de [RESULTADOS.md](RESULTADOS.md)) — e a **aprovação do limiar 0,20**, que hoje está no `settings` por ser o ponto equivalente ao antigo 0,50, e não por decisão de produto. |
 | 27/07/2026 | §10 atualizada: **projeção do Neo4j concluída** — o grafo deixou de mostrar dado legado e passou a ter as 57.420 medições com proveniência por valor. Também entram em "pronto" a **persistência do modelo** e a **calibração da probabilidade**. Restam como pendências o passo de deploy que reconstrua os três artefatos derivados, os endpoints, o nome honesto do produto na interface e o painel. |
 | 27/07/2026 | ✅ **§7.4 criada — o modelo passou a ser salvo.** `manage.py treinar_final` faz o oposto dos comandos de medição: um modelo só, sobre todos os dados, gravado em `dados/modelos/` com metadados em JSON ao lado. Registradas as três decisões e o motivo de cada uma — artefato **não versionado** (cópia versionada envelhece em silêncio), metadados **legíveis sem abrir o pickle** (é preciso saber o que é o arquivo antes de executá-lo), e recusa de artefato desconhecido porque 🚨 **`joblib.load` executa código** e o pickle de um `Pipeline` falha em silêncio entre versões do scikit-learn. §10 troca a pendência: sai "persistir o modelo", entra "**passo de deploy que rode `treinar_final`**", já que o artefato é derivado. |
 | 26/07/2026 | 🚨 **§9 corrigida — o vento também não se confirmou, e o ERA5 foi cancelado.** A afirmação de que o vento era a variável não térmica que funciona vinha de **uma única coluna** do GCBD, nunca conferida. Contra vento medido do ERA5 nos mesmos 166 pontos e datas, as duas fontes concordam sobre o vento (r = +0,708) e discordam sobre o coral (*d* = −0,461 contra −0,057); trocar uma pela outra deixa o modelo **pior que sem vento**. O placar real passa a ser: **nenhuma variável não térmica testada se confirma** — salinidade, oxigênio e vento descrevem, nenhum prevê. §10 reordenada: persistir o modelo vira prioridade máxima, e o ERA5 sai como cancelado. |

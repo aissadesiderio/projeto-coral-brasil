@@ -621,6 +621,33 @@ padrão** (`--calibrar isotonic`). Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) 
 declarado para avisar**. No modelo recalibrado o corte equivalente ao antigo
 fica em **0,20**, não em 0,50.
 
+#### Servir a predição: `/api/painel-risco/`
+
+O único endpoint que **faz conta**. Carrega o artefato gravado por
+`treinar_final`, monta a janela de 7 dias a partir da série do PostgreSQL e
+devolve a probabilidade calibrada.
+
+```bash
+curl http://localhost:8000/api/painel-risco/
+```
+
+| Situação | Resposta |
+|---|---|
+| tudo certo | `200` com `probabilidade`, `limiar`, `data_base`, `entradas` |
+| janela incompleta | `200`, item com `disponivel: false` e **qual dia faltou** |
+| local que o modelo não treinou | `404` com a lista dos disponíveis |
+| artefato ausente | `503` pedindo `treinar_final` |
+
+⚠️ **O limiar vem de `settings.PAINEL_LIMIAR`** (padrão `0.20`) e vai no
+payload. Subir o número troca alarme falso por evento perdido — é decisão de
+quem opera, não de quem treina.
+
+🚨 **Quem exibir isso não pode escrever "0%" nem "100%".** A recalibração
+isotônica é função escada e devolve `0,000` e `1,000` exatos por construção —
+12,2% das amostras de treino caem em `p = 0` exato. Isso significa *"nenhum
+alerta neste degrau"*, não *"impossível"*. A API sinaliza com `no_extremo:
+true`. Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) §22.8.
+
 ### Entrega 2 — prever branqueamento observado (GCBD)
 
 **Não usa o banco nem a rede** — lê só o CSV do GCBD.
