@@ -132,6 +132,19 @@ class ColunasRecusadasTests(SimpleTestCase):
         for coluna in gcbd.FEATURES_INTERPRETAVEIS:
             self.assertIn(coluna, gcbd.TERMICAS_DO_DIA)
 
+    def test_windspeed_ficou_fora_do_conjunto_interpretavel(self):
+        """A regressao de 27/07/2026, e o motivo nao e cosmetico.
+
+        O `Windspeed` do GCBD dava o melhor numero, mas o efeito nao sobrevive
+        a troca por vento medido do ERA5 (docs/RESULTADOS.md secao 20): as duas
+        fontes concordam sobre o vento e discordam sobre o coral. Reintroduzi-lo
+        sem reexaminar essa medicao seria reintroduzir o erro.
+        """
+        self.assertNotIn('Windspeed', gcbd.FEATURES_INTERPRETAVEIS)
+
+    def test_interpretaveis_sao_so_as_duas_termicas_com_mecanismo(self):
+        self.assertEqual(gcbd.FEATURES_INTERPRETAVEIS, ('TSA_DHW', 'TSA'))
+
 
 class AvaliarTests(SimpleTestCase):
     def test_metricas_binarias(self):
@@ -179,6 +192,19 @@ class ValidarTests(SimpleTestCase):
     """Usa um conjunto sintetico: o CSV real nao e versionado."""
 
     def _conjunto(self, n_sitios=20, por_sitio=3):
+        """Conjunto sintetico em que **`TSA_DHW` e quem gera o alvo**.
+
+        ⚠️ O ruido no `tsa` nao e enfeite. Ate 27/07/2026 este gerador fazia
+        `tsa = dhw / 4` exato, o que torna as duas colunas **perfeitamente
+        colineares**. Enquanto o conjunto interpretavel tinha uma terceira
+        coluna isso passou despercebido; ao reduzi-lo para (`TSA_DHW`, `TSA`),
+        a importancia por permutacao passou a atribuir o credito a qualquer uma
+        das duas - e o teste quebrou.
+
+        Colinearidade perfeita torna a pergunta "qual coluna importa mais"
+        indefinida, e nao errada. E o mesmo fenomeno que docs/RESULTADOS.md
+        secao 12 mede no dado real, aqui reproduzido por acidente no fixture.
+        """
         gerador = np.random.default_rng(42)
         linhas = []
         for site in range(n_sitios):
@@ -188,7 +214,8 @@ class ValidarTests(SimpleTestCase):
                 pb = 20.0 if dhw > 4 else 0.0
                 linhas.append(visita(
                     site, f'{2000 + k}-06-15', pb, dhw=dhw,
-                    tsa=dhw / 4, vento=float(gerador.uniform(3, 9)),
+                    tsa=dhw / 4 + float(gerador.normal(0, 0.6)),
+                    vento=float(gerador.uniform(3, 9)),
                 ))
         quadro = gcbd.agregar_por_visita(pd.DataFrame(linhas))
         quadro['alvo'] = (quadro['Percent_Bleaching'] > 0).astype(int)
@@ -247,6 +274,17 @@ class ValidarTests(SimpleTestCase):
 
 
 class ImportanciaTests(SimpleTestCase):
+    def test_o_fixture_nao_e_perfeitamente_colinear(self):
+        """Guarda do proprio teste seguinte.
+
+        Se `TSA` voltar a ser funcao exata de `TSA_DHW`, a pergunta "qual
+        importa mais" fica indefinida e o teste abaixo passa ou falha por
+        sorte. Melhor descobrir aqui, com a mensagem certa.
+        """
+        quadro = ValidarTests()._conjunto().quadro
+
+        self.assertLess(abs(quadro['TSA_DHW'].corr(quadro['TSA'])), 0.95)
+
     def test_a_variavel_que_gera_o_alvo_e_a_mais_importante(self):
         conjunto = ValidarTests()._conjunto()
 

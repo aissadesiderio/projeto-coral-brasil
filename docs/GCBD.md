@@ -252,16 +252,17 @@ O caminho mínimo que responde à pergunta científica, em ordem:
 ter sentinela (ver Etapa 2). Foram usadas as **8 térmicas do dia**. **Zero
 ingestão**, como previsto.
 
-**2. Ingerir apenas salinidade e oxigênio** do Copernicus, em janela de 90 dias
-antes de cada uma das 197 observações: **35.460 medições**. Menos do que o
-backfill do Copernicus já feito.
+**2. ✅ Ingerir apenas salinidade e oxigênio** do Copernicus, em janela de 90
+dias antes de cada observação — **feito em 26/07/2026**: **30.212 valores
+diários**, 332 pares (visita, variável), **zero falhas**. Foram 166 visitas, e
+não as 197 estimadas, pela correção da Etapa 3.
 
-A reanálise começa em **1993** e o GCBD brasileiro em **1994** — a cobertura é
-exata, sem emenda com produto de análise.
+A reanálise começa em **1993** e o GCBD brasileiro em **1994** — conferido nos
+dois produtos: a cobertura é exata, **sem emenda** com produto de análise.
 
-**3. O experimento:** modelo térmico-apenas contra térmico + salinidade + O₂,
-prevendo **branqueamento observado**. É a pergunta da entrega 2, com rótulo
-real e classes balanceadas.
+**3. ✅ O experimento:** modelo térmico-apenas contra térmico + salinidade + O₂,
+prevendo **branqueamento observado**. **Feito em 26/07/2026 — a resposta é
+não.** Ver abaixo.
 
 ### Por que essa ordem
 
@@ -299,11 +300,15 @@ Duas consequências para o passo 2:
 1. **Há lacuna quantificada a preencher.** Não é mais "seria interessante testar
    salinidade e oxigênio": são **78 eventos observados sem estresse térmico
    acumulado** esperando explicação.
-2. **`Windspeed` é a segunda variável mais útil** do modelo interpretável
-   (queda de PR-AUC +0,073, contra +0,100 do `TSA_DHW`). É o primeiro sinal
-   não térmico que o projeto encontra — e vento se liga a mistura da coluna
-   d'água, que é justamente o mecanismo pelo qual salinidade e oxigênio
-   importariam.
+2. ~~**`Windspeed` é a segunda variável mais útil**~~ do modelo interpretável
+   (queda de PR-AUC +0,073, contra +0,100 do `TSA_DHW`). ~~É o primeiro sinal
+   não térmico que o projeto encontra.~~
+
+   🚨 **Desmentido em 26/07/2026.** Essa evidência vinha da coluna `Windspeed`
+   do próprio GCBD, e ninguém tinha conferido se ela descreve o vento. Contra
+   vento medido do ERA5, nos mesmos pontos e datas, o efeito some — e substituir
+   uma pela outra deixa o modelo **pior que sem vento**. Ver
+   [RESULTADOS.md](RESULTADOS.md) §20 e [ERA5.md](ERA5.md).
 
 ⚠️ **O que o passo 1 não disse:** que salinidade e oxigênio *são* a explicação.
 Eles não foram medidos. O que se mostrou é que **há espaço**, não quem o ocupa.
@@ -319,6 +324,189 @@ python backend\manage.py treinar_gcbd --interpretavel --importancia
 ```
 
 Código em `backend/ml/gcbd.py`, testes em `backend/ml/testes_gcbd.py` (26).
+
+---
+
+## Passo 2 — a ingestão ambiental
+
+Executado em **26/07/2026**. Busca **salinidade e oxigênio dissolvido** nos 90
+dias que precedem cada uma das 166 visitas.
+
+### Por que 90 dias
+
+É a escala em que o estresse térmico opera — o DHW da NOAA acumula 12 semanas.
+Usar a mesma janela mantém a comparação honesta: as duas famílias de variável
+enxergam o mesmo intervalo, então uma diferença de desempenho não pode ser
+atribuída a uma delas ter olhado mais longe.
+
+⚠️ **A janela termina no dia da visita e inclui esse dia.** Um único dia
+posterior seria vazamento direto — o mergulhador já tinha visto o coral branco.
+Há teste travando isso.
+
+### Verificações feitas antes de baixar
+
+**1. A reanálise cobre o período?** [GCBD.md](GCBD.md) afirmava que "a reanálise
+começa em 1993", mas isso nunca tinha sido conferido para o produto de
+biogeoquímica, que costuma ter cobertura diferente do físico. Conferido no
+catálogo real:
+
+| Variável | Produto | Cobertura | Cobre 1994–2010? |
+|---|---|---|---|
+| salinidade | `cmems_mod_glo_phy_my_0.083deg_P1D-m` | 1993-01-01 → 2026-06-23 | ✅ |
+| oxigênio | `cmems_mod_glo_bgc_my_0.25deg_P1D-m` | 1993-01-01 → 2026-05-31 | ✅ |
+
+✅ **Só a reanálise é usada.** Ao contrário da série da entrega 1, aqui **não há
+emenda** com produto de análise: a reanálise sozinha cobre todo o período do
+GCBD brasileiro. É uma fonte de erro a menos.
+
+**2. 🚨 Os recifes caem em célula de terra?** Este era o risco real. **69 das
+166 visitas estão a menos de 1 km da costa** (mediana: 2,3 km), e a grade do
+oxigênio é 0,25° ≈ **28 km**. Um recife costeiro pode simplesmente não ter
+célula de oceano em cima dele.
+
+Medido, por raio de busca:
+
+| Raio | ~km | Salinidade | Oxigênio |
+|---|---|---|---|
+| 0,15° | 17 | 118 sítios | 99 sítios |
+| 0,30° | 33 | +1 → **119** | +20 → **119** |
+| **sem dado** | | **0** | **0** |
+
+**Nenhum sítio fica sem dado.** Mas 20 sítios só encontram oxigênio a até 33 km
+do recife — e isso fica gravado.
+
+### O que é gravado, e por quê
+
+O resultado **não entra no banco**. `MedicaoAmbiental` pendura em
+`LocalRecife`, que são os três recifes monitorados, com foto, slug e página
+pública. Os 119 sítios do GCBD não são recifes monitorados: são pontos de
+amostragem de um estudo retrospectivo. Criá-los como `LocalRecife` encheria a
+tabela pública de 119 registros falsos para viabilizar um experimento.
+
+Então a janela vira **cache em `dados/gcbd_janelas_ambientais.csv`** — não
+versionado, reconstruível por um comando, com proveniência por valor. É
+coerente com o passo 1, que já lê arquivo em vez do banco.
+
+Cada linha guarda:
+
+| Coluna | Por quê |
+|---|---|
+| `dataset_id` | De qual produto o valor saiu |
+| **`raio_graus`** | **A que distância do recife.** Um valor colhido a 33 km não é o mesmo que um colhido em cima dele, e quem lê o resultado precisa saber qual foi |
+| `n_celulas` | Quantas células de oceano entraram na média |
+
+### Qualidade da água — acrescentada em 27/07/2026
+
+O **mesmo arquivo** de onde vem o oxigênio publica também `chl` (clorofila),
+`no3` (nitrato), `po4` (fosfato), `si` (silicato) e `nppv` — diários, 1993–2026.
+Conferido no catálogo. Custo de acrescentar: **nenhuma fonte, credencial ou
+código novo**, só mais nomes.
+
+Escolhidas três, e o motivo de cada uma:
+
+| Variável | Por quê |
+|---|---|
+| `chl` | Clorofila — o indicador de eutrofização mais estabelecido |
+| `no3` | Nitrato — o nutriente de mecanismo mais direto |
+| `si` | Silicato — marcador de **aporte continental** (água de rio) |
+
+`po4` ficou de fora por andar junto com `no3`, e `nppv` por ser consequência
+dos nutrientes e não causa.
+
+**O `si` era o que interessava:** a salinidade deveria detectar água de rio e não
+detectou. Silicato pergunta o mesmo por outro caminho.
+
+🚨 **Resultado: não, e a hipótese do rio caiu.** Nenhuma combinação melhora a
+validação por ano, e o silicato correlaciona **+0,363 com a salinidade** — o
+oposto do que uma pluma de água doce produziria. Ver
+[RESULTADOS.md](RESULTADOS.md) §21.
+
+⚠️ **Estas variáveis ficam declaradas em `ml/gcbd_ambiental.py`, e não em
+`conectores/copernicus.py::SERIES`.** Aquele dicionário alimenta o comando
+`ingerir`, que grava em `MedicaoAmbiental`; uma variável listada lá sem nome
+canônico em `ingestao/normalizacao.py` viraria uma opção que aceita o pedido e
+quebra no meio da gravação. Há teste travando a separação.
+
+### As features
+
+Uma média e uma trajetória por variável — **quatro colunas novas** no passo 2,
+mais seis se a qualidade da água entrar:
+
+| Feature | O que responde |
+|---|---|
+| `salinidade_media_90d` | Como estava o ambiente no trimestre |
+| `salinidade_variacao_90d` | Para onde ele ia (último menos primeiro) |
+| `oxigenio_media_90d` | idem |
+| `oxigenio_variacao_90d` | idem |
+
+A distinção média×trajetória é a mesma que fez a entrega 1 funcionar
+([RESULTADOS.md](RESULTADOS.md) §3). E o número é pequeno de propósito: a
+entrega 1 aprendeu **duas vezes** que janelas demais sobre a mesma variável
+viram a mesma coluna e quebram os coeficientes. Com 166 visitas, quatro
+features novas sobre três térmicas já é o limite defensável.
+
+⚠️ **Visita sem janela completa é descartada, nunca preenchida.** Imputar
+salinidade por média inventaria exatamente a variável cujo efeito o experimento
+quer medir — o defeito do `carregar_historico.py` legado
+([FONTES.md](FONTES.md) §6.3).
+
+### Como rodar
+
+```bash
+python backend\manage.py ingerir_gcbd --agua
+```
+
+Sem `--agua`, baixa só salinidade e oxigênio. Grava a cada visita concluída:
+pode ser interrompido e retomado, porque o cache é consultado por (sítio, data,
+variável).
+
+```bash
+python backend\manage.py treinar_gcbd --interpretavel --ambiental --importancia
+```
+
+O experimento espelho — só as não térmicas, sem nenhuma temperatura:
+
+```bash
+python backend\manage.py treinar_gcbd --so-ambiental --importancia
+```
+
+Código em `backend/ml/gcbd_ambiental.py`, testes em
+`backend/ml/testes_gcbd_ambiental.py` (23).
+
+### ✅ O que saiu — e a resposta é não
+
+Números completos em [RESULTADOS.md](RESULTADOS.md) §15–§19.
+
+> **Nenhuma combinação de salinidade e oxigênio superou o modelo só-térmico na
+> validação por ano.** Sozinhas, as quatro features ambientais dão PR-AUC
+> **0,527** contra taxa base 0,530 — acaso.
+
+| Conjunto | PR-AUC ano |
+|---|---|
+| Só as 3 térmicas | **0,717** |
+| \+ as 4 ambientais | 0,636 |
+| Só as 4 ambientais | 0,527 *(acaso = 0,530)* |
+
+As duas explicações alternativas foram testadas e **caíram**:
+
+- **Não é o tamanho da janela.** Reconstruída de 7 a 90 dias a partir do mesmo
+  cache: todas ficam entre 0,632 e 0,664, abaixo do modelo sem ambientais.
+- **Não são identificador de sítio.** Variam com a visita (razão de desvio
+  interno 0,48 a 0,87) e só acertam o sítio em 14,9% contra 3,0% de acaso.
+
+**O achado que não é zero:** as quatro **separam as classes na direção
+fisicamente esperada** — os sítios que branquearam tinham oxigênio mais baixo
+e caindo (*d* = −0,38 e −0,32) e salinidade mais baixa e caindo (−0,28). O
+efeito é cerca de metade do das térmicas, e **não vira previsão**. É a segunda
+vez que o projeto vê exatamente esse padrão com o oxigênio, agora em base
+independente ([VARIAVEIS.md](VARIAVEIS.md) §3.6).
+
+🚨 **A explicação concorrente que estes dados não descartam** está em
+[RESULTADOS.md](RESULTADOS.md) §18: a grade do oxigênio é 28 km e 20 sítios só
+têm dado a até 33 km do recife. Uma pluma de água doce num recife costeiro é
+exatamente o que uma célula desse tamanho calcula a média para fora. O
+resultado negativo é sobre **estes produtos nesta resolução**, não sobre o
+mecanismo.
 
 ---
 
@@ -346,6 +534,12 @@ Código em `backend/ml/gcbd.py`, testes em `backend/ml/testes_gcbd.py` (26).
 7. **A versão reduzida de features tem viés de seleção.** Ela foi escolhida
    olhando a mesma validação que a avalia; com 166 visitas não sobra conjunto
    para confirmá-la. Ver [RESULTADOS.md](RESULTADOS.md) §12.3.
+8. 🚨 **A salinidade e o oxigênio vêm de reanálise global, não do recife.** A
+   grade do oxigênio é 0,25° (~28 km) e **20 sítios só têm dado a até 33 km**.
+   O resultado negativo do passo 2 é condicional a isso — ver
+   [RESULTADOS.md](RESULTADOS.md) §18 e [FONTES.md](FONTES.md) §6.18. Afirmar
+   "salinidade e oxigênio não explicam o branqueamento brasileiro" sem essa
+   ressalva seria afirmar mais do que foi medido.
 
 ---
 
@@ -367,5 +561,9 @@ O código procura nesta ordem: o argumento `--csv`, a variável de ambiente
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **`Windspeed` saiu do conjunto interpretável.** Passa a ser `TSA_DHW` + `TSA`, duas colunas. Custa 0,025 de PR-AUC — dentro do ruído declarado — e elimina a única entrada que exigia ressalva, já que o efeito do vento não sobrevive à troca por vento medido do ERA5. Ver [RESULTADOS.md](RESULTADOS.md) §20.1. |
+| 27/07/2026 | **Qualidade da água acrescentada ao passo 2 — e a resposta é não.** O mesmo produto do oxigênio publica clorofila, nitrato e silicato; extraídos 45.318 valores, 498 pares, zero falhas, sem fonte nem código novo. **Nenhuma combinação melhora a validação por ano.** A hipótese que justificava o silicato — marcar água de rio — **caiu**: ele correlaciona +0,363 com a salinidade, o oposto do esperado para pluma de água doce. Registrado também por que essas variáveis ficam declaradas em `ml/gcbd_ambiental.py` e não no `SERIES` do conector: lá elas seriam oferecidas ao comando `ingerir` e quebrariam na normalização por falta de nome canônico. Ver [RESULTADOS.md](RESULTADOS.md) §21. |
+| 26/07/2026 | 🚨 **Corrigido o achado 2 do passo 1 — o `Windspeed` não se confirma.** A afirmação de que ele era "o primeiro sinal não térmico do projeto" vinha da coluna do próprio GCBD, nunca conferida contra fonte independente. Contra vento medido do ERA5 nos mesmos pontos e datas, o efeito some, e substituir deixa o modelo pior que sem vento. Ver [RESULTADOS.md](RESULTADOS.md) §20 e [ERA5.md](ERA5.md). |
+| 26/07/2026 | **Passos 2 e 3 executados — a resposta é não.** 30.212 valores diários de salinidade e oxigênio extraídos para as 166 visitas, zero falhas, só reanálise (cobertura conferida: 1993-01-01 nos dois produtos, sem emenda). **Nenhuma combinação supera o modelo só-térmico por ano**; sozinhas as ambientais ficam no acaso (0,527 contra base 0,530). Testadas e derrubadas as duas explicações alternativas: tamanho de janela (7 a 90 dias, nenhuma ajuda) e identidade de sítio (variam com a visita, e só acertam o sítio em 14,9%). O achado positivo: elas **separam as classes na direção fisicamente esperada**, com metade da força das térmicas, sem virar previsão — segunda ocorrência do mesmo padrão com o oxigênio. Acrescentada a **limitação 8**: a grade do oxigênio é 28 km e 20 sítios só têm dado a até 33 km, então o resultado negativo é sobre estes produtos nesta resolução, não sobre o mecanismo. |
 | 26/07/2026 | **Passo 1 executado, com três correções ao levantamento.** (a) A unidade amostral é a **visita**: 166, não 313 — o GCBD traz uma linha por substrato, e 0 de 166 visitas divergem no alvo. (b) **`ClimSST` tem sentinela** (262,15 K = −11 °C) em 115 de 313 registros e foi removida do baseline, junto com `SSTA_Mean`, que é constante; o plano original recomendava `ClimSST`. (c) Das 33 colunas térmicas, só **8 variam com a data** — as outras 23 são climatologia constante do sítio. Resultado: a regra da NOAA tem precisão 1,000 e revocação **0,114**, com **78 dos 88 branqueamentos ocorrendo com `TSA_DHW` = 0**. O passo 2 passa a ter lacuna quantificada. A suspeita da limitação 4 (equilíbrio artificial) foi medida e **não** se confirmou. |
 | 25/07/2026 | Documento criado. Levantamento de viabilidade em cinco etapas, antes de qualquer código: download e integridade, estrutura, conteúdo brasileiro, cobertura geográfica frente aos três recifes, e custo de ingestão. Conclusão: viável, mas como experimento separado — o dado brasileiro é de 1994–2010, termina em 2010, e Picãozinho fica sem cobertura. Balanceamento de 50/50 é vantagem real sobre os 8% do BAA. |

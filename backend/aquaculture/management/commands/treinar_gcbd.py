@@ -8,7 +8,7 @@ vale ingerir salinidade e oxigenio.
 
 from django.core.management.base import BaseCommand
 
-from ml import gcbd
+from ml import gcbd, gcbd_ambiental
 
 
 class Command(BaseCommand):
@@ -42,6 +42,23 @@ class Command(BaseCommand):
             help='Usa so as 3 variaveis sem coeficiente invertido '
                  f'({", ".join(gcbd.FEATURES_INTERPRETAVEIS)}).',
         )
+        parser.add_argument(
+            '--ambiental', action='store_true',
+            help='Acrescenta salinidade e oxigenio da janela de 90 dias. '
+                 'Exige o cache de "manage.py ingerir_gcbd".',
+        )
+        parser.add_argument(
+            '--so-ambiental', action='store_true',
+            help='Usa SO salinidade e oxigenio, sem nenhuma termica. '
+                 'Mede o que as nao termicas explicam sozinhas.',
+        )
+        parser.add_argument(
+            '--agua', action='store_true',
+            help='Inclui qualidade da agua '
+                 f'({", ".join(gcbd_ambiental.QUALIDADE_DA_AGUA)}) nas features '
+                 'ambientais. Implica --ambiental.',
+        )
+        parser.add_argument('--cache', help='Caminho do cache ambiental.')
 
     def handle(self, *args, **opcoes):
         if opcoes['interpretavel']:
@@ -61,6 +78,38 @@ class Command(BaseCommand):
         except gcbd.ArquivoAusente as erro:
             self.stderr.write(self.style.ERROR(str(erro)))
             return
+
+        if opcoes['ambiental'] or opcoes['so_ambiental'] or opcoes['agua']:
+            cache = gcbd_ambiental.carregar_cache(opcoes['cache'])
+            if cache.empty:
+                self.stderr.write(self.style.ERROR(
+                    'O cache ambiental esta vazio. Rode primeiro:\n'
+                    '  python backend/manage.py ingerir_gcbd'
+                ))
+                return
+            ambientais = (
+                gcbd_ambiental.VARIAVEIS_COM_AGUA if opcoes['agua']
+                else gcbd_ambiental.VARIAVEIS
+            )
+            faltando = [v for v in ambientais
+                        if v not in set(cache['variavel'].unique())]
+            if faltando:
+                self.stderr.write(self.style.ERROR(
+                    f'O cache nao tem {faltando}. Rode primeiro:\n'
+                    '  python backend/manage.py ingerir_gcbd --agua'
+                ))
+                return
+            # `--so-ambiental` zera as termicas: e o experimento espelho, que
+            # responde "as nao termicas explicam alguma coisa sozinhas?".
+            conjunto = gcbd_ambiental.juntar(
+                conjunto, cache=cache, variaveis=ambientais,
+                features_termicas=() if opcoes['so_ambiental'] else None,
+            )
+            features = list(conjunto.features)
+            self.stdout.write(
+                f'  cache ambiental: {len(cache):,} valores diarios, '
+                f'raios {sorted(cache["raio_graus"].unique())}'
+            )
 
         self.stdout.write(self.style.MIGRATE_HEADING('\n=== CONJUNTO ==='))
         self.stdout.write(f'  {conjunto.resumo()}')

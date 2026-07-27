@@ -376,6 +376,36 @@ Define a MMM (Maximum Monthly Mean) por pixel, o HotSpot, a acumulação de DHW 
 
 ---
 
+### 4.2 ERA5 — vento real ⏳ credencial configurada, conector não escrito
+
+**Instituição:** ECMWF, para o Copernicus Climate Change Service (C3S)
+**Acesso:** Climate Data Store — `https://cds.climate.copernicus.eu/api`, cliente `cdsapi==0.7.6`
+**Credencial:** `~/.cdsapirc` — **fora do repositório**, mesma decisão do Copernicus Marine
+**Variáveis:** `10m_u_component_of_wind`, `10m_v_component_of_wind` (**0,25°**, horário)
+**Licença:** Copernicus — atribuição obrigatória
+**Data do teste de conexão:** 26/07/2026
+
+**Citação obrigatória — são duas:**
+> Hersbach, H. et al. (2020). *The ERA5 global reanalysis.* Quarterly Journal of the Royal Meteorological Society, 146(730). doi:10.1002/qj.3803
+
+> Hersbach, H. et al. (2023). *ERA5 hourly data on single levels from 1940 to present.* Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
+
+Mais a frase exigida pela licença: *"Contains modified Copernicus Climate Change Service information [ano]"*.
+
+🚨 **O DOI do dataset ainda não foi conferido na página oficial** — mesma pendência dos produtos CMEMS (§6.15), **bloqueante para submissão**.
+
+**Para quê:** o vento é a **única variável não térmica que dá sinal** no projeto — 2ª mais importante no passo 2 da entrega 2, coeficiente −0,72, *d* de Cohen −0,461 ([RESULTADOS.md](RESULTADOS.md) §17). E o vento atual do projeto é uma **constante inventada** (§6.7). É a maior assimetria aberta: a variável que funciona é a que não temos.
+
+**Medido em 26/07/2026:**
+
+1. ✅ **A conexão funciona e a fila não atrapalha** — `200` em **40,4 s** num pedido mínimo, com o ciclo `accepted → running → successful` em ~35 s. Era o risco número um: o CDS não devolve dado na hora, e sim por fila compartilhada.
+2. ⛔ **O espelho ARCO na Google Cloud foi testado e descartado** — ver §6.19.
+3. ⚠️ **A resolução é 0,25°, a mesma do produto de oxigênio** que virou a ressalva de [RESULTADOS.md](RESULTADOS.md) §18. Precisa ser medida contra o `Windspeed` do próprio GCBD antes de qualquer conclusão.
+
+📖 **Levantamento em [ERA5.md](ERA5.md)** — credencial, conexão, o espelho descartado, as decisões de agregação e a validação de graça contra o GCBD.
+
+---
+
 ### 4.2 Demais candidatas
 
 Levantadas no planejamento, com justificativa de por que interessam ao projeto.
@@ -662,6 +692,68 @@ inventaria desempenho sem que nada no resultado denunciasse.
 > §6.2 (hemisfério errado): dado que o programa aceita e o fenômeno não. É a
 > razão de esta seção existir.
 
+### 6.18 A janela ambiental do GCBD vem de longe do recife, e isso é gravado
+
+Medido em 26/07/2026, ao extrair salinidade e oxigênio para as 166 visitas
+(§4.1). Não é defeito da fonte — é limitação de resolução, e ela precisa
+aparecer em qualquer resultado que dependa desses valores.
+
+**69 das 166 visitas estão a menos de 1 km da costa** (mediana 2,3 km). A grade
+do produto de oxigênio é **0,25° ≈ 28 km**; a de salinidade, 0,083° ≈ 9 km. Um
+recife costeiro pode não ter nenhuma célula de oceano em cima dele — as células
+próximas são máscara de terra.
+
+A extração busca do raio mais justo para o mais largo e para no primeiro que
+devolve oceano:
+
+| Raio | ~km | Sítios atendidos (salinidade) | Sítios atendidos (oxigênio) |
+|---|---|---|---|
+| 0,15° | 17 | 118 | 99 |
+| 0,30° | 33 | 119 | **119** |
+| sem dado | | **0** | **0** |
+
+**Nenhum sítio ficou sem dado.** Mas **20 sítios só têm oxigênio a até 33 km do
+recife** — e o oxigênio perto de um recife costeiro raso é justamente onde a
+diferença com o mar aberto seria maior.
+
+**O que foi feito:** cada linha do cache grava `raio_graus` e `n_celulas`, além
+do `dataset_id`. Um valor colhido a 33 km não é o mesmo que um colhido em cima
+do recife, e a distinção fica auditável valor a valor em vez de virar nota de
+rodapé.
+
+⚠️ **Isto é uma limitação a declarar no trabalho**, não um problema resolvido.
+Se as variáveis não térmicas mostrarem sinal fraco, "a resolução do produto é
+grosseira demais para um recife costeiro" é uma explicação concorrente que os
+dados atuais não permitem descartar.
+
+### 6.19 ⛔ O espelho ARCO do ERA5 foi testado e não serve — o motivo é o formato
+
+Medido em 26/07/2026, ao avaliar o ERA5 (§4.2).
+
+O CDS entrega o dado **por fila**: submete-se um pedido, ele espera, e só então
+baixa. Antes de aceitar isso, testei o **ARCO-ERA5** — um espelho público do
+mesmo dado, em Zarr na Google Cloud, **sem credencial e sem fila**. Era a mesma
+estratégia que deu certo com o PACIOOS (§1.1): ler do espelho, citar a origem, e
+registrar qual servidor foi usado.
+
+**Resultado: abortado após ~25 minutos sem conseguir nem abrir o dataset.**
+
+**O motivo é estrutural, não passageiro.** O ARCO é fatiado (*chunked*) **por
+instante de tempo**: cada pedaço do arquivo guarda o mapa do mundo inteiro numa
+hora. Para quem quer "o vento global às 12h de hoje", é o formato ideal. Para o
+que este projeto precisa — a série de **um ponto ao longo de anos** — é o pior
+caso possível: exigiria uma leitura separada por hora, dezenas de milhares
+delas.
+
+> **O formato de armazenamento decide para que um dado serve, não só quanto ele
+> pesa.** O ARCO tem exatamente os mesmos números do CDS e é inútil para este
+> uso.
+
+**Fica registrado como alternativa medida e descartada**, com o motivo, para que
+ninguém a tente de novo daqui a alguns meses achando que é atalho. A decisão é:
+**usar o CDS oficial**, cuja fila foi medida em ~35 s para pedido pequeno
+([ERA5.md](ERA5.md) Etapa 2).
+
 ---
 
 ## 7. Como citar, e onde cada fonte entra
@@ -675,7 +767,8 @@ no projeto, ao ponto do código, e às afirmações que dependem dela.
 | Fonte | O que produz | Onde no código | Afirmações que dependem dela |
 |---|---|---|---|
 | **NOAA Coral Reef Watch 5 km v3.1** | `sst`, `dhw`, `baa`, `baa_area_alerta`, `hotspot`, `sst_anomalia` — **43.038 medições** | [`ingestao/conectores/noaa_crw.py`](../backend/ingestao/conectores/noaa_crw.py) | Todo o alvo e as features térmicas da entrega 1. [RESULTADOS.md](RESULTADOS.md) inteiro; [VARIAVEIS.md](VARIAVEIS.md) §3.1, §3.2, §4.5, §7.1, §7.2 |
-| **Copernicus Marine (CMEMS)** | `salinidade`, `oxigenio` — **14.382 medições** | [`ingestao/conectores/copernicus.py`](../backend/ingestao/conectores/copernicus.py) | As duas variáveis não térmicas. [VARIAVEIS.md](VARIAVEIS.md) §3.3, §3.4; e o achado de [RESULTADOS.md](RESULTADOS.md) §8 de que **elas não contribuem** com o BAA como alvo |
+| **Copernicus Marine (CMEMS)** | `salinidade`, `oxigenio` — **14.382 medições** nos 3 recifes (2020–2026) | [`ingestao/conectores/copernicus.py`](../backend/ingestao/conectores/copernicus.py) | As duas variáveis não térmicas. [VARIAVEIS.md](VARIAVEIS.md) §3.3, §3.4; e o achado de [RESULTADOS.md](RESULTADOS.md) §8 de que **elas não contribuem** com o BAA como alvo |
+| **CMEMS — janelas do GCBD** | `salinidade`, `oxigenio` nos **90 dias antes de cada uma das 166 visitas** (1994–2010), em cache não versionado | [`ml/gcbd_ambiental.py`](../backend/ml/gcbd_ambiental.py), `manage.py ingerir_gcbd` | O experimento da entrega 2, passo 2. Ver §6.18 para as decisões de extração, e [GCBD.md](GCBD.md) |
 | **GCBD** | O **alvo observado** da entrega 2 — 166 visitas brasileiras, 88 positivas — e as 8 térmicas do dia que as acompanham | [`ml/gcbd.py`](../backend/ml/gcbd.py), `manage.py treinar_gcbd` | Todo o [RESULTADOS.md](RESULTADOS.md) §11–§14, e em especial a afirmação central: **a regra `DHW ≥ 4` da NOAA perde 78 dos 88 branqueamentos observados no Brasil**. Também [GCBD.md](GCBD.md) e o desenho da entrega 2 em [VARIAVEIS.md](VARIAVEIS.md) §4.4 |
 | **iNaturalist** | Fotografias de espécies | seed do banco | Nenhuma afirmação científica — uso ilustrativo |
 | **IUCN Red List** | `status_conservacao` por espécie | seed do banco | Nenhuma afirmação do modelo |
@@ -801,6 +894,8 @@ conforme a regra de governança daquele documento.
 | 25/07/2026 | **Backfill histórico concluído: 35.850 medições.** 2020-01-01 a 2026-07-23, três locais, 5 variáveis, em 14 blocos por local. Executado **duas vezes de forma independente** — pfeg `NOAA_DHW` na rede da UFF e PACIOOS `dhw_5km` fora dela — com resultado idêntico bloco a bloco, o que valida cruzadamente os dois espelhos. Cobertura e as 6 datas ausentes do produto documentadas na §1.1. |
 | 25/07/2026 | **§6.16 resolvida — BAA passa a ser agregado por máximo.** A regra de agregação espacial deixou de ser uniforme: `ConectorNoaaCrw.AGREGACAO` a declara por variável, e média ficou restrita a grandeza contínua. Nova variável canônica **`baa_area_alerta`** (fração dos pixels válidos em Alerta Nível 1 ou acima) grava a extensão do evento, que nem média nem máximo preservam sozinhos. Contrato canônico ganhou a tabela de tipo/agregação e a regra 5: variável ordinal ou categórica precisa declarar sua agregação, e usar média fora de variável contínua é defeito, não escolha. |
 | 25/07/2026 | **PACIOOS vira o espelho padrão do projeto**, no lugar do pfeg — `SERVIDOR_PADRAO`/`DATASET_PADRAO` no conector, defaults em `settings.py` e `.env.example` (onde as linhas `NOAA_ERDDAP_*` passam a vir comentadas). Razão: o pfeg exige rede com domínio federal, e um padrão que só funciona numa rede específica é armadilha para quem clona o repositório — foi exatamente o que travou a primeira tentativa de rodar fora da universidade. O PACIOOS não é versão degradada: os dois espelhos deram resultado idêntico bloco a bloco no backfill de 2020–2026. ⚠️ Registrado também o que **não** se sabe: o PACIOOS nunca foi testado de dentro da UFF, e a tabela da §1.1 diz "não medido" em vez de presumir sucesso. |
+| 26/07/2026 | **§4.2 e §6.19 criadas — ERA5 avaliado, e o atalho descartado.** O vento virou prioridade por ser a **única variável não térmica que dá sinal** ([RESULTADOS.md](RESULTADOS.md) §17) enquanto o vento atual do projeto é constante inventada (§6.7). Credencial configurada em `~/.cdsapirc`, **fora do repositório** — o motivo é que chave que entra no histórico do Git precisa ser **revogada**, não apenas apagada. Conexão medida: **`200` em 40,4 s**; a fila do CDS era o risco número um da fonte e não se confirmou como impeditivo. **§6.19: o espelho ARCO na Google Cloud foi testado e descartado** — abortado após ~25 min sem abrir, porque é fatiado por instante de tempo, formato ideal para o mapa global de uma hora e inútil para a série de um ponto ao longo de anos. Registrado com o motivo para ninguém tentar de novo. Corrigida também uma afirmação minha não verificada sobre a unidade do `Windspeed` do GCBD — ver [ERA5.md](ERA5.md) Etapa 6. |
+| 26/07/2026 | **§6.18 criada — a janela ambiental do GCBD vem de longe do recife.** Ao extrair salinidade e oxigênio para as 166 visitas, medido que **69 delas estão a menos de 1 km da costa** enquanto a grade do oxigênio é 0,25° (~28 km). Nenhum sítio ficou sem dado, mas **20 só encontram oxigênio a até 33 km**. Cada valor grava `raio_graus` e `n_celulas`, então a distância fica auditável valor a valor. Registrado como **limitação a declarar**: se as não térmicas derem sinal fraco, a resolução grosseira é explicação concorrente que estes dados não descartam. Confirmado também que a reanálise cobre **1993-01-01** nos dois produtos, então aqui **não há emenda** com produto de análise — ao contrário da série da entrega 1. §7.1 ganhou a linha do novo uso do CMEMS. |
 | 26/07/2026 | **§6.17 criada — três defeitos no GCBD, detectados ao integrá-lo**, e §4.1 promovida a integrada. (a) 🚨 **`ClimSST` traz ausência codificada como número**: 262,15 K (= 273,15 − 11, ou seja um `-11` de "sem dado" convertido de Celsius) em **115 dos 313 registros brasileiros**; a coluna foi recusada e o valor vira `NaN` no carregamento. O plano de [GCBD.md](GCBD.md) **recomendava `ClimSST`** — a recomendação vinha da lista de colunas, não da distribuição delas. (b) `SSTA_Mean` é constante em 0,0 e também foi recusada. (c) **A unidade amostral é a visita, não a linha**: o arquivo traz uma linha por substrato, e as 313 linhas são **166 visitas**, com 0 divergindo no alvo — tratar linha como amostra inflaria n em 1,9× e poria cópias exatas nos dois lados da validação. §7.1 atualizada com onde o GCBD entra e quais afirmações dependem dele, e §7.2 com a ressalva de que a régua da entrega 2 é o limiar publicado da NOAA e precisa ser citada junto. |
 | 25/07/2026 | **§7 reescrita — mapa de proveniência para citação.** Deixou de ser uma lista de fontes e passou a responder "ao escrever este parágrafo, o que preciso citar?": cada fonte ligada ao que produz, ao arquivo do código, e às afirmações documentadas que dependem dela. Corrigida uma imprecisão que atrapalharia a submissão — **o GCBD tem duas citações distintas**, van Woesik & Kratochwill (2022) para o artigo e van Woesik & Burkepile (2022) para o dado no BCO-DMO; a versão anterior misturava as duas. Registrado também que **seis afirmações do modelo legado citam documento não identificado** (§3.1) e não podem ir para o artigo, e que **os DOIs dos quatro produtos CMEMS usados continuam pendentes** — bloqueante para submissão. |
 | 25/07/2026 | **§4.1 criada — GCBD baixado e avaliado.** Base de branqueamento observado (van Woesik & Burkepile 2022, CC-BY, BCO-DMO 773466), 16 MB, com hash e citação registrados. Levantamento de viabilidade em cinco etapas em [GCBD.md](GCBD.md), feito **antes** de qualquer código de integração. Três achados condicionam o uso: o dado brasileiro **termina em 2010** (sobreposição zero com a série atual), **Picãozinho fica sem cobertura** (sítio mais próximo a 198 km, contra 1,3 km em Abrolhos), e **a base não traz salinidade nem oxigênio**. Em compensação, o alvo é balanceado em 50,2%, contra 8% do BAA. Custo de ingestão dimensionado: janela de 90 dias por observação custa 106 mil medições, contra 5 milhões da série contínua. |

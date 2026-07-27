@@ -116,6 +116,29 @@ O que fica: separar dois grupos nas transições **não é o mesmo** que ajudar 
 
 A **salinidade não separa nada** (0,02 σ) nas transições. Continua no baseline por hipótese mecanística, mas sem apoio empírico até aqui.
 
+#### 🔁 O mesmo padrão apareceu de novo, em base independente (26/07/2026)
+
+A entrega 2, passo 2, mediu salinidade e oxigênio contra **branqueamento observado** — outro alvo, outro período (1994–2010), outros 119 sítios. O padrão se repetiu exatamente:
+
+| | Separação descritiva | Contribuição preditiva |
+|---|---|---|
+| **Entrega 1** — oxigênio nas transições | 0,61 σ | −0,001 |
+| **Entrega 2** — `oxigenio_media_90d` | *d* = **−0,377** | **−0,045** |
+| **Entrega 2** — `oxigenio_variacao_90d` | *d* = −0,315 | −0,018 |
+| **Entrega 2** — `salinidade_media_90d` | *d* = −0,281 | +0,020 |
+
+E a direção é sempre a fisicamente esperada: os sítios que branquearam tinham oxigênio **mais baixo e caindo**, salinidade **mais baixa e caindo**.
+
+> **Uma vez é indício. Duas vezes, em bases independentes e com alvos diferentes, é um fato sobre o problema:** salinidade e oxigênio *descrevem* o branqueamento sem *prevê-lo* — pelo menos na resolução em que conseguimos medi-los.
+
+⚠️ A ressalva importa e está em [RESULTADOS.md](RESULTADOS.md) §18: a grade do produto de oxigênio é **28 km**, e 20 dos sítios só têm dado a até 33 km do recife. Pode ser que o mecanismo exista e o instrumento não o alcance. Estes dados não separam as duas hipóteses.
+
+~~**A variável não térmica que funciona é outra: o vento.**~~ `Windspeed` é a segunda mais importante em todas as versões do passo 2, com coeficiente −0,72 — mais vento, menos branqueamento. E `oxigenio_variacao_90d` × `Windspeed` tem **r = +0,554**: o vento mistura a coluna d'água e a oxigena, então ele já carrega parte do que o oxigênio diria, e chega antes.
+
+🚨 **Escrito e desmentido em 26/07/2026.** Toda essa evidência vinha de **uma única coluna** — o `Windspeed` do próprio GCBD —, e ninguém tinha conferido se ela descreve o vento. Baixado vento real do ERA5 para os mesmos 166 pontos e datas: as duas fontes **concordam sobre o vento** (r = +0,708) e **discordam sobre o coral** (*d* = −0,461 contra **−0,057**, com o intervalo do ERA5 incluindo zero). **Trocar a coluna por vento medido deixa o modelo pior que não ter vento** — PR-AUC por ano de 0,717 para 0,673, contra 0,692 sem vento nenhum. Ver [RESULTADOS.md](RESULTADOS.md) §20.
+
+**Então o placar real é este: nenhuma variável não térmica testada até hoje se confirma como preditora.** Salinidade, oxigênio e vento — os três descrevem, nenhum prevê. O parágrafo acima fica com o aviso porque apagá-lo esconderia o percurso, que é a mesma regra aplicada ao indício do oxigênio logo acima.
+
 ⚠️ **Estes números são sugestivos, não estabelecidos.** São 95 e 96 amostras, tiradas de ~4 anos-evento correlacionados entre si (§7.2). Servem para orientar o desenho do modelo e para dizer o que medir — não para afirmar efeito.
 
 ---
@@ -181,17 +204,28 @@ Estruturalmente é o mesmo defeito do `calcular_risco()` em `treinar_modelo.py`,
 amostral que os 3 recifes colados da entrega 1. Mas o dado brasileiro **vai só
 até 2010**, e **Picãozinho fica sem cobertura**.
 
-✅ **O caminho A foi executado no passo 1, e ele valeu a pena.** A pergunta que
-este documento chamava de "pergunta científica com resposta real" recebeu a
-primeira resposta: **o sinal térmico sozinho não explica o branqueamento
-observado no Brasil**. A régua publicada da NOAA (`DHW ≥ 4`) tem precisão
-1,000 e revocação **0,114** — 78 dos 88 branqueamentos ocorreram com o
-acumulador térmico em **zero**. Ver [RESULTADOS.md](RESULTADOS.md) §11.
+✅ **O caminho A foi executado, e a pergunta científica tem resposta.**
+
+**Passo 1 — o sinal térmico sozinho não explica.** A régua publicada da NOAA
+(`DHW ≥ 4`) tem precisão 1,000 e revocação **0,114**: 78 dos 88 branqueamentos
+ocorreram com o acumulador térmico em **zero**. Ver
+[RESULTADOS.md](RESULTADOS.md) §11.
 
 Isso confirma o diagnóstico de circularidade que motivou esta seção: com o BAA
 como alvo, a entrega 1 concluiu que variáveis não térmicas não contribuem
 ([RESULTADOS.md](RESULTADOS.md) §8) — mas o BAA **é** térmico. Trocado o alvo,
 sobra o que explicar.
+
+🚨 **Passo 2 — salinidade e oxigênio não preenchem essa lacuna.** Extraídos
+30.212 valores diários da reanálise do Copernicus, **nenhuma combinação supera
+o modelo só-térmico** na validação por ano (0,717); sozinhas as quatro features
+ambientais ficam em 0,527 contra taxa base 0,530 — acaso. Testados e
+descartados o tamanho da janela (7 a 90 dias) e a hipótese de identidade de
+sítio. Ver [RESULTADOS.md](RESULTADOS.md) §15–§19.
+
+**A resposta à pergunta desta seção — "salinidade acrescenta sinal além do
+DHW?" — é, com os dados que temos: não.** Com a ressalva de resolução de
+§18, que é séria e não pode ser omitida.
 
 **B — Previsão de BAA com horizonte.** Manter o BAA, mas mudar a pergunta: em vez de "qual o BAA de hoje dadas as condições de hoje" (circular), prever **o BAA daqui a N dias a partir das condições de hoje**. Não é circular, porque o DHW futuro não é conhecido no presente — e aí salinidade, O₂ e turbidez podem genuinamente antecipar a trajetória térmica.
 *Custo:* nenhum dado novo. Exige rigor na montagem das janelas para não vazar futuro. **Muda o nome honesto do produto:** é previsão de estresse térmico, não de branqueamento.
@@ -377,6 +411,10 @@ Antes de adicionar ou remover qualquer variável:
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **`Windspeed` removido do conjunto interpretável da entrega 2.** Ele dava o melhor número (0,717 contra 0,692), mas o efeito vinha de **uma coluna do GCBD que ninguém tinha conferido**, e não sobrevive à troca por vento medido ([RESULTADOS.md](RESULTADOS.md) §20). A diferença de 0,025 já estava declarada como ruído. Fica `TSA_DHW` + `TSA`, com coeficientes +1,011 e +0,374, ambos no sinal físico. Critério registrado: entre um número melhor dentro do ruído e um conjunto em que toda entrada se defende sozinha, escolher o segundo. |
+| 27/07/2026 | **Qualidade da água testada — clorofila, nitrato e silicato.** Sai do mesmo produto do oxigênio, custo quase nulo. **Nenhuma melhora a previsão por ano.** O `silicato_variacao_90d` é a única com efeito distinguível de zero (*d* = +0,396, IC [+0,077, +0,746]), mas colado no zero e entre 9 variáveis testadas. 🚨 **A hipótese do aporte continental não se sustentou**: o silicato correlaciona **+0,363 com a salinidade**, oposto do que uma pluma de água doce produziria. Colinearidade de volta: `nitrato` × `silicato` r = 0,733, com `nitrato` saindo em −0,607 — o que diria que adubo protege coral. **O placar fecha em quatro famílias testadas, todas descrevendo e nenhuma prevendo.** Ver [RESULTADOS.md](RESULTADOS.md) §21. |
+| 26/07/2026 | 🚨 **§3.6 corrigida — o vento também não se confirmou.** A afirmação de que "a variável não térmica que funciona é o vento", escrita horas antes, vinha da coluna `Windspeed` do próprio GCBD, nunca verificada. Contra vento medido do ERA5: concordam sobre o vento (r = +0,708), discordam sobre o coral (*d* = −0,461 contra **−0,057**, IC do ERA5 incluindo zero), e substituir deixa o modelo pior que sem vento. **Placar real: nenhuma variável não térmica testada se confirma como preditora** — salinidade, oxigênio e vento, os três descrevem e nenhum prevê. O parágrafo original fica com o aviso, mesma regra do indício do oxigênio. Ver [RESULTADOS.md](RESULTADOS.md) §20. |
+| 26/07/2026 | **§3.6 e §4.4 — o passo 2 foi executado, e a resposta à pergunta central é não.** Salinidade e oxigênio de reanálise, na janela antes de cada visita, **não superam o modelo só-térmico** e sozinhas ficam no acaso. O padrão do oxigênio da entrega 1 — separação descritiva sem capacidade preditiva — **se repetiu em base independente, com outro alvo e outro período**, o que o promove de indício a fato sobre o problema. As direções são sempre as fisicamente esperadas (oxigênio e salinidade mais baixos e caindo onde branqueou). Registrada a ressalva séria de resolução ([RESULTADOS.md](RESULTADOS.md) §18) e o achado de que **a não térmica que funciona é o vento** — 2ª mais importante, coeficiente −0,72, e correlacionada com a trajetória do oxigênio em r = 0,554. |
 | 26/07/2026 | **§4.4 — o caminho A foi executado, e a pergunta recebeu resposta.** Com branqueamento observado como alvo, **o sinal térmico sozinho não explica**: a régua da NOAA tem precisão 1,000 e revocação 0,114, e **78 dos 88 branqueamentos brasileiros ocorreram com o acumulador térmico em zero**. Isso confirma que a conclusão da entrega 1 — "variáveis não térmicas não contribuem" — era efeito do alvo, não do fenômeno. Corrigido o tamanho da base: **166 visitas**, não 313 amostras. Abertos dois bloqueios novos em §7: **(9)** as térmicas do GCBD são colineares entre si (`SSTA` e `TSA` são duas réguas do mesmo calor, r = 0,881, VIF até 11,7, 4 coeficientes invertidos) e **(10)** `ClimSST` e `SSTA_Mean` são inutilizáveis. |
 | 25/07/2026 | Documento criado a partir da sessão de seleção de variáveis. Registradas as 5 features baseline, 2 opcionais e 7 exclusões. Acrescentadas duas constatações verificadas em dados: a circularidade do `CRW_BAA` como target (§4.2) e a indisponibilidade de PAR de superfície (§3.5). |
 | 25/07/2026 | **§3.6 atualizada — o indício do oxigênio não se confirmou.** Medida a importância dentro do modelo treinado, a *trajetória* do oxigênio contribui −0,001 (logística) e −0,006 (boosting): ruído. Só o *nível* contribui algo pequeno e consistente (+0,021). A separação de 0,61 σ nas transições continua correta como descrição — ela é que não virou capacidade preditiva, provavelmente por redundância com as térmicas. O parágrafo original fica no documento com o aviso em cima: apagá-lo esconderia o percurso. Ver [RESULTADOS.md](RESULTADOS.md) §7. |

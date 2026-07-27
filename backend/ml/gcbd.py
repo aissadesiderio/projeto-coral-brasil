@@ -149,14 +149,29 @@ FEATURES_PADRAO = TERMICAS_DO_DIA
 #
 # Com as oito, quatro coeficientes saem invertidos - `SSTA` em -0,58 diz que
 # anomalia quente de SST *protege* o coral, o que e fisicamente falso. Com
-# estas tres, nenhum inverte: TSA_DHW +0,95 (estresse acumulado piora), TSA
-# +0,21 (anomalia do dia piora), Windspeed -0,36 (vento mistura a coluna
-# d'agua e resfria - negativo aqui e o esperado, nao inversao).
+# estas duas, nenhum inverte: TSA_DHW positivo (estresse acumulado piora) e
+# TSA positivo (anomalia do dia piora).
 #
-# ⚠️ **As metricas desta versao sao otimistas.** O conjunto foi escolhido
+# 🚨 **`Windspeed` saiu em 27/07/2026, e o motivo importa.** Ate entao o
+# conjunto tinha tres colunas, e a terceira era o vento - que dava o melhor
+# numero (PR-AUC por ano 0,717 contra 0,692 sem ele).
+#
+# O problema: essa evidencia vinha de UMA coluna, o `Windspeed` do proprio
+# GCBD, e ninguem tinha conferido se ela descreve o vento. Baixado vento medido
+# do ERA5 para os mesmos 166 pontos e datas, as duas fontes **concordam sobre o
+# vento** (r = 0,708) e **discordam sobre o coral**: d = -0,461 na coluna do
+# GCBD contra -0,057 no ERA5, cujo intervalo inclui zero. Trocar uma pela outra
+# deixa o modelo **pior que sem vento** (0,673).
+#
+# Ou seja: funcionava aquela coluna, nao o vento. E o ganho de 0,025 ja estava
+# declarado como ruido em docs/RESULTADOS.md secao 15. Duas variaveis com
+# mecanismo defensavel valem mais que tres em que uma exige duas paginas de
+# ressalva. Ver docs/RESULTADOS.md secao 20.
+#
+# ⚠️ **As metricas desta versao continuam otimistas.** O conjunto foi escolhido
 # olhando a mesma validacao que o avalia; sobre 166 visitas isso e vies real.
-# Ver docs/RESULTADOS.md secao 12.
-FEATURES_INTERPRETAVEIS = ('TSA_DHW', 'TSA', 'Windspeed')
+# Ver docs/RESULTADOS.md secao 12.3.
+FEATURES_INTERPRETAVEIS = ('TSA_DHW', 'TSA')
 
 # Limiar de DHW da propria NOAA para Alerta Nivel 1 - a regra publicada, que e
 # a linha de base honesta aqui. Equivale a persistencia da entrega 1: se o
