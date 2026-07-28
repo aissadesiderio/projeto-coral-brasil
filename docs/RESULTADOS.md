@@ -1482,12 +1482,146 @@ granularidade perdida —, mas passa a acompanhá-la.
 
 ---
 
+## 22.9 O limiar de alerta: a troca, medida
+
+Material para a decisão da §22.6 — *limiar declarado para avisar*. Produzido em
+27/07/2026 por `manage.py limiar`, sobre as **predições fora da dobra** do
+modelo servido (`logistica` + isotônica). 7.095 amostras, 596 positivas (8,4%),
+7 anos, 3 recifes, **19 episódios reais**.
+
+O limiar não é propriedade do modelo. O modelo devolve probabilidade; o limiar
+é onde o site decide avisar, e isso é escolha de operação.
+
+### 22.9.1 A tabela
+
+Traduzida para a unidade em que a decisão existe — *por ano e por recife*, não
+por amostra:
+
+| Limiar | Precisão | Revocação | F1 | Episódios | Avisados no 1º dia | Atraso médio | Alarme falso/ano/recife |
+|---|---|---|---|---|---|---|---|
+| 0,05 | 0,498 | 0,943 | 0,652 | **18/19** | 18/20 | 0,80 d | 27,0 |
+| 0,10 | 0,620 | 0,936 | 0,746 | 17/19 | 18/20 | 0,95 d | 16,3 |
+| 0,15 | 0,678 | 0,919 | 0,781 | 16/19 | 16/20 | 1,30 d | 12,4 |
+| **0,20** | 0,719 | 0,899 | 0,799 | 16/19 | **16/20** | **1,50 d** | 10,0 |
+| 0,25 | 0,736 | 0,874 | 0,799 | 16/19 | 15/20 | 1,85 d | 8,9 |
+| **0,30** | 0,753 | 0,859 | **0,803** | 16/19 | 13/20 | 2,60 d | 8,0 |
+| 0,40 | 0,786 | 0,807 | 0,796 | 16/19 | 11/20 | 3,95 d | 6,2 |
+| 0,50 | 0,826 | 0,747 | 0,784 | 14/19 | 10/20 | 4,94 d | 4,5 |
+| 0,70 | 0,904 | 0,601 | 0,722 | 13/19 | 4/20 | 9,53 d | 1,8 |
+| 0,95 | 0,961 | 0,367 | 0,532 | 7/19 | 2/20 | 12,43 d | 0,4 |
+
+⚠️ **A contagem "16/19" e "16/20" usa duas réguas diferentes, e isso é
+deliberado.** A dos episódios funde trechos separados por poucos dias num
+evento só (`folga_dias`), porque a pergunta é *"o sistema percebeu este
+evento?"*. A do atraso conta cada corrida contígua por si, porque fundir
+trechos deslocaria o início para trás e inflaria o atraso. São 19 eventos com
+folga, 20 corridas contíguas.
+
+### 22.9.2 🚨 O achado principal não é sobre o limiar
+
+**Nenhum limiar varrido detecta os 19 episódios.** Um escapa em *todos*:
+
+> **Picãozinho, 21 a 23/04/2026 — 3 dias.**
+
+Baixar o corte não o recupera. Isso muda a natureza da conversa: o teto não
+está na escolha do limiar, está **no modelo**. Discutir 0,20 contra 0,30 é
+discutir os outros dois episódios, não este.
+
+Os outros dois que 0,20 perde, e que 0,05 recupera:
+
+| Episódio | Duração | Recuperado a partir de |
+|---|---|---|
+| Picãozinho, 26/02–06/03/**2022** | 9 dias | 0,10 |
+| Porto de Galinhas, 07/05/2020 | 1 dia | 0,05 |
+
+⚠️ O de 2022 conecta com a pendência já aberta *"investigar 2022"* — é o único
+ano em que o modelo perde claramente para a persistência, e agora sabemos que
+o episódio perdido lá é de **nove dias**, não um caso de borda.
+
+### 22.9.3 🚨 O patamar de episódios engana, e a correção importa
+
+Entre **0,15 e 0,40** a contagem de episódios não se move: são sempre 16 de 19,
+enquanto o alarme falso cai de 12,4 para 6,2 dias por ano e por recife. Lida
+sozinha, essa faixa diz *"apertar o limiar é de graça"*.
+
+**Não é.** Foi o que a coluna de atraso, acrescentada depois, mostrou:
+
+| | 0,20 | 0,30 | 0,40 |
+|---|---|---|---|
+| Episódios detectados | 16/19 | 16/19 | 16/19 |
+| **Avisados já no 1º dia** | **16/20** | 13/20 | 11/20 |
+| **Atraso médio do 1º aviso** | **1,50 d** | 2,60 d | 3,95 d |
+| Alarme falso/ano/recife | 10,0 | 8,0 | 6,2 |
+
+O evento continua sendo detectado — **mais tarde**. Para um sistema de aviso,
+alertar no terceiro dia de um episódio de nove não é o mesmo que alertar no
+primeiro, ainda que ambos contem como "detectado".
+
+> ⚠️ **Correção registrada.** A primeira versão desta seção concluía que
+> *"0,20 é dominado por 0,30"*, com base só na contagem de episódios e no
+> alarme falso. **Estava errado** — não havia domínio, havia uma dimensão não
+> medida. Vale como aviso de método: um patamar numa métrica agregada quase
+> sempre esconde movimento em alguma coisa que ela não mede.
+
+### 22.9.4 Os candidatos, com a troca inteira à vista
+
+| Candidato | Limiar | Episódios | 1º dia | Atraso | Alarme falso |
+|---|---|---|---|---|---|
+| Cobertura máxima | 0,05 | 18/19 | 18/20 | 0,80 d | 27,0 |
+| Meio-termo | 0,10 | 17/19 | 18/20 | 0,95 d | 16,3 |
+| **Em uso hoje** | **0,20** | 16/19 | 16/20 | 1,50 d | 10,0 |
+| F1 máximo | 0,30 | 16/19 | 13/20 | 2,60 d | 8,0 |
+
+Com as três dimensões na mesa, **0,20 deixa de ser dominado**: paga 2 dias a
+mais de alarme falso por ano e por recife, e compra 3 episódios a mais avisados
+já no primeiro dia, além de mais de um dia de antecedência média.
+
+E **0,10** vira candidato sério, o que não aparecia antes: recupera o episódio
+de nove dias de 2022 e mantém o aviso no primeiro dia em 18 dos 20, ao custo de
+6 dias a mais de alarme falso por ano.
+
+⚠️ **Viés de seleção, declarado.** Os limiares foram comparados sobre as mesmas
+predições que os avaliam. Serve para escolher entre eles; **não** é estimativa
+do desempenho no ano que vem. Mesma ressalva das §12.3 e §22.5.
+
+### 22.9.5 ✅ Decisão: 0,10
+
+Tomada em 27/07/2026, com a tabela acima na mesa. Está em
+`settings.PAINEL_LIMIAR` e viaja no payload de `/api/painel-risco/`.
+
+**O critério declarado foi priorizar antecedência.** Para um site cujo público
+age sobre o aviso, perder um evento custa mais que um alarme falso — e chegar
+tarde é quase o mesmo que não chegar.
+
+| | 0,20 (anterior) | **0,10 (adotado)** | Diferença |
+|---|---|---|---|
+| Episódios detectados | 16/19 | **17/19** | +1 (o de 9 dias, 2022) |
+| Avisados já no 1º dia | 16/20 | **18/20** | +2 |
+| Atraso médio do 1º aviso | 1,50 d | **0,95 d** | −0,55 d |
+| Alarme falso/ano/recife | 10,0 | **16,3** | +6,3 dias |
+
+O que se compra: o episódio de **nove dias** de Picãozinho em 2022 — o mesmo
+ano que já figurava como o pior do modelo. O que se paga: cerca de **seis dias
+a mais de alarme falso por ano em cada recife**.
+
+⚠️ **O 0,20 anterior nunca tinha sido escolhido.** Ele era o ponto de
+desempenho equivalente ao `0,50` do `predict`, que por sua vez operava daquele
+jeito só porque `class_weight='balanced'` empurrava a probabilidade para cima
+(§22.5). Herança, não decisão.
+
+⚠️ **A decisão não resolve o teto.** O episódio de Picãozinho de 21–23/04/2026
+continua escapando, como escapa em todos os limiares. Isso é problema do
+modelo, e permanece aberto.
+
+---
+
 ## 23. O que estes resultados indicam fazer
 
 | Prioridade | O quê | Por quê |
 |---|---|---|
 | ✅ feito | ~~Persistir um modelo~~ | Feito em 27/07/2026: `manage.py treinar_final`. Ver [VISAO_GERAL.md](VISAO_GERAL.md) §7.4 |
 | **Alta** | Declarar §18 e §20 em qualquer texto | Os dois resultados negativos são condicionais, e omitir as condições seria afirmar demais |
+| **Alta** | **Decidir o limiar de alerta** | §22.9 — material medido, com as três dimensões: episódios pegos, **quando** o aviso chega, e alarme falso. Dois achados: **nenhum limiar pega os 19 episódios**, e o patamar 0,15–0,40 **não** é de graça — o aviso só chega mais tarde |
 | **Alta** | **A interface não pode exibir "0%" nem "100%"** | §22.8 — a isotônica devolve 0 e 1 exatos por construção (12,2% e 1,7% das amostras). A API sinaliza com `no_extremo`; traduzir isso em impossibilidade ou certeza é decisão de exibição, e seria errada |
 | ✅ feito | ~~Curva de calibração~~ | Feito em 27/07/2026 (§22): o modelo prometia **o dobro** do que acontecia. Corrigido com recalibração isotônica, ECE de 0,081 para **0,0039** |
 | Média | Investigar 2022 (entrega 1) | Único ano em que o modelo perde claramente |
@@ -1567,6 +1701,8 @@ python backend\manage.py treinar_gcbd --so-ambiental --importancia
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **§22.9.3 corrigida no mesmo dia — eu havia concluído domínio onde não havia.** A primeira versão dizia que *"0,20 é dominado por 0,30"*, olhando só episódios detectados e alarme falso. Ao medir **quando** o aviso chega, o suposto domínio some: entre 0,20 e 0,30 os episódios pegos são os mesmos, mas os avisados já no 1º dia caem de **16/20 para 13/20** e o atraso médio sobe de **1,50 para 2,60 dias**. O evento continua detectado — mais tarde. Fica o aviso de método: um patamar numa métrica agregada quase sempre esconde movimento em algo que ela não mede. Com a dimensão nova, **0,10 vira candidato sério** (recupera o episódio de nove dias de 2022, mantém aviso no 1º dia em 18/20). |
+| 27/07/2026 | **§22.9 criada — a troca do limiar, medida e traduzida.** `manage.py limiar` varre 19 cortes sobre as predições fora da dobra e converte tudo para *dias de alarme falso por ano e por recife*, porque "precisão 0,719" não é uma frase sobre a qual alguém consiga formar opinião. 🚨 **O achado principal não é sobre o limiar:** nenhum dos 19 cortes detecta os 19 episódios — **Picãozinho, 21–23/04/2026, escapa em todos**. Baixar o corte não o recupera, então o teto é do modelo e não da escolha. Medido também que **entre 0,15 e 0,40 a contagem de episódios não se move** (sempre 16/19): nessa faixa apertar o limiar é de graça em termos de evento, e só reduz alarme falso (12,4 → 6,2 dias/ano/recife). Disso sai que **0,20 é dominado por 0,30** — mesma cobertura, 20% menos alarme falso. Os dois episódios que 0,20 perde e 0,05 recupera custam quase o triplo de alarme falso, e um deles dura um dia. ⚠️ O de 2022 (nove dias, Picãozinho) conecta com a pendência já aberta de investigar 2022. Viés de seleção declarado: os limiares são comparados sobre as mesmas predições que os avaliam. 19 testes. |
 | 27/07/2026 | **§22.8 acrescentada — o custo da isotônica, achado ao aplicar o modelo pela primeira vez.** Os três recifes voltaram com **exatamente 0,0029**, apesar de entradas bem diferentes. Não é defeito: a isotônica é **função escada**, e as probabilidades cruas 0,083 e 0,066 caem no mesmo degrau. Medido sobre o treino: **313 valores distintos em 7.095 amostras, 864 (12,2%) em `p = 0,000` exato e 121 em `p = 1,000` exato**. O problema real é de comunicação — `p = 0` significa "nenhum alerta neste degrau", e exibir isso como "0% de risco" traduz um degrau finito em impossibilidade. **Deliberadamente não houve corte para 0,001/0,999**: falsificar o número na direção oposta inventaria precisão inexistente e esconderia da interface justamente o que ela precisa saber. A API sinaliza com `no_extremo`. O custo não reverte a decisão da §22.4 — 0,081 → 0,0039 de ECE continua valendo muito mais que a granularidade perdida — mas passa a acompanhá-la. |
 | 27/07/2026 | 🚨 **§22 criada — a probabilidade que o painel ia exibir estava mentindo, e o bloqueio de go-live caiu.** O modelo dizia **0,165** onde a taxa real é **0,084**: ECE de **0,081**, praticamente do tamanho do próprio fenômeno, com **todas** as faixas prometendo demais — na faixa que dizia 8,4% o alerta aconteceu **zero vezes**. A causa não era defeito a descobrir e sim consequência conhecida a medir: `class_weight="balanced"` corrige a **decisão** e destrói a **probabilidade**. A decomposição de Murphy mostrou por que o Brier de 0,043 escondia isso — a **incerteza (0,0769) sozinha é o dobro do Brier**, ou seja o número parecia bom porque o problema é fácil. Testados quatro consertos; **adotada a recalibração isotônica** (ECE 0,0039, 20× melhor), com o calibrador ajustado **dentro** da dobra de treino. E medido que **calibrar não custa detecção**: no corte equivalente (0,20 em vez de 0,50) a revocação é a mesma — o `class_weight` não detectava mais, apenas baixava o limiar sem declarar. Fica a separação: **probabilidade calibrada para exibir, limiar declarado para avisar**. §22.7 registra um defeito no próprio medidor, achado por teste: predição constante produzia curva vazia e ECE 0,0, que se lê como calibração perfeita quando é o pior caso possível. |
 | 27/07/2026 | **§20.1 — `Windspeed` removido do conjunto interpretável, e o critério registrado.** `FEATURES_INTERPRETAVEIS` passa de três para duas colunas: `TSA_DHW` e `TSA`. Custa **0,025** de PR-AUC por ano (0,717 → 0,692) — exatamente a diferença que §15 classifica como ruído — e compra que **toda entrada tenha mecanismo defensável sem ressalva**. Coeficientes limpos e no sinal físico (`TSA_DHW` +1,011, `TSA` +0,374), e as duas passam a contribuir positivamente na validação por ano, contra o `TSA` quase apagado antes. O `Windspeed` **continua** na versão de 8 features, onde não foi escolha nossa. Teste travando a remoção, com o motivo escrito. Critério para decisões futuras: *entre um número melhor dentro do ruído e um conjunto em que toda entrada se defende sozinha, escolher o segundo*. |

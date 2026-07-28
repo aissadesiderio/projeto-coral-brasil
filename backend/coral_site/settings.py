@@ -282,15 +282,29 @@ PAINEL_MODELO = env('PAINEL_MODELO', default='entrega1_baa')
 # 🚨 **O limiar de alerta e decisao de produto, e por isso mora aqui e vai no
 # payload — nao esta escondido no codigo do modelo.**
 #
-# Nao existe corte natural. Ate a recalibracao, `class_weight='balanced'`
-# empurrava a probabilidade para cima, o que **equivale a baixar o limiar sem
-# declarar**: o 0,50 aparente operava como 0,20. Com a probabilidade calibrada,
-# o ponto de desempenho equivalente e 0,20 — medido em 27/07/2026:
+# **Decidido em 27/07/2026: 0,10**, com o material de docs/RESULTADOS.md secao
+# 22.9 na mesa. O criterio declarado foi **priorizar antecedencia**: para um
+# site cujo publico age sobre o aviso, perder um evento custa mais que um
+# alarme falso, e chegar tarde e quase o mesmo que nao chegar.
 #
-#   versao        limiar   precisao   revocacao
-#   balanced       0,50      0,721      0,909
-#   isotonica      0,20      0,705      0,903
+#   limiar  episodios  avisados no 1o dia  atraso medio  alarme falso/ano/recife
+#    0,05     18/19          18/20            0,80 d              27,0
+#   >0,10<    17/19          18/20            0,95 d              16,3
+#    0,20     16/19          16/20            1,50 d              10,0
+#    0,30     16/19          13/20            2,60 d               8,0
 #
-# Subir o numero troca alarme falso por evento perdido, e essa troca e de quem
-# opera o site, nao de quem treina o modelo. Ver docs/RESULTADOS.md secao 22.5.
-PAINEL_LIMIAR = env.float('PAINEL_LIMIAR', default=0.20)
+# O que 0,10 compra sobre o 0,20 anterior: o episodio de **nove dias** de
+# Picaozinho em 2022, e o aviso no primeiro dia em 18 dos 20 em vez de 16.
+# O que custa: de 10,0 para 16,3 dias de alarme falso por ano e por recife.
+#
+# ⚠️ **Nao existe corte natural, e o numero anterior nunca foi escolhido.** Ate
+# a recalibracao, `class_weight='balanced'` empurrava a probabilidade para
+# cima, o que equivale a baixar o limiar sem declarar: o 0,50 do `predict`
+# operava como 0,20. O 0,20 herdou essa equivalencia — nao uma decisao.
+#
+# ⚠️ **Nenhum limiar pega todos os episodios.** Um evento de Picaozinho
+# (21–23/04/2026) escapa em todos os cortes varridos. O teto ai e do modelo, e
+# baixar mais o limiar nao o recupera — so compra alarme falso.
+#
+# Reproduza o material com: python backend/manage.py limiar
+PAINEL_LIMIAR = env.float('PAINEL_LIMIAR', default=0.10)
