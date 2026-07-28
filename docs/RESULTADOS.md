@@ -1613,6 +1613,41 @@ jeito só porque `class_weight='balanced'` empurrava a probabilidade para cima
 continua escapando, como escapa em todos os limiares. Isso é problema do
 modelo, e permanece aberto.
 
+### 22.9.6 O exemplo mínimo que torna o erro visível
+
+O engano da §22.9.3 é fácil de repetir, então vale deixá-lo em cinco linhas.
+
+Um episódio de 5 dias, com as probabilidades que o modelo devolveu:
+
+| Dia do episódio | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Probabilidade | 0,12 | 0,18 | 0,35 | 0,60 | 0,55 |
+
+O que cada limiar faz com ele:
+
+| Limiar | Dias em alerta | Episódio detectado? | 1º aviso |
+|---|---|---|---|
+| 0,10 | 1, 2, 3, 4, 5 | ✅ | **dia 1** |
+| 0,20 | 3, 4, 5 | ✅ | dia 3 |
+| 0,50 | 4, 5 | ✅ | dia 4 |
+
+**Na contagem de episódios, os três empatam.** Todos detectam. É exatamente por
+isso que a coluna de episódios ficou parada entre 0,15 e 0,40 nos dados reais —
+e por isso ler só essa coluna produziu a conclusão errada de que apertar o corte
+saía de graça.
+
+O que muda entre eles é o dia do primeiro aviso: 1, 3 e 4. Num sistema cujo
+propósito é dar tempo de reagir, essa é a variável de interesse — e ela é
+invisível na métrica que estava sendo usada para decidir.
+
+> **Generalizando:** um patamar numa métrica agregada raramente significa
+> *"aqui nada muda"*. Quase sempre significa *"aqui muda algo que essa métrica
+> não mede"*. O patamar é um convite a procurar a dimensão ausente, não uma
+> licença para escolher pelo critério secundário.
+
+A versão sem jargão desta seção inteira está em
+[METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md) §13.
+
 ---
 
 ## 23. O que estes resultados indicam fazer

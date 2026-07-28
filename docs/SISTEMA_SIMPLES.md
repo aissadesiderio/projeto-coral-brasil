@@ -19,12 +19,13 @@ Aqui a pergunta é outra: *o que essas pastas e comandos estão fazendo?*
 5. [Onde os dados moram — são três lugares](#5-onde-os-dados-moram--são-três-lugares)
 6. [Dado e modelo são coisas diferentes](#6-dado-e-modelo-são-coisas-diferentes)
 7. [Artefatos derivados, e por que não guardamos no Git](#7-artefatos-derivados-e-por-que-não-guardamos-no-git)
-8. [O que é um teste, e por que existem 441](#8-o-que-é-um-teste-e-por-que-existem-441)
+8. [O que é um teste, e por que existem 513](#8-o-que-é-um-teste-e-por-que-existem-513)
 9. [Por que dois bancos de dados](#9-por-que-dois-bancos-de-dados)
 10. [O que o Docker faz aqui](#10-o-que-o-docker-faz-aqui)
 11. [Por que as senhas ficam fora do projeto](#11-por-que-as-senhas-ficam-fora-do-projeto)
 12. [Vocabulário](#12-vocabulário)
 13. [O endpoint que faz conta, e a escada escondida nele](#13-o-endpoint-que-faz-conta-e-a-escada-escondida-nele)
+14. [O que é *deploy*, e por que aqui ele dá trabalho](#14-o-que-é-deploy-e-por-que-aqui-ele-dá-trabalho)
 
 ---
 
@@ -343,10 +344,10 @@ se foi este projeto que gerou, e só então abre. Se não reconhecer, recusa.
 
 ---
 
-## 8. O que é um teste, e por que existem 441
+## 8. O que é um teste, e por que existem 513
 
 Um **teste automatizado** é um pedacinho de código que faz uma pergunta e
-confere a resposta. Todos rodam com um comando, em cerca de 75 segundos:
+confere a resposta. Todos rodam com um comando, em cerca de 80 segundos:
 
 ```bash
 python backend\manage.py test
@@ -377,7 +378,7 @@ da resposta** — e quando mudei o formato, avisou.
 Sem ele, eu teria dito que estava tudo certo: o backend não dá erro nenhum. O
 problema só apareceria com o site no ar e a página em branco.
 
-**75 segundos, em vez de em produção.**
+**80 segundos, em vez de em produção.**
 
 ### Vários erros reais foram achados assim nesta reconstrução
 
@@ -388,6 +389,25 @@ problema só apareceria com o site no ar e a página em branco.
   importa mais" impossível de responder
 
 Nenhum deles daria mensagem de erro sozinho.
+
+### ⚠️ E uma coisa que os testes **não** pegam
+
+Vale saber, porque é fácil confiar demais neles.
+
+Três comandos do projeto morriam no meio ao rodar de verdade, por causa de um
+**emoji na mensagem que imprimiam** — o console do Windows não sabe desenhar
+esses símbolos e derruba o programa.
+
+Os 513 testes nunca perceberam. O motivo é simples e revelador: quando os
+testes rodam, a saída dos comandos vai para **um arquivo**, e não para a tela.
+E arquivo aceita qualquer símbolo.
+
+> Os testes verificam o que o programa **faz**. Eles não verificam o mundo em
+> que ele roda.
+
+Só apareceu quando alguém executou o comando de verdade, num terminal de
+verdade. Hoje existe um teste específico para isso — mas ele só existe porque
+a falha aconteceu primeiro.
 
 ---
 
@@ -494,6 +514,9 @@ nunca na linha de comando (que fica no histórico do terminal).
 | **Teste** | código que confere se outro código faz o esperado |
 | **Ingestão** | o processo de buscar dados de fora e gravar |
 | **Proveniência** | o registro de de onde cada valor veio |
+| **Deploy** | colocar o site no servidor, para outras pessoas abrirem |
+| **Migração** *(banco)* | instrução que atualiza a estrutura das tabelas |
+| **Servidor** | o computador que fica ligado servindo o site |
 | **Calibrar** | ajustar a probabilidade para que "30%" aconteça 30% das vezes |
 | **Limiar** | o número a partir do qual se decide avisar |
 
@@ -623,6 +646,118 @@ decide é o servidor; a tela mostra a decisão.
 
 ---
 
+## 14. O que é *deploy*, e por que aqui ele dá trabalho
+
+**Deploy** é o ato de pegar o que existe no seu computador e colocar no
+servidor, para que outras pessoas possam abrir o site.
+
+A palavra costuma ser traduzida como "publicar", e serve. Só que ela esconde
+uma pergunta que quase ninguém faz na primeira vez:
+
+> **Publicar o quê, exatamente?**
+
+### O site não é só o código
+
+A intuição natural é: o código está no Git, então mandar o código para o
+servidor deveria bastar. Copiar os arquivos, ligar, pronto.
+
+Aqui isso **não funciona**, e o motivo é a seção 7. O site precisa de coisas
+que **não estão no Git de propósito**:
+
+| O que o site precisa | Está no Git? |
+|---|---|
+| O código (Python, React) | ✅ sim |
+| A estrutura das tabelas do banco | ✅ sim (como instruções de migração) |
+| Os dados medidos | ❌ estão no banco, que é outra máquina |
+| **O modelo treinado** (`.joblib`) | ❌ **não** |
+| **O grafo do Neo4j** | ❌ **não** |
+| **A documentação em `.docx`** | ❌ **não** |
+
+Os três últimos são os **artefatos derivados** da seção 7 — aqueles que não
+guardamos porque "cópia guardada envelhece em silêncio". A decisão está certa.
+Mas ela cria uma obrigação: **alguém precisa reconstruí-los no servidor.**
+
+### O que aconteceria sem isso
+
+Nada explodiria. É o que torna esse erro perigoso.
+
+O site subiria, a página abriria, o menu funcionaria. E:
+
+| Faltando | O que a pessoa veria |
+|---|---|
+| O modelo | O painel de risco diz **"serviço indisponível"** nos três recifes |
+| O grafo | A lista de recifes vinda do grafo aparece **vazia** |
+| Os `.docx` | Nada no site — só a documentação para baixar não existe |
+
+Um site que abre e não responde a pergunta principal. **Parece que funcionou.**
+
+### O comando que resolve
+
+Um só, rodado no servidor antes de liberar o site:
+
+```bash
+python backend\manage.py preparar_deploy
+```
+
+Ele faz cinco coisas, **nessa ordem**, e a ordem não é escolha:
+
+| # | Passo | Por que aqui |
+|---|---|---|
+| 1 | Atualiza a estrutura do banco | sem tabelas, nada mais tem onde ler |
+| 2 | **Treina o modelo** | lê o banco, então depende do passo 1 |
+| 3 | **Reconstrói o grafo** | mesma coisa: lê o banco |
+| 4 | Gera os `.docx` | independente, fica por último |
+| 5 | **Confere o resultado** | valida o que ficou pronto, não o que se pretendia |
+
+### Duas decisões dentro dele que valem explicar
+
+**1. Ele para no primeiro erro.**
+
+Poderia continuar e avisar no fim "olha, dois passos falharam". Não continua —
+e o motivo é o mesmo do parágrafo acima:
+
+> Um site **meio construído** é pior que um que não sobe, porque parece ter
+> funcionado. Um que não sobe você conserta hoje; um que subiu errado você
+> descobre pela reclamação de alguém.
+
+**2. Ele confere se os arquivos existem, mesmo depois de os comandos darem
+certo.**
+
+Isso parece redundante e não é. Um comando pode terminar sem erro nenhum e
+mesmo assim não ter produzido o que o site espera — por exemplo gravando o
+modelo com um nome diferente do que o painel procura. O comando "funcionou"; o
+site fica sem modelo do mesmo jeito.
+
+### A parte que mais ensinou
+
+O passo de deploy foi a **última** coisa construída, e antes dele existia uma
+regra escrita em três lugares diferentes, cada uma correta:
+
+> *"Este arquivo não é versionado. Quem publicar precisa rodar este comando."*
+
+Três avisos certos, escritos por três motivos certos. E juntos eles garantiam
+**nada**, porque ninguém executa um aviso.
+
+E rodar de verdade pela primeira vez encontrou coisas que centenas de testes
+não tinham encontrado — inclusive três comandos que morriam no meio por causa
+de um **emoji na mensagem**, que o console do Windows não sabe imprimir. Os
+testes nunca pegaram porque eles guardam a saída num arquivo, e não na tela.
+
+> **A lição, que vale além deste projeto:** documentar um passo não é o mesmo
+> que ter o passo. E um procedimento que nunca foi executado inteiro não é um
+> procedimento — é uma intenção.
+
+### Onde isso encosta no dia a dia
+
+Depois de publicado, o site **não se atualiza sozinho**. Nada busca dados novos
+por conta própria ainda: a série congela no dia do deploy até alguém rodar a
+ingestão de novo. Isso está na lista de pendências como *agendamento*.
+
+E o mesmo comando serve para conferir um site já no ar — se algo parecer
+errado, rodá-lo reconstrói tudo a partir do banco e diz o que não bate.
+
+---
+
 ## Onde ver mais
 
 | Documento | O que tem |
@@ -638,5 +773,6 @@ decide é o servidor; a tela mostra a decisão.
 
 | Data | Alteração |
 |---|---|
+| 28/07/2026 | **Seção 14 acrescentada: o que é deploy.** Explica em linguagem comum a pergunta que a palavra esconde — *publicar o quê, exatamente?* — e por que aqui mandar o código não basta: três coisas que o site precisa **não estão no Git de propósito**, porque são os artefatos derivados da seção 7. Registrado o que aconteceria sem o passo: o site sobe, a página abre, e o painel de risco diz "serviço indisponível" nos três recifes — **parece que funcionou**, que é o que torna o erro perigoso. Explicadas as duas decisões dentro do comando: ele **para no primeiro erro** (site meio construído é pior que site que não sobe) e **confere se os arquivos existem** mesmo depois de os comandos terem dado certo (um comando pode terminar sem erro e gravar o modelo com nome que o painel não procura). E a lição que o passo ensinou ao ser executado pela primeira vez: a regra estava escrita corretamente em três lugares e garantia nada, porque **ninguém executa um aviso** — documentar um passo não é o mesmo que ter o passo. Vocabulário ganhou *deploy*, *migração* e *servidor*. |
 | 27/07/2026 | **Seção 13 acrescentada, sobre o `/api/painel-risco/`** — o primeiro endpoint que faz conta em vez de servir linha guardada. Três coisas ficaram explicadas em linguagem comum: a armadilha de recalcular a mesma variável de outro jeito (o modelo receberia **o nome certo com o conteúdo errado** e responderia sem erro nenhum), a diferença entre série que *termina* mais cedo e série *furada*, e 🚨 **a escada da calibração** — por que os três recifes voltaram com exatamente o mesmo número, e por que o degrau mais baixo valer 0,000 significa "nenhum alerta entre estes dias", e não "impossível". Daí sai um requisito de tela: **o site não pode exibir "0%" nem "100%"**. Registrado também o que decidimos **não** fazer: trocar o 0 por 0,001 para ficar apresentável seria inventar precisão inexistente. |
 | 27/07/2026 | Documento criado como par de software do [METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md), que cobre só a ciência. Reúne, em linguagem comum, as explicações que foram sendo pedidas ao longo da reconstrução: a separação entre backend e frontend e por que o navegador não acessa o banco, o que é JSON e por que a diferença entre lista e caixa quebrou três testes, os nove endpoints e por que só um precisa de paginação, os três lugares onde os dados moram, a distinção entre **dado** e **modelo**, a regra dos artefatos derivados (cópia guardada envelhece em silêncio), o que um teste realmente compra, por que há dois bancos e o segundo nunca recebe escrita direta, o papel do Docker e por que as credenciais ficam fora do projeto — sendo que essa última é irreversível, porque chave que entra no Git precisa ser revogada e não apagada. |

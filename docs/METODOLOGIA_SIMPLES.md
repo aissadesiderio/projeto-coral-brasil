@@ -25,6 +25,7 @@ linguagem.
 10. [Fomos buscar salinidade e oxigênio. Não era isso.](#10-fomos-buscar-salinidade-e-oxigênio-não-era-isso)
 11. [Última tentativa: poluição da água](#11-última-tentativa-poluição-da-água)
 12. [O número que o site ia mostrar estava mentindo](#12-o-número-que-o-site-ia-mostrar-estava-mentindo)
+13. [A pergunta que sobrou: a partir de quantos por cento o site avisa?](#13-a-pergunta-que-sobrou-a-partir-de-quantos-por-cento-o-site-avisa)
 
 ---
 
@@ -571,8 +572,8 @@ Nós então testamos as duas desculpas que tínhamos:
 dura dias, não três meses; uma janela longa demais diluiria o efeito. Refizemos
 com 7, 14, 30 e 60 dias. **Nenhuma ajudou.**
 
-**"Talvez essas variáveis só estejam dizendo *qual recife é*, não *como ele
-estava*."** Testamos. Elas mudam de visita para visita no mesmo recife, e mal
+**"Talvez essas variáveis só estejam dizendo qual recife é, não como ele
+estava."** Testamos. Elas mudam de visita para visita no mesmo recife, e mal
 conseguem identificar o lugar. **Não era isso também.**
 
 ### Mas elas *não* são inúteis — e essa é a parte interessante
@@ -925,6 +926,198 @@ Corrigido, e travado com teste.
 
 ---
 
+## 13. A pergunta que sobrou: a partir de quantos por cento o site avisa?
+
+A seção anterior terminou com uma frase que parece encerrar o assunto e na
+verdade abre outro:
+
+> Probabilidade honesta para mostrar. **Corte declarado para avisar.**
+
+O modelo agora diz "9%" e isso quer dizer mesmo 9%. Mas o site não pode exibir
+só um número e ir embora — em algum momento ele precisa **decidir se acende a
+luz**. E aí vem a pergunta: 9% é para avisar ou não?
+
+### Essa pergunta não tem resposta técnica
+
+Isso é o mais importante desta seção, e o que demorou para ficar claro.
+
+Não existe um cálculo que produza "o limiar certo". O modelo entrega uma
+probabilidade; onde traçar a linha depende de **quanto incômodo você aceita
+para não perder um evento**. É uma escolha de produto, não de estatística.
+
+E as duas pontas são ruins de formas diferentes:
+
+| Se o corte for muito baixo | Se o corte for muito alto |
+|---|---|
+| O site avisa toda hora | O site quase nunca avisa |
+| As pessoas param de olhar | Quando avisa, é tarde |
+| O aviso vira ruído | Eventos passam batido |
+
+O pior resultado dos dois é o mesmo: **ninguém confia no aviso**.
+
+### O que o projeto estava usando, e por quê (spoiler: por acidente)
+
+O site estava operando com **20%**. E ninguém tinha escolhido esse número.
+
+Ele apareceu assim: o corte original era 50%, que é o padrão de qualquer
+biblioteca. Mas — como a seção 12 conta — o modelo estava com um ajuste que
+**empurrava todas as probabilidades para cima**. Então o "50%" daquele modelo
+inflado se comportava, na prática, como um corte bem mais baixo. Quando
+consertamos a probabilidade, tivemos que baixar o corte para 20% só para manter
+o mesmo comportamento.
+
+Ou seja: **20% era o número que reproduzia um acidente anterior.** Não era uma
+decisão. Era uma herança.
+
+### Como transformamos isso em algo decidível
+
+O problema de tabelas de "precisão e revocação" é que ninguém consegue ter
+opinião sobre elas. *"Precisão 0,719"* não é uma frase sobre a qual uma pessoa
+pense "concordo" ou "discordo".
+
+Então traduzimos tudo para unidades da vida real:
+
+> **Quantos dias por ano, em cada recife, o site mostraria alerta sem que nada
+> acontecesse?**
+
+E medimos três coisas diferentes para cada corte possível, de 5% a 95%:
+
+| O que medimos | A pergunta que responde |
+|---|---|
+| **Episódios detectados** | quantos eventos reais o site pegaria? |
+| **Avisados no 1º dia** | de quantos ele avisaria logo no começo? |
+| **Alarme falso** | quantos dias por ano ele grita à toa? |
+
+### Por que "episódios" e não "dias"
+
+Isso já apareceu na [seção 5](#5-por-que-contamos-eventos-e-não-dias), e aqui
+importa de novo.
+
+Um episódio de estresse térmico dura semanas. Se o site avisa no dia 3 de um
+evento de 9 dias, ele **acertou o evento** — errou só alguns dias. Contar dias
+puniria isso como se fosse erro grave, quando não é.
+
+O que seria erro grave é o evento inteiro passar sem aviso nenhum.
+
+### O primeiro achado: não é sobre o limiar
+
+Rodamos os 19 cortes. E apareceu uma coisa que nenhum deles resolve:
+
+> **Um episódio escapa em TODOS os cortes testados.**
+> Picãozinho, 21 a 23 de abril de 2026. Três dias.
+
+Mesmo baixando o corte para 5% — o ponto em que o site praticamente grita o
+tempo todo — esse evento não é pego.
+
+Isso muda a natureza da conversa. **Não é escolha de limiar que resolve; é o
+modelo que não vê esse caso.** Discutir 10% contra 20% é discutir os *outros*
+episódios. Aquele fica de fora de qualquer jeito, e continua como problema em
+aberto.
+
+> É o tipo de coisa que só aparece quando se mede o intervalo inteiro em vez de
+> testar dois ou três valores. Se tivéssemos comparado só 20% e 30%, teríamos
+> concluído "os dois perdem 3 eventos" sem nunca perceber que **um deles é
+> impossível de pegar**.
+
+### O segundo achado: eu tinha concluído errado
+
+Esta parte fica registrada porque o erro é instrutivo.
+
+Olhando a tabela, entre 15% e 40% a contagem de episódios **não muda**: são
+sempre 16 de 19. Só o alarme falso diminui. A leitura óbvia é:
+
+> "Nessa faixa, apertar o corte é de graça — pego os mesmos eventos e incomodo
+> menos gente."
+
+Foi o que escrevi. **Estava errado.**
+
+Faltava medir uma coisa: **quando** o aviso chega.
+
+| Corte | Eventos pegos | Avisados já no 1º dia | Atraso médio |
+|---|---|---|---|
+| 20% | 16/19 | **16 de 20** | 1,5 dia |
+| 30% | 16/19 | 13 de 20 | 2,6 dias |
+| 40% | 16/19 | 11 de 20 | 3,9 dias |
+
+O evento continua sendo detectado — **mais tarde**. Em 40%, o aviso médio sai
+quase **quatro dias** depois do começo do evento.
+
+Para um sistema de aviso, isso é quase tudo. Avisar no quarto dia de um evento
+de nove não é o mesmo que avisar no primeiro, mesmo que os dois contem como
+"detectado" na planilha.
+
+> **A lição de método:** quando uma métrica fica parada num intervalo, isso
+> raramente significa "aqui não muda nada". Quase sempre significa **"aqui muda
+> alguma coisa que essa métrica não mede"**.
+
+### Um exemplo pequeno, para a ideia ficar concreta
+
+Imagine um único episódio de **5 dias**, e o que o modelo respondeu em cada um:
+
+| Dia do evento | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Probabilidade | 12% | 18% | 35% | 60% | 55% |
+
+Agora veja o que cada corte faria:
+
+| Corte | Dias em que avisa | Pegou o evento? | Avisou no 1º dia? |
+|---|---|---|---|
+| **10%** | 1, 2, 3, 4, 5 | ✅ sim | ✅ sim |
+| **20%** | 3, 4, 5 | ✅ sim | ❌ dois dias tarde |
+| **50%** | 4, 5 | ✅ sim | ❌ três dias tarde |
+
+**Os três "pegaram o evento".** Na coluna de episódios, os três empatam.
+
+Mas o de 10% avisou no dia 1 e o de 50% avisou no dia 4. Se alguém precisava
+agir, essa diferença é o produto inteiro. E ela **não aparece** se você olhar
+só a contagem de eventos.
+
+Era exatamente esse o buraco na minha primeira conclusão.
+
+### A decisão: 10%
+
+Com as três dimensões na mesa:
+
+| | 20% (o herdado) | **10% (o decidido)** |
+|---|---|---|
+| Eventos detectados | 16 de 19 | **17 de 19** |
+| Avisados já no 1º dia | 16 de 20 | **18 de 20** |
+| Atraso médio | 1,5 dia | **0,95 dia** |
+| Dias de alarme falso por ano, em cada recife | 10 | **16** |
+
+**O critério declarado foi priorizar antecedência.** O raciocínio: este site
+existe para que alguém possa reagir. Para quem reage, um aviso que chega tarde
+vale quase o mesmo que aviso nenhum — enquanto um alarme falso custa
+incômodo, não estrago.
+
+O que 10% comprou concretamente: o episódio de **nove dias** em Picãozinho, em
+fevereiro/março de 2022 — o mesmo ano que já era o pior do modelo.
+
+O que custou: o site mostrará alerta em cerca de **16 dias por ano em cada
+recife** sem que o estresse térmico se confirme. Em Abrolhos, algo como um
+alerta falso a cada três semanas.
+
+### O que essa decisão não resolve, e a gente não vai fingir que resolve
+
+1. **O episódio de abril de 2026 continua escapando.** Nenhum corte o pega.
+2. **16 dias de alarme falso por ano é um número para acompanhar.** Se o
+   público começar a ignorar o aviso, a decisão se revisita — e agora existe
+   um comando que refaz a tabela inteira.
+3. ⚠️ **Os cortes foram comparados usando os mesmos dados que os avaliaram.**
+   Isso serve para escolher entre eles. **Não** é promessa de que o ano que vem
+   terá exatamente 16 dias de alarme falso.
+
+### E, principalmente: agora é uma decisão
+
+O 20% anterior não era pior por ser 20%. Era pior por **ninguém saber por que
+era 20%**.
+
+Hoje o número está num lugar único, com o motivo escrito ao lado, viajando na
+resposta da API para quem consome poder discordar — e com um comando que
+reconstrói a tabela quando alguém quiser rediscutir.
+
+---
+
 ## Onde ver mais
 
 | Documento | O que tem |
@@ -940,6 +1133,7 @@ Corrigido, e travado com teste.
 
 | Data | Alteração |
 |---|---|
+| 27/07/2026 | **§13 criada — a decisão do limiar de alerta, explicada por inteiro.** Fecha o assunto que a §12 abriu: a probabilidade ficou honesta, mas faltava decidir a partir de quantos por cento o site acende a luz. Registrado que **essa pergunta não tem resposta técnica** — é troca entre incômodo e evento perdido, e portanto escolha de produto. Contado também que o 20% em uso **nunca havia sido escolhido**: era o número que reproduzia um acidente anterior, quando o modelo inflava as probabilidades. Dois achados: 🚨 **um episódio (Picãozinho, abril/2026) escapa em todos os 19 cortes testados**, então ali o teto é do modelo e não da escolha; e **eu havia concluído errado** que apertar o corte entre 15% e 40% era de graça — faltava medir *quando* o aviso chega, e ao medir os avisados no 1º dia caem de 16/20 para 11/20. Incluído um exemplo trabalhado de cinco dias mostrando três cortes que "pegam o evento" e avisam no dia 1, 3 e 4 — a diferença que a contagem de episódios não enxerga. Decisão: **10%**, com o critério declarado (priorizar antecedência) e o custo declarado (16 dias de alarme falso por ano em cada recife). |
 | 27/07/2026 | **§12 criada — o número que o site ia mostrar estava mentindo.** Contada a promessa que uma porcentagem faz e por que ela não estava sendo cumprida: o modelo dizia 16,5% onde a realidade era 8,4%, e nos dias em que dizia "8,4%" **nunca** houve alerta. Explicado que não era bug e sim efeito colateral de uma decisão correta — mandar o modelo tratar as duas classes como igualmente comuns conserta *quando avisar* e estraga *quanto dizer*. Registrado por que o Brier de 0,043 enganava (a **incerteza sozinha é o dobro dele** — o problema é fácil de acertar por omissão), o conserto que levou o erro de 8,1 pontos a 0,4, e que **calibrar não custou detecção**, só mudou o corte de 50% para 20%. Fecha com o defeito encontrado no próprio medidor: predição constante dava "calibração perfeita", quando é o pior caso possível. |
 | 27/07/2026 | **§11 criada — a última tentativa, poluição da água, também não deu.** Contada a hipótese do rio e por que ela caiu de um jeito verificável: se o silicato marcasse água de rio, teria que subir quando a salinidade desce, e **os dois sobem juntos**. Registrado, com o motivo, por que **não** estou chamando de descoberta a única medida que passou no teste estatístico — passou colado e foram nove medidas testadas, e seria repetir o erro do vento no mesmo dia. E que esta é a ressalva de resolução na sua forma pior: 28 km é o tamanho errado para uma mancha de rio de 2 km, com 84 das 498 buscas precisando ir a 33 km de distância. Fecha com o placar das quatro famílias testadas e as três explicações que os dados não separam — incluindo a de que **166 mergulhos é pouco**, que não se resolve com satélite. |
 | 26/07/2026 | 🚨 **§10 corrigida — o vento também caiu, e a lição virou a parte principal.** Contada a conferência que derrubou a animação com o vento: o "vento" que o modelo usava era só uma coluna de planilha que ninguém tinha checado, e vento de verdade não mostra o efeito. Registrado o placar honesto — salinidade, oxigênio e vento descrevem o branqueamento, nenhum prevê — e a lição de que **explicação convincente é o que faz um número de ruído parecer descoberta**, já que o ganho de 0,025 estava abaixo do limiar de ruído que o próprio projeto tinha escrito. Acrescentado o achado positivo: 28 km serve para vento, então a ressalva de resolução passa a ser específica de variáveis irregulares e costeiras. |
