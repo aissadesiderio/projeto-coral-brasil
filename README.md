@@ -735,6 +735,65 @@ consultas quentes, contra o banco real:
 python backend\manage.py conferir_persistencia
 ```
 
+## Manter o site atualizado
+
+Depois de publicado, **nada roda sozinho**. Sem agendamento a série congela no
+dia do deploy, e o painel passa a prever a partir de dado velho — declarando o
+atraso, mas velho.
+
+Um comando por dia resolve:
+
+```bash
+python backend\manage.py atualizar
+```
+
+Ele ingere só o que falta (retoma da última data), reprojeta o grafo e relata o
+que envelheceu. É idempotente: rodar duas vezes no mesmo dia não duplica nada.
+
+### 🚨 Ele **não** retreina o modelo, e isso é decisão
+
+A rotina óbvia seria ingerir + retreinar + projetar, deixando tudo fresco. Seria
+errado:
+
+> Um modelo que muda toda noite é um modelo que **ninguém mediu**. O
+> `treinar_final` grava sem avaliar de propósito — quem avalia é o
+> `treinar_modelo`, com leave-year-out. Encadear o primeiro num agendador
+> trocaria, todo dia, um modelo medido por um não medido.
+
+Então o modelo envelhece — e a rotina **torna isso visível** em vez de esconder.
+Depois de 90 dias sem retreino ela avisa, deixando claro que não é erro:
+
+```
+(!) O modelo foi treinado ha 94 dias, sobre dados ate 2026-07-28.
+    Isto nao e erro - o retreino e deliberado de proposito. Mas vale
+    medir antes de decidir: "manage.py treinar_modelo" avalia,
+    "treinar_final" grava.
+```
+
+Também avisa se a ingestão parar (7 dias sem dado novo) ou se não houver modelo
+no disco. **Em dia normal, não diz nada** — rotina que avisa todo dia treina
+quem lê a ignorar.
+
+### Agendando
+
+O comando aceita `--silencioso`, que só imprime quando há algo a dizer. Saída
+vazia = dia normal.
+
+Linux/macOS, 6h todo dia:
+
+```bash
+0 6 * * * cd /caminho/do/projeto && venv/bin/python backend/manage.py atualizar --silencioso
+```
+
+Windows, pelo Agendador de Tarefas:
+
+```bash
+schtasks /create /tn "coral-brasil-atualizar" /tr "C:\caminho\venv\Scripts\python.exe C:\caminho\backend\manage.py atualizar --silencioso" /sc daily /st 06:00
+```
+
+⚠️ **Sai com código 1 quando falha.** É o único canal que o agendador entende —
+não há ninguém lendo a tela quando a rotina roda.
+
 ## Grafo (Neo4j)
 
 O Neo4j é **projeção derivada**: nunca recebe escrita que não venha do
