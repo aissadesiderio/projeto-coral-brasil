@@ -118,9 +118,34 @@ class NormalizacaoTests(TestCase):
     def test_traduz_nomes_de_fonte_para_canonicos(self):
         self.assertEqual(resolver_variavel('CRW_SST'), 'sst')
         self.assertEqual(resolver_variavel('crw_dhw'), 'dhw')
-        self.assertEqual(resolver_variavel('thetao'), 'sst')
         self.assertEqual(resolver_variavel('so'), 'salinidade')
         self.assertEqual(resolver_variavel('kd'), 'kd490')
+
+    def test_thetao_nao_e_sst(self):
+        """🚨 Ate 28/07/2026 esta linha afirmava `thetao -> sst`.
+
+        As duas colunas viravam o mesmo nome canonico, e nao sao a mesma
+        grandeza: `CRW_SST` e temperatura de superficie, `thetao` e temperatura
+        potencial a **13,47 m**. docs/FONTES.md secao 6.10 ja registrava a
+        mistura de profundidades como problema do acervo — o vocabulario a
+        codificava.
+        """
+        with self.assertRaises(ColunaRecusada) as ctx:
+            resolver_variavel('thetao')
+
+        self.assertIn('13,47', str(ctx.exception))
+
+    def test_thetao_recusa_em_vez_de_ser_ignorada(self):
+        """A diferenca entre recusar e desconhecer nao e cosmetica.
+
+        Coluna desconhecida devolve `None` em silencio. Quem tentar ingerir
+        `thetao` daqui a seis meses precisa receber o motivo, e nao um campo
+        que simplesmente nao aparece no resultado.
+        """
+        self.assertIsNone(resolver_variavel('coluna_inexistente'))
+
+        with self.assertRaises(ColunaRecusada):
+            resolver_variavel('thetao')
 
     def test_coluna_desconhecida_e_ignorada_e_nao_quebra(self):
         self.assertIsNone(resolver_variavel('coluna_qualquer'))
@@ -152,6 +177,89 @@ class NormalizacaoTests(TestCase):
 
         self.assertEqual(resultado.variavel, 'par')
         self.assertEqual(resultado.quality_flag, 'degradado')
+
+
+class VocabularioCanonicoTests(TestCase):
+    """O vocabulario precisa fechar consigo mesmo, nos dois sentidos.
+
+    Nenhuma destas conferencias e obvia olhando o codigo: sao tres dicionarios
+    em dois arquivos, e a divergencia entre eles nao produz erro na hora — ela
+    produz `KeyError` no meio de uma gravacao, ou uma variavel que o banco
+    recusa depois que a rede ja foi consultada.
+    """
+
+    def canonicos(self):
+        from ingestao.normalizacao import MAPA_COLUNAS
+
+        return set(MAPA_COLUNAS.values())
+
+    def test_todo_canonico_alcancavel_tem_unidade(self):
+        """Sem isto, `normalizar` estoura com KeyError no meio da ingestao."""
+        from ingestao.normalizacao import UNIDADES
+
+        self.assertEqual(self.canonicos() - set(UNIDADES), set())
+
+    def test_toda_unidade_declarada_e_alcancavel(self):
+        """Unidade sem mapeamento e vocabulario morto: nada produz aquele nome."""
+        from ingestao.normalizacao import UNIDADES
+
+        self.assertEqual(set(UNIDADES) - self.canonicos(), set())
+
+    def test_o_modelo_aceita_exatamente_o_vocabulario(self):
+        """`VARIAVEL_CHOICES` diverge do mapa = gravacao recusada depois da rede."""
+        from aquaculture.models import MedicaoAmbiental
+
+        escolhas = {
+            c[0] for c in MedicaoAmbiental._meta.get_field('variavel').choices
+        }
+
+        self.assertEqual(escolhas, self.canonicos())
+
+    def test_canonico_sem_dado_precisa_declarar_o_motivo(self):
+        """🚨 A guarda que impede o vocabulario de inchar por descuido.
+
+        Um nome pode existir sem dado — `kd490` e `clorofila` existem, e por
+        decisao medida. O que nao pode e existir **sem que ninguem saiba por
+        que**: seis meses depois, ninguem distingue "avaliado e rejeitado" de
+        "sobrou de uma tentativa esquecida", e o proximo repete o teste.
+        """
+        from ingestao.conectores.copernicus import SERIES
+        from ingestao.conectores.noaa_crw import (
+            COLUNA_FRACAO_ALERTA,
+            VARIAVEIS_ERDDAP,
+        )
+        from ingestao.normalizacao import SEM_DADO, resolver_variavel
+
+        # `COLUNA_FRACAO_ALERTA` entra a parte porque e **derivada** no
+        # conector e nao existe no ERDDAP — a primeira versao deste teste a
+        # esqueceu e acusou `baa_area_alerta` de orfa, com 7.173 linhas no
+        # banco.
+        servidos = {
+            resolver_variavel(v)
+            for v in (*VARIAVEIS_ERDDAP, COLUNA_FRACAO_ALERTA)
+        }
+        servidos |= set(SERIES)
+        servidos.discard(None)
+
+        orfaos = self.canonicos() - servidos - set(SEM_DADO)
+
+        self.assertEqual(
+            orfaos, set(),
+            f'Canonicos sem conector e sem motivo declarado: {sorted(orfaos)}. '
+            f'Acrescente a SEM_DADO com a razao, ou remova do MAPA_COLUNAS.',
+        )
+
+    def test_o_motivo_declarado_nao_pode_ser_vazio(self):
+        from ingestao.normalizacao import SEM_DADO
+
+        for nome, motivo in SEM_DADO.items():
+            self.assertGreater(len(motivo.strip()), 40, f'{nome} sem motivo real')
+
+    def test_nome_em_sem_dado_precisa_existir_no_vocabulario(self):
+        """Motivo para nome que nao existe e documentacao apontando para nada."""
+        from ingestao.normalizacao import SEM_DADO
+
+        self.assertEqual(set(SEM_DADO) - self.canonicos(), set())
 
 
 class QualidadeTests(TestCase):
