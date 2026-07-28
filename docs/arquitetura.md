@@ -111,6 +111,24 @@ rodar os comandos de reconstrucao**, porque nada disso viaja no `git push`.
 | Modelo treinado | `manage.py treinar_final` | `dados/modelos/` |
 | Projecao do grafo | `manage.py neo4j_projetar` | Neo4j |
 
+🚨 **A regra acima foi escrita tres vezes e nunca foi executada por ninguem.**
+Registrado em 28/07/2026, ao fechar o checklist de go-live: cada um dos tres
+artefatos ganhou, no momento em que foi criado, uma linha dizendo "o deploy
+precisa rodar isto" — e o deploy nunca existiu. Tres avisos corretos, escritos
+em tres lugares diferentes, somam **zero** garantia.
+
+O efeito de publicar sem eles nao e degradacao suave:
+
+| Artefato ausente | O que o usuario ve |
+|---|---|
+| `.joblib` | `/api/painel-risco/` responde **503** nos tres recifes |
+| projecao | `/api/grafo/localizacoes/` vazio |
+| `.docx` | nada no site — so a documentacao offline falta |
+
+Ver `manage.py preparar_deploy`, que executa os tres em ordem e confere o
+resultado. **Aviso escrito nao e passo executado** — a diferenca entre os dois
+custou o unico bloqueio real que sobrou depois do checklist fechar.
+
 ⚠️ **O modelo tem uma guarda que os outros nao precisam.** `joblib.load`
 desserializa via `pickle`, que executa codigo durante a leitura. Nao e problema
 para um arquivo que o proprio projeto gerou; e problema serio para um vindo de

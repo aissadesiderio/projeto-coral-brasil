@@ -3,7 +3,7 @@
 O painel vai exibir "risco 37%". Este comando responde se, entre os dias em que
 o modelo disse 37%, o alerta aconteceu em cerca de 37% deles.
 
-⚠️ Tudo com predicao **fora da dobra**: cada amostra e prevista pelo modelo que
+(!) Tudo com predicao **fora da dobra**: cada amostra e prevista pelo modelo que
 nao a viu. Medir calibracao sobre o proprio treino mede memoria.
 """
 
@@ -50,7 +50,7 @@ class Command(BaseCommand):
         self.stdout.write(f'  colunas: {", ".join(conjunto.colunas_de_entrada)}')
 
         self.stdout.write(self.style.WARNING(
-            '\n  ⚠️ O modelo usa class_weight="balanced", que trata as classes\n'
+            '\n  (!) O modelo usa class_weight="balanced", que trata as classes\n'
             '     como se fossem do mesmo tamanho. Isso e correto para DECIDIR\n'
             '     com 8% de positivos, e distorce a PROBABILIDADE por\n'
             '     construcao. O vies abaixo e esperado, nao surpresa.'
@@ -93,15 +93,15 @@ class Command(BaseCommand):
         ece = relatorio.erro_esperado
         if ece < 0.02:
             return (
-                '✅ Calibrado o suficiente para exibir porcentagem '
+                '[ok] Calibrado o suficiente para exibir porcentagem '
                 f'(ECE {ece:.3f}).'
             )
         if ece < 0.05:
             return (
-                f'⚠️ Calibracao sofrivel (ECE {ece:.3f}). Da para exibir '
+                f'(!) Calibracao sofrivel (ECE {ece:.3f}). Da para exibir '
                 'faixa qualitativa, nao numero.'
             )
         return (
-            f'🚨 NAO calibrado (ECE {ece:.3f}). Exibir esta probabilidade como '
+            f'(!) NAO calibrado (ECE {ece:.3f}). Exibir esta probabilidade como '
             'porcentagem seria mentir para quem le.'
         )

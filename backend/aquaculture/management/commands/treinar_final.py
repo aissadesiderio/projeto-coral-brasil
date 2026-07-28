@@ -38,7 +38,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--calibrar', default='isotonic',
             choices=['nenhuma', 'isotonic', 'sigmoid'],
-            help='Recalibra a probabilidade. Padrao: isotonic — sem isso o '
+            help='Recalibra a probabilidade. Padrao: isotonic - sem isso o '
                  'numero exibido mente (ECE 0,081). Ver docs/RESULTADOS.md §23.',
         )
         parser.add_argument('--semente', type=int, default=42)
@@ -82,14 +82,14 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.MIGRATE_HEADING('\n=== TREINO ==='))
         self.stdout.write(
-            '  ⚠️ Sobre TODOS os dados, sem dobra. Este comando nao mede\n'
-            '     desempenho — para isso existe "treinar_modelo".'
+            '  (!) Sobre TODOS os dados, sem dobra. Este comando nao mede\n'
+            '      desempenho - para isso existe "treinar_modelo".'
         )
 
         calibrar = None if opcoes['calibrar'] == 'nenhuma' else opcoes['calibrar']
         if calibrar is None:
             self.stdout.write(self.style.WARNING(
-                '  🚨 Sem recalibracao: a probabilidade gravada NAO pode ser '
+                '  (!) Sem recalibracao: a probabilidade gravada NAO pode ser '
                 'exibida como porcentagem. Ver docs/RESULTADOS.md §23.'
             ))
         else:

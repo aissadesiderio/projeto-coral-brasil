@@ -700,6 +700,41 @@ Resultados em [docs/RESULTADOS.md](docs/RESULTADOS.md) §11–§14.
 
 ---
 
+## Publicar
+
+Um comando, antes de qualquer deploy:
+
+```bash
+python backend\manage.py preparar_deploy
+```
+
+Ele reconstrói **o que não viaja no `git push`** e confere o resultado:
+
+| # | Passo | Por quê |
+|---|---|---|
+| 1 | `migrate` | sem o schema, nada mais roda |
+| 2 | `treinar_final` | o `.joblib` não é versionado |
+| 3 | `neo4j_projetar` | o grafo é derivado do PostgreSQL |
+| 4 | `exportar_docs` | os `.docx` derivam do Markdown |
+| 5 | `conferir_persistencia` | valida o resultado, não a intenção |
+
+🚨 **Sem ele, um `git clone` seguido de deploy sobe um site sem modelo:**
+`/api/painel-risco/` responde **503** nos três recifes e o grafo vem vazio.
+Nenhum item do checklist falha por isso — é o buraco *entre* eles.
+
+⚠️ **Para no primeiro erro, e sai com código 1.** Um deploy que segue depois de
+um passo quebrado entrega um site meio construído, que é pior do que um que não
+sobe: ele parece ter funcionado.
+
+Opções: `--sem-grafo` (ambiente que só serve a API), `--sem-docs`.
+
+Para conferir sem reconstruir nada — índices, constraints e o tempo das
+consultas quentes, contra o banco real:
+
+```bash
+python backend\manage.py conferir_persistencia
+```
+
 ## Grafo (Neo4j)
 
 O Neo4j é **projeção derivada**: nunca recebe escrita que não venha do

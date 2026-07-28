@@ -4,11 +4,14 @@
 
 Antes de publicar o site, **todos** os itens abaixo devem ser aprovados:
 
-- [ ] Camada de persistência validada com constraints/índices.
+- [x] **Camada de persistência validada com constraints/índices** — ✅ **28/07/2026.** ⚠️ Este item ficou aberto por meses parecendo bloqueado por trabalho que estava rastreado em outro lugar: as duas ressalvas penduradas nele (`Predicao` no grafo, projeção não roda sozinha) **não são sobre constraint nem índice**, e foram movidas para as fases 4.4 e 2.1. O que faltava de verdade era menor e mais concreto — e não existia.
   - [x] **PostgreSQL como fonte única da verdade** — migrado em 25/07/2026: 57.463 objetos vindos do SQLite, incluindo as 57.420 medições, com contagens e distribuição do BAA idênticas. Sobe por `docker-compose.yml` em versão fixa; 181 testes passam contra ele. Decisão e justificativa em [docs/arquitetura.md](docs/arquitetura.md).
   - [x] **Neo4j como projeção derivada** — ✅ **resolvido em 27/07/2026.** `manage.py neo4j_projetar` reconstrói o grafo do zero a partir do PostgreSQL: **57.420 medições, 172.286 elementos em 16 s**, conferidos item a item. Constraints de unicidade criadas de forma idempotente. O critério deste item era *reconstruir do zero e conferir* — é exatamente o que o comando faz, e a conferência roda sozinha ao final. 18 testes. Ver [docs/arquitetura.md](docs/arquitetura.md).
-    - ⚠️ **`Predicao` ainda não entra**: o modelo novo não grava saída em lugar nenhum, e projetar o `StatusPredicao` legado repetiria o erro que este comando veio corrigir.
-    - ⚠️ **A projeção não roda sozinha** — é artefato derivado, e o deploy precisa chamá-la.
+    - ➡️ **`Predicao` não entra no grafo** — movido para a **fase 4.4**. Não é questão de persistência: depende de decidir onde a saída do modelo é gravada, e projetar o `StatusPredicao` legado repetiria o erro que este comando veio corrigir.
+    - ➡️ **A projeção não roda sozinha** — movido para a **fase 2.1**, junto do `.docx` e do `.joblib`. É passo de deploy, não validação de banco.
+  - [x] **Constraints conferidas de verdade** — ✅ 28/07/2026. Até então a `UniqueConstraint` estava **declarada no modelo e nunca testada**: nada verificava que o banco a aplica. Declarar e aplicar são eventos diferentes — a constraint pode não ter migrado, ou ter sido removida por migração posterior, e nada disso aparece até a primeira duplicata chegar, provavelmente numa reingestão. 10 testes novos contra PostgreSQL real, incluindo o caso **deliberado**: a mesma variável de duas fontes no mesmo dia **continua permitida**, porque é o que torna a proveniência por valor possível.
+  - [x] **Índices medidos, e nenhum acrescentado** — ✅ 28/07/2026, contra os 57.420 registros reais: `/api/medicoes/` 1ª página **52 ms**, com filtro **9 ms**, cobertura do catálogo **57 ms**, janela do painel **4 ms**. A tabela cresce 24 linhas/dia; em dez anos são ~145 mil. **Decidido não criar índice para o `ORDER BY`**: custaria escrita em toda ingestão para resolver um problema que a medição diz não existir.
+  - [x] **`manage.py conferir_persistencia`** — ✅ a validação virou reproduzível em vez de afirmação. Confere os índices por **coluna** (e não por nome, que o Django gera com hash e muda a cada migração recriada), mede as consultas quentes contra limite declarado de 500 ms (~10× a pior medição) e confere as 5 constraints do Neo4j. **Sai com código 1 quando falha**, para poder ser portão de deploy. Verificado que detecta índice ausente.
 - [x] Ingestão NOAA/Copernicus rodando localmente com logs e tratamento de falha.
   - [x] **NOAA CRW** — verificado ao vivo em 25/07/2026: 115 medições de Abrolhos (01–23/07, 5 variáveis) gravadas com proveniência por valor, `ExecucaoIngestao` registrando cada tentativa, retentativa de falha passageira, e idempotência confirmada com dado real. Validação física em [docs/FONTES.md](docs/FONTES.md) §9.
   - [x] **Copernicus** — verificado ao vivo em 25/07/2026: backfill de 14.382 medições (salinidade e oxigênio, três locais, 2020-01-01 a 2026-07-24), sem lacuna e sem valor nulo. Emenda reanálise→análise rastreável por valor via `dataset_id`, e corte que impede previsão de entrar como medição. Ver [docs/FONTES.md](docs/FONTES.md) §1.2.
@@ -40,9 +43,55 @@ Antes de publicar o site, **todos** os itens abaixo devem ser aprovados:
 
 O go-live só é autorizado quando o checklist estiver **100% concluído** (todos os itens marcados como `[x]`).
 
+### ✅ O pré-requisito de publicação foi resolvido em 28/07/2026
+
+O texto abaixo foi escrito quando o checklist fechou, e descrevia um bloqueio
+real: não havia passo de deploy. **`manage.py preparar_deploy` existe agora** e
+foi executado com sucesso ponta a ponta. Fica registrado porque o raciocínio
+continua valendo — e porque o comando precisa **rodar**, não apenas existir.
+
+### 🚨 O checklist fechou em 28/07/2026 — e isso ainda não autorizava publicar
+
+Todos os itens estão `[x]`. Pelo critério acima, o go-live estaria liberado.
+**Não está**, e registrar por quê é mais importante que comemorar a marcação.
+
+O checklist verificava se **o sistema está correto**. Ele nunca verificou se
+**o sistema sobe**. São perguntas diferentes, e a segunda tem uma resposta ruim:
+
+> *(Resolvido — mantido como registro do raciocínio.)* Os três artefatos que o site precisa — o modelo `.joblib`, a projeção do
+> Neo4j e a documentação `.docx` — são **derivados e não versionados**. Um
+> `git clone` seguido de deploy produz um site **sem modelo**: o
+> `/api/painel-risco/` responderia **503** em todos os recifes, e o catálogo
+> apareceria vazio.
+
+Isso não é falha de nenhum item — é o buraco entre eles, e é exatamente o tipo
+de coisa que uma lista de verificação não pega, porque cada linha olha para uma
+peça e ninguém olha para a montagem.
+
+**Fica um pré-requisito novo e explícito**, que vale como se fosse item do
+checklist: a **fase 2.1 do roadmap** (passo de deploy que reconstrói os três
+derivados) precisa existir e ter sido executada com sucesso ao menos uma vez
+antes de qualquer publicação.
+
+⚠️ Não marquei isso como item `[x]` pendente para não desfazer o fechamento do
+checklist original, que é legítimo: o que ele se propunha a verificar, ele
+verificou. O que faltava era **um critério que ninguém tinha escrito**.
+
 ## Regra de bloqueio
 
 Se **qualquer** item do checklist falhar, o site deve permanecer **offline**.
+
+O mesmo vale para o pré-requisito acima: **sem o passo de deploy executado, o
+site permanece offline**, mesmo com o checklist inteiro marcado.
+
+Antes de publicar, e depois de cada deploy:
+
+```
+python backend/manage.py conferir_persistencia
+```
+
+Ele sai com código 1 se algum índice, constraint ou consulta quente estiver
+fora do esperado — feito para ser portão, e não relatório.
 
 ---
 
@@ -75,7 +124,7 @@ satélite → ingestão → PostgreSQL → dataset → modelo → artefato → /
 | **Frontend** | ✅ consome o modelo novo nas duas superfícies |
 | Deploy / agendamento / CI | ❌ não existem |
 
-**489 testes de backend + 71 de frontend, todos offline.**
+**513 testes de backend + 71 de frontend, todos offline.**
 
 ## Fase 1 — fechar o último metro (bloqueia o go-live)
 
@@ -102,9 +151,9 @@ Nada aqui bloqueia o go-live *técnico*, e tudo aqui bloqueia o go-live
 
 | # | O quê | Por que |
 |---|---|---|
-| 2.1 | **Passo de deploy que reconstrua os três derivados** | `.docx`, `.joblib` e o grafo são todos não versionados e regeráveis. Quem publicar hoje sobe um site **sem modelo** — a API responderia 503 |
+| 2.1 | **Passo de deploy** | ✅ **28/07** — `manage.py preparar_deploy` roda os cinco passos em ordem, para no primeiro erro e confere o resultado. Executado ponta a ponta: **18,6 s**, exit 0. 14 testes |
 | 2.2 | Agendamento da ingestão | Nada roda sozinho; a série congela no dia do deploy |
-| 2.3 | CI rodando os 560 testes | Eles já pegaram cinco defeitos reais. Fora do CI, dependem de alguém lembrar |
+| 2.3 | CI rodando os 584 testes | Eles já pegaram cinco defeitos reais. Fora do CI, dependem de alguém lembrar |
 | 2.4 | Monitorar `dias_de_atraso` | O campo existe; ninguém olha. É o sinal de ingestão parada |
 
 ## Fase 3 — dívida acumulada
@@ -128,7 +177,7 @@ Independente do site. Pode correr em paralelo.
 | 4.1 | **DOIs dos produtos CMEMS e do ERA5** | ⛔ **bloqueia submissão.** Não bloqueia o site |
 | 4.2 | Declarar §18 e §20 em qualquer texto | Os resultados negativos são **condicionais**; omitir as condições afirma demais |
 | 4.3 | Investigar 2022 | Único ano em que o modelo perde claramente para a persistência |
-| 4.4 | Gravar `Predicao` e projetá-la no grafo | Fecha a travessia de proveniência completa — hoje só metade dela existe |
+| 4.4 | Gravar `Predicao` e projetá-la no grafo ⬅️ *(recebeu a ressalva vinda do item de persistência)* | Fecha a travessia de proveniência completa — hoje só metade dela existe |
 
 ## O que está fechado e não volta
 
@@ -145,6 +194,8 @@ Independente do site. Pode correr em paralelo.
 
 | Data | Alteração |
 |---|---|
+| 28/07/2026 | ✅ **Fase 2.1 — o passo de deploy existe, e ele já pagou o próprio custo.** `manage.py preparar_deploy` roda cinco passos em ordem declarada (schema → modelo → grafo → docs → conferência), **para no primeiro erro** e confere que os artefatos estão no disco. Executado ponta a ponta: **18,6 s**, exit 0. 🚨 **A regra "o deploy precisa rodar isto" estava escrita três vezes e nunca executada** — cada artefato derivado ganhou seu aviso quando foi criado, e três avisos corretos em três lugares somam zero garantia. Rodar pela primeira vez expôs **três defeitos que só existem fora dos testes**: (a) `treinar_final`, `neo4j_projetar` e `calibrar` morriam com `UnicodeEncodeError` por emoji no `stdout` — o console do Windows é cp1252, e a suíte nunca pegou porque captura a saída num buffer UTF-8; (b) o comando aparecia como "falhou" **depois de ter feito todo o trabalho**, o que é o pior sintoma possível; (c) ⚠️ **meu próprio diagnóstico mentia** — eu sugeria "o banco não tem série suficiente" para qualquer falha nos passos de modelo e grafo, e na primeira execução real a causa era encoding. Corrigido para ler o **erro**, e não o passo: é a mesma lição do CDS, *o código do erro não é o diagnóstico, o texto dele é*. Fica um teste que verifica que nenhuma string impressa por comando escapa do cp1252 — verificado que ele pega um emoji injetado, com arquivo, linha e codepoint. 14 testes. |
+| 28/07/2026 | ✅ **Camada de persistência validada — o checklist de go-live fechou, e isso revelou um buraco que ele não cobria.** ⚠️ O item ficou aberto parecendo bloqueado por trabalho já rastreado em outro lugar: as duas ressalvas penduradas nele (`Predicao` no grafo, projeção não roda sozinha) **não são sobre constraint nem índice**, e foram para as fases 4.4 e 2.1. O que faltava de verdade era menor e não existia: 🚨 **a `UniqueConstraint` estava declarada no modelo e nunca testada** — nada verificava que o banco a aplica, e uma constraint que não migrou só aparece na primeira duplicata, provavelmente numa reingestão. 10 testes novos contra PostgreSQL real, incluindo o caso deliberado (mesma variável de duas fontes **continua** permitida, porque é o que torna a proveniência por valor possível). Índices medidos pela primeira vez contra os 57.420 registros: 4 a 57 ms. **Decidido não criar índice para o `ORDER BY`** — custaria escrita em toda ingestão para resolver problema que a medição diz não existir. E a validação virou reproduzível: `manage.py conferir_persistencia` confere índices **por coluna** (não por nome, que o Django gera com hash), mede as consultas contra limite de 500 ms e confere as 5 constraints do Neo4j, saindo com código 1 quando falha. 🚨 **Com o checklist 100% marcado, ficou visível que ele nunca verificou se o sistema *sobe*, só se está *correto*:** os três artefatos derivados não são versionados, então `git clone` + deploy hoje produz um site **sem modelo**, com `/api/painel-risco/` em 503. Registrado como pré-requisito explícito de publicação, porque é o buraco *entre* os itens — o tipo de coisa que lista de verificação não pega. |
 | 28/07/2026 | ✅ **Variáveis canônicas aprovadas — o último item da fase 1.** Auditado nos dois sentidos, e a boa notícia veio primeiro: **nenhuma inconsistência interna** entre `MAPA_COLUNAS`, `UNIDADES` e `VARIAVEL_CHOICES`, e nenhuma variável no banco fora do contrato. As quatro conferências viraram teste, porque nenhuma delas falha na hora — falham com `KeyError` no meio de uma gravação, ou com o banco recusando a linha **depois** de a rede já ter sido consultada. 🚨 **Um defeito real, e do tipo mais difícil de ver:** `thetao` (temperatura potencial a **13,47 m**) e `CRW_SST` (superfície) traduziam para o **mesmo** nome canônico. [FONTES.md](docs/FONTES.md) §6.10 já registrava a mistura de profundidades como problema do acervo — o vocabulário a **codificava**, que é onde ela fica mais difícil de perceber. Nunca foi ingerido, então era armadilha dormente. Removido, e movido para `COLUNAS_RECUSADAS` em vez de apagado: desconhecida devolve `None` em silêncio, recusada levanta com o motivo. Segunda decisão: `clorofila`, `kd490` e `par` **ficam**, porque os três foram avaliados e rejeitados por razão medida e apagar apagaria essa memória — mas agora com motivo em `SEM_DADO` e **teste exigindo motivo para todo canônico sem conector**. Corrigidos também dois parágrafos do contrato que eram **falsos** desde 25–27/07 (diziam que a pipeline NOAA/Copernicus não estava implementada e que o grafo derivava de `StatusPredicao`). Um teste meu falhou primeiro por esquecer que `baa_area_alerta` é **derivada** no conector e não vem do ERDDAP. 8 testes novos. |
 | 27/07/2026 | ✅ **Limiar de alerta decidido: 0,10** — o penúltimo item aberto da fase 1. `manage.py limiar` varre 19 cortes sobre as predições fora da dobra e traduz tudo para *dias de alarme falso por ano e por recife*. ⚠️ **Uma conclusão minha caiu no meio do caminho:** eu havia escrito que "0,20 é dominado por 0,30" olhando só episódios e alarme falso; ao medir **quando** o aviso chega, o domínio some — entre 0,20 e 0,30 os avisados no 1º dia caem de 16/20 para 13/20. Fica o aviso de método: patamar em métrica agregada esconde movimento no que ela não mede. Critério declarado da decisão: **priorizar antecedência** — para um público que age sobre o aviso, chegar tarde é quase o mesmo que não chegar. 0,10 compra o episódio de **nove dias** de Picãozinho em 2022 e o aviso no 1º dia em 18/20; custa 6,3 dias a mais de alarme falso por ano e por recife. 🚨 Registrado que a decisão **não resolve o teto**: um episódio (Picãozinho, 21–23/04/2026) escapa em **todos** os limiares — isso é do modelo, e continua aberto. E que o 0,20 anterior nunca havia sido escolhido: era herança do `0,50` do `predict` sob `class_weight`. 19 testes. |
 | 27/07/2026 | ✅ **Endpoints estáveis fechados — e o último trouxe o quarto caso da mesma regra.** ⚠️ Começa com uma correção minha: eu havia registrado que o endpoint `banco-de-dados` *"ainda não existe"*, **sem verificar**. Ele existe (`/api/datasets/`) desde antes. O defeito real era outro e mais grave: 🚨 **o catálogo anunciava 9 conjuntos e a API servia 3** — pH, clorofila, nitrato, `thetao`, KD490 e o SST do Met Office apareciam com título, formato, período e tamanho **sem uma única medição no banco**, indistinguíveis dos reais. E `noaa_crw_dhw` declarava fim em 2025-11-30 com a série já em 2026-07-24: anunciando dado inexistente e **escondendo dado existente** ao mesmo tempo. A causa é a mesma que já cobrou preço três vezes — **cobertura estava gravada**, e cópia guardada envelhece em silêncio. Agora é derivada do banco a cada resposta, e cada número vem com **`consulta`**, a URL que o comprova (conferida nos três: o `count` bate). Na tela, três estados que não se implicam: *disponível*, *referência externa* e *não verificada*. Fecha o item pai, e com ele um padrão: em **dois dos três** endpoints o problema não era faltar, era servir a coisa errada com aparência de certa. ⚠️ Efeito colateral registrado: **apagar `backend/dados/` esvazia a página do catálogo** (fase 3.2). 29 testes. |

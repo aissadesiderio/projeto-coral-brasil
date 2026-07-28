@@ -3,7 +3,7 @@
 Substitui o `neo4j_seed`, que derivava os nos de `StatusPredicao` — o modelo
 legado, com 3 registros. As 57.420 medicoes reais nunca estiveram no grafo.
 
-⚠️ **Sentido unico.** O Neo4j e projecao derivada: nunca recebe escrita que nao
+(!) **Sentido unico.** O Neo4j e projecao derivada: nunca recebe escrita que nao
 venha do PostgreSQL. Se divergir ou for perdido, rode este comando de novo.
 Ver docs/arquitetura.md.
 """
@@ -79,7 +79,7 @@ class Command(BaseCommand):
         self.stdout.write(f'\n  {resultado.resumo()} em {decorrido:.0f}s')
 
         for aviso in resultado.avisos:
-            self.stdout.write(self.style.WARNING(f'  ⚠️ {aviso}'))
+            self.stdout.write(self.style.WARNING(f'  (!) {aviso}'))
 
         self.stdout.write(self.style.MIGRATE_HEADING('\n=== CONFERINDO ==='))
         self._conferir()
@@ -106,7 +106,7 @@ class Command(BaseCommand):
 
         if orfas:
             self.stdout.write(self.style.ERROR(
-                f'\n  🚨 {orfas:,} medicoes sem PROVENIENTE_DE. '
+                f'\n  (!) {orfas:,} medicoes sem PROVENIENTE_DE. '
                 'Proveniencia por valor e a razao de o grafo existir.'
             ))
             divergiu = True
@@ -118,5 +118,5 @@ class Command(BaseCommand):
             ))
         else:
             self.stdout.write(self.style.SUCCESS(
-                '\n  ✅ O grafo confere com o PostgreSQL, item a item.'
+                '\n  [ok] O grafo confere com o PostgreSQL, item a item.'
             ))
