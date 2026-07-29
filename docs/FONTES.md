@@ -651,17 +651,56 @@ guardado "por precaução" é só um convite a alguém usá-lo sem ler a ressalv
 ⚠️ **Nenhum estava no Git** — a remoção é definitiva, sem histórico para
 recuperar. Foi confirmada explicitamente antes de executar.
 
-#### O que **não** foi apagado, e por quê
+#### Os 7 órfãos: abertos um a um, e então removidos
 
-| Grupo | MB | Situação |
+Eram arquivos que não estavam **nem** catalogados **nem** declarados
+defeituosos — ninguém os tinha aberto. Como a §6.14 deixou a regra de não
+decidir sobre arquivo pelo nome, cada um foi lido antes de sair:
+
+| Arquivo | Contém | Veredito |
 |---|---|---|
-| Os 9 arquivos catalogados | 80,0 | apagá-los **esvazia a página "Banco de Dados"** (§6.20); é decisão de produto, não faxina |
-| 7 arquivos órfãos | 1,8 | nem catalogados nem declarados defeituosos — **não documentados**, e por isso não removidos |
+| `..._bgc-car_...291619.csv` | `ph` | **duplicata de valor** do pH catalogado: MD5 diferente pelo cabeçalho, mas os **1.501 valores são idênticos** |
+| `clorofila_recente.csv` | `chl` | produto de **análise** contra a reanálise de `clorofila.csv`; sobrepõem 1.501 datas, diferença até **0,0044** |
+| `nitrato_recente.csv` | `no3` | idem; 1.430 datas, diferença até **0,235 mmol/m³** |
+| `..._bgc-car_...196586.csv` | `dissic` | carbono inorgânico dissolvido — sem nome canônico |
+| `..._bgc-bio_...434573.csv` | `nppv` | produtividade primária — nunca avaliada |
+| `..._bgc-co2_...112534.csv` | `spco2` | pCO₂ de superfície — nunca avaliada |
+| `..._phy_...183519.csv` | `thetao` horário | temperatura a **13,47 m**, recusada do vocabulário em 28/07 |
 
-Os órfãos são um achado por si: `nitrato_recente.csv`, `clorofila_recente.csv`
-e cinco exportações `cmems_mod_glo_*`. Eles existem, ninguém os declara, e
-ninguém os usa. Apagar sem entender repetiria em pequena escala o erro que a
-§6.14 registra — decidir sobre arquivo pelo nome, sem abrir.
+⚠️ **Os dois `_recente` confirmam a §6.11 com número.** Não eram duplicatas:
+são o produto de **análise** ao lado do de **reanálise**, e para a mesma data e
+o mesmo ponto o nitrato diverge em até **0,235 mmol/m³**. Essa medição é o que
+valia guardar — não os arquivos. Ela está aqui; eles não estão mais.
+
+Todos entraram em `inventario_datasets.EXCLUIDOS` com o motivo **antes** de
+serem apagados. Total: mais 1,8 MB.
+
+#### O que **não** foi apagado
+
+Os **9 arquivos catalogados** (78 MB). Apagá-los **esvazia a página "Banco de
+Dados"** (§6.20) — é decisão de produto, não faxina.
+
+A pasta saiu de **251 MB para 78 MB**, e o que sobrou é exatamente o que a
+página inventaria.
+
+#### Três comandos legados removidos junto
+
+| Comando | Por quê |
+|---|---|
+| `carregar_historico` | lia os CSVs apagados e o `.pkl` removido, e fazia `StatusPredicao.objects.all().delete()` antes de cada carga |
+| `coleta_de_dados` | buscava dados e **descartava** o resultado; substituído por `ingerir` |
+| `backend/ml_models/treinar_modelo.py` | o treinador legado, com os marcadores `[cite: N]` da §6.3 — não confundir com `manage.py treinar_modelo`, que é novo e não tem relação |
+
+⚠️ **As docstrings do código atual continuam citando o
+`carregar_historico.py`**, e isso é proposital: elas explicam *por que* a
+validação física recusa zero, *por que* a persistência é idempotente, *por que*
+o DHW não é recalculado. O arquivo saiu; a razão de o código atual ser como é
+não sai com ele.
+
+Ficam de pé dois comandos legados que **não** foram removidos por terem
+dependências: `neo4j_seed` (usado por `db/setup_graph.py` e por dois testes) e
+`gerar_relatorio` (gera gráficos a partir de `StatusPredicao`, e pode servir ao
+texto do TCC).
 
 ### 6.20 O catálogo anunciava nove conjuntos; a API servia três — ✅ RESOLVIDO em 27/07/2026
 

@@ -252,6 +252,42 @@ EXCLUIDOS = {
     'dhw_5km_6006_cdf9_04d9.csv': 'Duplicata byte-a-byte de dhw.csv.',
     'turbidez_recente.csv': 'Duplicata byte-a-byte de turbidez.csv.',
     'salinidade_recente.csv': 'Contem sob (salinidade no fundo), nao em superficie.',
+
+    # --- acrescentados em 28/07/2026, ao auditar os arquivos orfaos ---------
+    #
+    # Estes sete existiam sem estar nem catalogados nem excluidos: ninguem os
+    # tinha aberto. A regra que a secao 6.14 deixou e clara — nao se decide
+    # sobre arquivo pelo nome —, entao cada um foi lido antes de sair.
+    'cmems_mod_glo_bgc-car_anfc_0.25deg_P1D-m_1764629291619.csv': (
+        'Duplicata de valor do arquivo de pH ja catalogado (..._1764629137159): '
+        'MD5 diferente pelo cabecalho, mas os 1.501 valores sao identicos em '
+        'todas as datas.'
+    ),
+    'clorofila_recente.csv': (
+        'Produto de analise, enquanto clorofila.csv e reanalise. Sobrepoem '
+        '1.501 datas com diferenca de ate 0,0044 mg/m3 - nao e duplicata, e a '
+        'mistura que a secao 6.11 registra. Nenhum dos dois entra no modelo.'
+    ),
+    'nitrato_recente.csv': (
+        'Mesmo caso: analise contra a reanalise de nitrato.csv, sobrepondo '
+        '1.430 datas com diferenca de ate 0,235 mmol/m3 - divergencia grande '
+        'para a mesma data e o mesmo ponto. Ver secao 6.11.'
+    ),
+    'cmems_mod_glo_bgc-car_anfc_0.25deg_P1D-m_1764629196586.csv': (
+        'Contem dissic (carbono inorganico dissolvido), variavel que o projeto '
+        'nao usa e que nao tem nome canonico.'
+    ),
+    'cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m_1764629434573.csv': (
+        'Contem nppv (produtividade primaria liquida), nunca avaliada.'
+    ),
+    'cmems_mod_glo_bgc-co2_anfc_0.25deg_P1D-m_1764629112534.csv': (
+        'Contem spco2 (pressao parcial de CO2 na superficie), nunca avaliada.'
+    ),
+    'cmems_mod_glo_phy_anfc_0.083deg_PT1H-m_1764628183519.csv': (
+        'Contem thetao horario a 13,47 m. O vocabulario canonico recusa thetao '
+        'desde 28/07/2026 justamente por nao ser temperatura de superficie - '
+        'ver ingestao/normalizacao.py::COLUNAS_RECUSADAS.'
+    ),
 }
 
 
