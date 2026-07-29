@@ -15,6 +15,7 @@ encaixam, sem pressupor oceanografia nem aprendizado de máquina.
 
 | Documento | Conteúdo |
 |---|---|
+| [docs/MANUAL.md](docs/MANUAL.md) | **Como rodar.** Do zero até o site aberto, passo a passo, com o que deve aparecer em cada etapa e o que fazer quando não aparece |
 | [docs/VISAO_GERAL.md](docs/VISAO_GERAL.md) | **Porta de entrada.** O projeto explicado do início: branqueamento, DHW, BAA, o caminho do dado e o que falta |
 | [docs/FONTES.md](docs/FONTES.md) | Toda fonte de dados: origem, licença, citação e problemas de proveniência conhecidos |
 | [docs/VARIAVEIS.md](docs/VARIAVEIS.md) | Por que cada variável entra ou fica de fora do modelo |
@@ -554,9 +555,17 @@ versionados** — um clone novo começa com o catálogo vazio até rodar a inges
 
 ## Testes
 
+⚠️ **De dentro de `backend/`, e não da raiz.** O `manage.py test` descobre os
+testes a partir do diretório atual: da raiz ele encontra **zero** e imprime
+`NO TESTS RAN` — saindo com sucesso, o que passa por "tudo passou". Verificado
+em 29/07/2026; até então este README documentava a forma que não roda nada.
+
 ```bash
-python backend\manage.py test
+cd backend
+python manage.py test
 ```
+
+São 527 testes, ~90 s, terminando em `OK (skipped=1)`.
 
 ```bash
 cd frontend
