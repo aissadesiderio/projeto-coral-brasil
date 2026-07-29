@@ -1,0 +1,111 @@
+# Roda os testes a cada push e a cada pull request.
+#
+# Por que existe: os 527 testes de backend e 71 de frontend ja pegaram sete
+# defeitos reais nesta reconstrucao — a lista passada ao driver do Neo4j que era
+# esvaziada antes do uso, a calibracao que dava "perfeito" no pior caso, a
+# quebra de contrato disfarcada de configuracao. Fora do CI, todos eles dependem
+# de alguem lembrar de rodar `manage.py test`.
+#
+# O que este arquivo NAO faz, e por que:
+#
+# - **Nao sobe o Neo4j.** Medido em 28/07/2026: a suite inteira passa com ele
+#   desligado, porque os testes de projecao injetam uma conexao falsa. Subir um
+#   servico que nada usa custaria ~40 s por execucao para nao verificar nada.
+# - **Nao roda a ingestao.** Ela depende de rede e de credencial do Copernicus;
+#   um CI que falha porque um servidor externo caiu treina todo mundo a ignorar
+#   o vermelho.
+# - **Nao faz deploy.** Publicar exige `preparar_deploy` num servidor com banco
+#   populado. Automatizar isso antes de existir ambiente de producao seria
+#   automatizar um passo que ninguem executou a mao ainda.
+
+name: testes
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: coral_brasil
+          POSTGRES_USER: coral
+          POSTGRES_PASSWORD: coral_ci
+          # A mesma locale do docker-compose.yml, e pelo mesmo motivo: sem ela
+          # o initdb usa a da imagem e a ordenacao de texto muda entre
+          # maquinas. O mesmo ORDER BY devolveria ordem diferente no CI e no
+          # laptop, e o teste de paginacao que confere "nao repete nem pula
+          # linha" acusaria um defeito que nao existe.
+          POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+        ports: ['5432:5432']
+        # Sem o healthcheck, o passo de teste comeca antes de o banco aceitar
+        # conexao: o container existe antes de o servico responder.
+        options: >-
+          --health-cmd "pg_isready -U coral -d coral_brasil"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgres://coral:coral_ci@localhost:5432/coral_brasil
+      # Chave descartavel, valida so dentro desta execucao. Nao e segredo: o
+      # CI nao serve requisicao nenhuma, e uma chave real aqui seria uma chave
+      # real num log publico.
+      DJANGO_SECRET_KEY: ci-descartavel-nao-usar-em-producao
+      DJANGO_DEBUG: 'True'
+      OFFLINE_MODE: 'True'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Conferir migracoes pendentes
+        # Um modelo alterado sem `makemigrations` passa nos testes e quebra no
+        # deploy, onde `migrate` nao encontra a coluna. Falha aqui e barata.
+        run: python backend/manage.py makemigrations --check --dry-run
+
+      - name: Testes
+        run: python backend/manage.py test backend --verbosity=2
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci
+
+      - name: Testes
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: npx react-scripts test --watchAll=false
+
+      - name: Build
+        working-directory: frontend
+        env:
+          # Com CI=true o build trata aviso como erro. E deliberado: import nao
+          # usado e variavel morta sao exatamente o rastro que uma refatoracao
+          # pela metade deixa.
+          CI: 'true'
+        run: npx react-scripts build

@@ -653,8 +653,8 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Passo de deploy que reconstrua os derivados** | São **três** agora, todos não versionados: o `.docx`, o `.joblib` e o grafo do Neo4j. Quem publicar precisa rodar os três comandos, e esse passo não existe |
 | **Aprovar o limiar de alerta** | 0,20 está em `settings.PAINEL_LIMIAR` porque é o ponto equivalente ao antigo 0,50 — não porque alguém escolheu a troca entre alarme falso e evento perdido |
 | **Variáveis canônicas aprovadas** | item de go-live ainda aberto |
-| **Apagar `backend/dados/`** | ~260 MB de CSV legado que nada lê, incluindo os arquivos defeituosos de [FONTES.md](FONTES.md) §6 |
-| **Apagar `backend/ml_models/modelo_coral_rf.pkl`** | o modelo legado que predizia `0.0` para tudo, ainda no repositório |
+| **Apagar os 9 CSVs ainda catalogados** | ⚠️ **Decisão pendente, não faxina.** Os 7 arquivos defeituosos (179,9 MB) foram apagados em 28/07/2026; sobram 80 MB que a página "Banco de Dados" inventaria. Apagá-los **esvazia a página** — ver [FONTES.md](FONTES.md) §6.21 |
+| **Os 7 arquivos órfãos** | 1,8 MB que não estão catalogados **nem** declarados defeituosos. Não documentados, e por isso não apagados |
 | **DOIs dos produtos CMEMS** | bloqueia submissão, não o site |
 | **Agendamento** | nada roda sozinho ainda |
 | **CI** | não existe |

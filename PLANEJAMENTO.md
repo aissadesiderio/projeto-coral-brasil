@@ -162,8 +162,8 @@ Barata de resolver, e cresce em silêncio.
 
 | # | O quê | Tamanho |
 |---|---|---|
-| 3.1 | Apagar `backend/ml_models/modelo_coral_rf.pkl` | O modelo legado que predizia `0.0` para tudo. **Perigoso enquanto existir** |
-| 3.2 | Apagar `backend/dados/` | ~260 MB de CSV que nada lê. ⚠️ **Não é mais uma exclusão livre:** a regra 2 do inventário desativa registro sem arquivo, então apagar a pasta **esvazia a página do catálogo**. Decidir antes, não descobrir depois ([FONTES.md](docs/FONTES.md) §6.20) |
+| 3.1 | Apagar o `.pkl` legado | ✅ **28/07** — removido via `git rm`, então recuperável pelo histórico. Era o que predizia `0.0` para tudo |
+| 3.2 | Limpar `backend/dados/` | 🟡 **parcial, 28/07** — apagados os **7 declarados defeituosos: 179,9 MB, 72% da pasta**, sem perder conhecimento (o motivo de cada um está no [FONTES.md](docs/FONTES.md) §6). Restam 80 MB catalogados, cuja remoção **esvazia a página** — decisão separada. E 1,8 MB de órfãos não documentados |
 | 3.3 | **Aposentar `/api/monitoramento/`** | ⬆️ **Desbloqueado em 27/07:** o frontend migrou (1.1) e não consome mais. O endpoint e o `StatusPredicao` continuam de pé, servindo 3 registros de um modelo que não é mais o do projeto — agora é só armadilha |
 | 3.5 | Limpar a camada legada de `utils/recifes.js` | `possuiPainelCompleto`, `obterMetaRisco` e os campos `risco_atual`/`nivel_alerta` ficaram órfãos quando o cartão migrou. `RISCO_STATUS` tem quatro níveis que o modelo atual não produz |
 | 3.4 | Resolver os `[cite: N]` de `treinar_modelo.py` | Seis referências apontando para um documento não identificado |

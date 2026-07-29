@@ -628,6 +628,41 @@ Em 17/05/2024 a nova regra grava BAA 4 e `baa_area_alerta` = 115/121 = **0,950**
 
 A ingestão sofreu 10 `ReadTimeout` do PACIOOS, todos absorvidos pela retentativa. Nenhum bloco perdido.
 
+### 6.21 Os arquivos defeituosos foram apagados — ✅ 28/07/2026
+
+Os sete arquivos que as seções anteriores declaram inutilizáveis foram
+removidos do disco. **179,9 MB, 72% da pasta `backend/dados/`.**
+
+| Arquivo | MB | Por quê (seção) |
+|---|---|---|
+| `dhw_5km_6006_cdf9_04d9.csv` | 78,8 | duplicata byte-a-byte de `dhw.csv` |
+| `par.csv` | 58,6 | coordenadas com separador de milhar, não georreferenciáveis (§6.13) |
+| `NOAA_DHW_monthly_...csv` | 42,3 | coordenadas no Mar Vermelho (§6) |
+| `ph.csv` | 0,1 | contém alcalinidade, não pH (§6.14) |
+| `par_recente.csv` | 0,1 | campo de incerteza, não a medida (§6.12) |
+| `salinidade_recente.csv` | 0,1 | salinidade de fundo, não superfície (§6.10) |
+| `turbidez_recente.csv` | 0,0 | duplicata byte-a-byte |
+
+**O que justifica apagar sem perda: o conhecimento sobre eles não estava
+neles.** Está aqui, e em `inventario_datasets.EXCLUIDOS`, que continua listando
+os sete com o motivo mesmo depois de os arquivos sumirem. Um arquivo defeituoso
+guardado "por precaução" é só um convite a alguém usá-lo sem ler a ressalva.
+
+⚠️ **Nenhum estava no Git** — a remoção é definitiva, sem histórico para
+recuperar. Foi confirmada explicitamente antes de executar.
+
+#### O que **não** foi apagado, e por quê
+
+| Grupo | MB | Situação |
+|---|---|---|
+| Os 9 arquivos catalogados | 80,0 | apagá-los **esvazia a página "Banco de Dados"** (§6.20); é decisão de produto, não faxina |
+| 7 arquivos órfãos | 1,8 | nem catalogados nem declarados defeituosos — **não documentados**, e por isso não removidos |
+
+Os órfãos são um achado por si: `nitrato_recente.csv`, `clorofila_recente.csv`
+e cinco exportações `cmems_mod_glo_*`. Eles existem, ninguém os declara, e
+ninguém os usa. Apagar sem entender repetiria em pequena escala o erro que a
+§6.14 registra — decidir sobre arquivo pelo nome, sem abrir.
+
 ### 6.20 O catálogo anunciava nove conjuntos; a API servia três — ✅ RESOLVIDO em 27/07/2026
 
 Descoberto ao verificar se o endpoint `banco-de-dados` do checklist de go-live
@@ -976,6 +1011,7 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 28/07/2026 | **§6.21 — os arquivos defeituosos foram apagados, e um comando que não existia foi construído.** Removidos os **7 arquivos declarados inutilizáveis: 179,9 MB, 72% da pasta**. O que justifica apagar sem perda é que **o conhecimento sobre eles nunca esteve neles** — está nesta seção e em `inventario_datasets.EXCLUIDOS`, que continua listando os sete com o motivo depois de os arquivos sumirem. ⚠️ Nenhum estava no Git: remoção definitiva, confirmada antes. Mantidos os 9 catalogados (apagá-los esvazia a página, é decisão de produto) e os **7 órfãos** — nem catalogados nem declarados defeituosos, ou seja **não documentados**, e apagá-los sem entender repetiria em pequena escala o erro da §6.14. Removido também o `.pkl` legado que predizia `0.0` para tudo, via `git rm` (recuperável). 🚨 **Achado maior no caminho: `manage.py treinar_modelo` nunca existiu.** O README ensinava a rodá-lo, o `treinar_final` mandava usá-lo e o aviso de envelhecimento da rotina diária apontava para ele — confusão com o arquivo legado `backend/ml_models/treinar_modelo.py`, de mesmo nome. A falta importava porque a decisão de **não retreinar automaticamente** se apoia em "medir é ato deliberado", e não havia como medir sem escrever Python. Construído sobre o código que já existia e era testado. |
 | 27/07/2026 | 🚨 **§6.20 criada — o catálogo anunciava nove conjuntos e a API servia três.** Descoberto ao verificar se o endpoint `banco-de-dados` do checklist existia: ele existia, e o problema era outro. **Seis dos nove datasets não têm uma única linha em `MedicaoAmbiental`** — pH, clorofila, nitrato, `thetao`, KD490 e o SST do Met Office apareciam na página com título, formato, período e tamanho, indistinguíveis dos três reais. Nenhum é invenção (ao contrário da §6.14): os arquivos existem em `backend/dados/` e o inventário lê deles. **O erro não era número nenhum** — era a página não dizer que *"período do arquivo em disco"* e *"até quando a API tem dado"* são perguntas diferentes. E os dois divergem no pior sentido: `noaa_crw_dhw` declarava fim em **2025-11-30** enquanto a série no banco vai a **2026-07-24**, ou seja o catálogo ao mesmo tempo anunciava dado inexistente e **escondia dado existente**. A causa é estrutural: cobertura estava **gravada**, e cópia guardada envelhece em silêncio — quarta vez que essa mesma regra cobra o preço, depois do `.docx`, do `.joblib` e do grafo. Agora é derivada a cada resposta em `aquaculture/cobertura.py`. Cada número anunciado vem com **`consulta`, o recibo**: a URL do `/api/medicoes/` que devolve exatamente aquilo, conferida nos três. Na tela, três estados que não se implicam: *disponível*, *referência externa* e *não verificada* — o terceiro porque afirmar ausência a partir de silêncio seria o mesmo erro invertido. ⚠️ Fica registrado o efeito colateral: **apagar `backend/dados/` esvazia a página do catálogo**, porque a regra 2 do inventário desativa registro sem arquivo. Isso precisa ser decidido, não descoberto. 29 testes. |
 | 24/07/2026 | Criação do documento. Auditoria inicial de proveniência dos 19 CSVs, das imagens e das referências: 15 problemas registrados na §6. |
 | 24/07/2026 | Fase A do roadmap. Adicionadas coordenadas aos três locais de recife (§2.3) — duas delas aproximadas e pendentes de verificação. `django-environ` incluída na §5. |
