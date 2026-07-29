@@ -76,9 +76,11 @@ export default function LocalRecifePage({
         />
 
         {/* O proprio painel decide o que mostrar em cada estado — inclusive
-            quando falta dado. O portao anterior (`possuiPainelCompleto`) exigia
-            sete campos do modelo legado, dois deles de variaveis que o projeto
-            nem coleta mais, e por isso nunca liberava com dado real. */}
+            quando falta dado. O portao anterior exigia sete campos do modelo
+            legado, dois deles de variaveis que o projeto nem coleta (`par` e
+            `kd490`), e por isso nunca liberava com dado real. Aquela funcao
+            (`possuiPainelCompleto`) foi removida em 28/07/2026 junto com o
+            resto da camada legada. */}
         <PainelPredicao slug={recife.slug} publicOffline={siteOffline} />
       </section>
 

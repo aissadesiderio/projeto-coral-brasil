@@ -1,4 +1,3 @@
-import { CAMPOS_MONITORAMENTO_OBRIGATORIOS, RISCO_STATUS } from '../config/monitoramentoConfig';
 import { FALLBACK_DETALHES, FALLBACK_RECIFES } from '../data/recifeData';
 
 function normalizarNumero(valor) {
@@ -31,20 +30,6 @@ function normalizarEspecie(especie, index) {
     id: especie.id ?? especie.nome_cientifico ?? especie.nome_comum ?? `especie-${index}`,
     foto_url: especie.foto_url || '',
   };
-}
-
-export function obterMetaRisco(nivelAlerta) {
-  return RISCO_STATUS[nivelAlerta] || RISCO_STATUS.SEM_RISCO;
-}
-
-export function possuiPainelCompleto(monitoramento) {
-  if (!monitoramento) {
-    return false;
-  }
-
-  return CAMPOS_MONITORAMENTO_OBRIGATORIOS.every(
-    (campo) => monitoramento[campo] !== null && monitoramento[campo] !== undefined,
-  );
 }
 
 export function combinarLocais(apiLocais = []) {
@@ -196,33 +181,3 @@ export function obterQuantidadeEspeciesLocal(local) {
   return local.quantidade_especies ?? local.informacoes_disponiveis ?? especiesFallback ?? 0;
 }
 
-export function obterMonitoramentoLocal(local) {
-  return (
-    normalizarPredicao(local.monitoramento_recente) ||
-    normalizarPredicao(FALLBACK_DETALHES[local.slug]?.monitoramento_recente) ||
-    null
-  );
-}
-
-export function obterNivelAlertaLocal(local) {
-  return (
-    local.nivel_alerta_atual ||
-    local.monitoramento_recente?.nivel_alerta ||
-    local.nivel_alerta ||
-    obterMonitoramentoLocal(local)?.nivel_alerta ||
-    'SEM_RISCO'
-  );
-}
-
-export function obterValorRiscoAtualLocal(local) {
-  return (
-    normalizarNumero(local.risco_atual) ??
-    normalizarNumero(local.monitoramento_recente?.risco_integrado) ??
-    normalizarNumero(obterMonitoramentoLocal(local)?.risco_integrado) ??
-    null
-  );
-}
-
-export function obterRiscoAtualLocal(local) {
-  return obterValorRiscoAtualLocal(local);
-}
