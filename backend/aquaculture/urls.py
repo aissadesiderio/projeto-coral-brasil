@@ -14,10 +14,9 @@ urlpatterns = [
     ),
     path('especies/', views.EspecieList.as_view(), name='especie_list'),
     path('especies/<int:pk>/', views.EspecieDetail.as_view(), name='especie_detail'),
-    path('monitoramento/', views.StatusPredicaoList.as_view(), name='monitoramento_list'),
-    # A serie ambiental de verdade. O `monitoramento/` acima devolve
-    # `StatusPredicao`, o modelo legado com 3 registros, e fica no ar so
-    # enquanto o frontend nao migrar.
+    # A serie ambiental. Substituiu o `monitoramento/`, removido em
+    # 28/07/2026: aquele devolvia `StatusPredicao`, o modelo legado com 3
+    # registros de demonstracao.
     path('medicoes/', views.MedicaoAmbientalList.as_view(), name='medicao_list'),
     # O unico endpoint que faz conta: carrega o modelo persistido e responde
     # probabilidade. Todos os outros servem linha guardada.

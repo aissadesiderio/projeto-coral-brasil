@@ -12,7 +12,6 @@ from .models import (
     Especie,
     LocalRecife,
     MedicaoAmbiental,
-    StatusPredicao,
 )
 from .paginacao import PaginacaoPadrao
 from .neo4j_service import (
@@ -26,7 +25,6 @@ from .serializers import (
     LocalRecifeDetailSerializer,
     LocalRecifeListSerializer,
     MedicaoAmbientalSerializer,
-    StatusPredicaoSerializer,
 )
 
 MENSAGEM_OFFLINE = (
@@ -81,19 +79,6 @@ class LocalRecifeDetail(OfflineModeMixin, generics.RetrieveAPIView):
 
     def get_queryset(self):
         return LocalRecife.objects.filter(ativo=True).prefetch_related('especies', 'monitoramentos')
-
-
-class StatusPredicaoList(OfflineModeMixin, generics.ListAPIView):
-    serializer_class = StatusPredicaoSerializer
-
-    def get_queryset(self):
-        queryset = StatusPredicao.objects.select_related('local_recife').order_by('-data')
-        local_slug = self.request.query_params.get('local')
-        if local_slug:
-            queryset = queryset.filter(
-                Q(local_recife__slug=local_slug) | Q(local_recife__isnull=True)
-            )
-        return queryset
 
 
 class CoberturaNoContextoMixin:

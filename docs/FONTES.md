@@ -697,10 +697,61 @@ validação física recusa zero, *por que* a persistência é idempotente, *por 
 o DHW não é recalculado. O arquivo saiu; a razão de o código atual ser como é
 não sai com ele.
 
-Ficam de pé dois comandos legados que **não** foram removidos por terem
-dependências: `neo4j_seed` (usado por `db/setup_graph.py` e por dois testes) e
-`gerar_relatorio` (gera gráficos a partir de `StatusPredicao`, e pode servir ao
-texto do TCC).
+#### 🚨 O `gerar_relatorio` produzia um relatório executivo falso
+
+Eu o tinha poupado supondo que servisse ao texto do TCC. Rodei antes de decidir,
+e o que ele escreve em `relatorios_gerados/RELATORIO_EXECUTIVO.txt` é:
+
+```
+RELATÓRIO EXECUTIVO (2020 - 2025)
+PROJETO CORAL BRASIL - ABROLHOS
+
+1. ESCOPO DO RELATÓRIO
+Período: 10/04/2026 a 15/04/2026 (3 dias)
+
+3. SITUAÇÃO ATUAL (15/04/2026)
+Temp. Superfície: 29.00°C
+Luz Bentônica:    30.4 (µmol/m²/s)
+Turbidez (Kd):    0.220
+RISCO HOJE:       69.0%
+```
+
+Cinco defeitos num arquivo de 900 bytes, e **nenhum deles gera erro**:
+
+| O que diz | O que é |
+|---|---|
+| "2020 – 2025" no título | os dados são de **abril de 2026** |
+| "Período: 3 dias" | contradiz o próprio título, na linha seguinte |
+| "SITUAÇÃO ATUAL" / "RISCO HOJE" | dado de **três meses e meio atrás** |
+| "PROJETO CORAL BRASIL — **ABROLHOS**" | as 3 linhas são de **três recifes diferentes**, tratadas como uma série |
+| "Luz Bentônica" e "Turbidez" | variáveis com **zero linhas** no banco (§6.21) |
+
+E ele termina imprimindo *"Relatório 2020-2025 gerado com sucesso!"*.
+
+**Removido.** É o oposto exato do que este projeto declara fazer: em vez de
+recusar-se a mostrar um número que não sustenta, ele monta um documento com
+aparência oficial a partir de três linhas de demonstração — e chama de sucesso.
+Um `.txt` desses circulando é pior que nenhum relatório, porque parece resultado.
+
+#### `/api/monitoramento/`, `neo4j_seed` e `setup_graph` também saíram
+
+| Removido | Por quê |
+|---|---|
+| `/api/monitoramento/` | servia os 3 registros de `StatusPredicao`; o frontend migrou para `/api/painel-risco/` em 27/07 |
+| `neo4j_seed` | derivava o grafo de `StatusPredicao`; substituído por `neo4j_projetar`, que deriva do PostgreSQL |
+| `db/setup_graph.py` | só delegava para `neo4j_init` + `neo4j_seed` |
+
+⚠️ **`neo4j_seed` era o mais perigoso dos três**, e não por estar errado: ele
+funcionava. O problema é que existiam **dois caminhos de escrita no mesmo
+grafo** — e o legado sobrescreveria a projeção com os dados de abril de 2026.
+Ficou um teste que falha se o par voltar.
+
+#### O que fica de pé, e por quê
+
+O **modelo `StatusPredicao`** continua existindo, com os 3 registros. Removê-lo
+é mudança de esquema — migração, e mais admin, `code_sync`, `neo4j_schema` e o
+campo `monitoramento_recente` que `/api/locais/<slug>/` ainda devolve. É
+trabalho de outra natureza que apagar comando morto, e merece decisão própria.
 
 ### 6.20 O catálogo anunciava nove conjuntos; a API servia três — ✅ RESOLVIDO em 27/07/2026
 

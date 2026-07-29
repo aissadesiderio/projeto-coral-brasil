@@ -14,7 +14,6 @@ from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from db import setup_graph
 from .admin import LocalRecifeAdmin
 from .management.commands.testar_fontes import _origem_das_credenciais
 from .management.utils import exigir_migrations_aplicadas, migrations_pendentes
@@ -126,7 +125,7 @@ class OfflineModeTests(TestCase):
             reverse('local_recife_detail', kwargs={'slug': self.local.slug}),
             reverse('especie_list'),
             reverse('especie_detail', kwargs={'pk': self.especie.pk}),
-            reverse('monitoramento_list'),
+            reverse('medicao_list'),
         ]
 
         for rota in rotas:
@@ -499,11 +498,23 @@ class Neo4jCommandWiringTests(TestCase):
         verificar_mock.assert_called_once_with()
         executar_mock.assert_called_once_with(SCHEMA_QUERIES)
 
-    @patch('db.setup_graph.call_command')
-    def test_setup_graph_delegates_to_official_commands(self, call_command_mock):
-        setup_graph.setup()
+    def test_neo4j_seed_e_setup_graph_nao_existem_mais(self):
+        """O bootstrap legado do grafo foi removido em 28/07/2026.
 
-        call_command_mock.assert_has_calls([call('neo4j_init'), call('neo4j_seed')])
+        `neo4j_seed` derivava os nos de `StatusPredicao` — os 3 registros do
+        caminho legado — e `db/setup_graph.py` so delegava para ele. Quem
+        reconstroi o grafo hoje e `neo4j_projetar`, a partir do PostgreSQL.
+
+        Este teste existe para o par nao voltar por copia de um tutorial
+        antigo: sao dois caminhos de escrita no mesmo grafo, e o legado
+        sobrescreveria a projecao com dado de 2026-04.
+        """
+        from django.core.management import get_commands
+
+        self.assertNotIn('neo4j_seed', get_commands())
+
+        with self.assertRaises(ImportError):
+            from db import setup_graph  # noqa: F401
 
 
 @override_settings(OFFLINE_MODE=False)
