@@ -612,6 +612,44 @@ python backend\manage.py treinar_final --listar
 
 Opções: `--horizonte 14`, `--modelo boosting`, `--nome outro`, `--semente 7`.
 
+#### Figuras: o que o modelo aprendeu
+
+```bash
+python backend\manage.py graficos
+```
+
+Gera cinco tipos de figura em `relatorios_gerados/graficos/`, escritas para
+serem lidas por quem não é da área, cada uma com um `.txt` ao lado dizendo
+sobre que dado foi feita. Nenhuma delas calcula nada novo — todo número já é
+produzido por `ml/importancia.py`, `ml/calibracao.py` ou `ml/modelo.py` e já
+sai em texto nos outros comandos.
+
+| Figura | Responde |
+|---|---|
+| **`o_que_e_previsto`** | **o que prevemos, e por que isso não é branqueamento** |
+| `linha_do_tempo_<recife>` | o que aconteceu, o que previmos, e o que o modelo viu |
+| `coeficientes_por_ano` | o modelo dá o mesmo peso a cada variável todo ano? |
+| `importancia_por_ano` | de qual variável a previsão realmente depende? |
+| `resposta_a_variavel` | quanto cada variável precisa mudar para o aviso sair? |
+
+🚨 **A primeira é pré-requisito das outras.** O modelo prevê **alerta de
+estresse térmico** (`baa ≥ 3`, critério NOAA), e não branqueamento observado.
+A diferença está medida: quando o alerta dispara houve branqueamento em 10 de
+10 casos, mas **78 dos 88 branqueamentos registrados no Brasil ocorreram sem
+alerta nenhum** ([RESULTADOS.md §11.2](docs/RESULTADOS.md)). Toda figura sai
+com esse aviso carimbado no rodapé — por construção, não por disciplina: o
+carimbo é aplicado por `_selar()`, e há teste exigindo-o em cada uma.
+
+Opções: `--pdf` (para inserir no texto sem perder nitidez), `--so tempo`,
+`--repeticoes N`.
+
+⚠️ **Artefato derivado, não versionado.** Figura versionada envelhece em
+silêncio — em duas semanas o PNG mostra um modelo e o código produz outro.
+
+🚨 **As duas primeiras descrevem os modelos do leave-year-out; a última, o
+modelo que está no ar.** São objetos diferentes de propósito: um responde
+"isso generaliza?", o outro responde "o que está servindo faz o quê?".
+
 #### Conferir se a probabilidade exibida é honesta
 
 ```bash

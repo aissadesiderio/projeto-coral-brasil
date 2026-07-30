@@ -55,6 +55,14 @@ aquaculture/management/calcular_dhw.py
 relatorios_gerados/*.png
 relatorios_gerados/*.csv
 
+# Figuras de interpretacao do modelo, reconstruiveis com
+#   python backend/manage.py graficos
+# ⚠️ A pasta inteira, e nao `relatorios_gerados/graficos/*.png`: o `*` do
+# gitignore nao atravessa barra, entao um padrao com extensao deixaria os
+# .pdf e os .txt de legenda entrarem no commit. Figura versionada envelhece
+# em silencio - mesma decisao do .joblib, do .docx e da projecao do Neo4j.
+relatorios_gerados/graficos/
+
 # --- Editores e SO ---
 .vs/
 .idea/

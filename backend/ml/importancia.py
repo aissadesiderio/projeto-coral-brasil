@@ -107,6 +107,17 @@ class Importancia:
     por_grupo: dict = field(default_factory=dict)
     coeficientes: dict = field(default_factory=dict)
 
+    # 🚨 O mesmo, **sem** a media: `{coluna: [valor por ano, na ordem de
+    # `anos`]}`. Ate 30/07/2026 estes numeros eram calculados dobra a dobra e
+    # jogados fora — so a media sobrevivia. E a media responde "o que o modelo
+    # entende", enquanto a serie responde **"ele entende a mesma coisa todo
+    # ano?"**, que e a pergunta que decide se a relacao e estavel ou artefato
+    # de um ano. Um coeficiente que troca de sinal entre 2021 e 2022 tem media
+    # perto de zero e nao e "sem efeito": e instabilidade, e a media a esconde.
+    coeficientes_por_ano: dict = field(default_factory=dict)
+    por_coluna_por_ano: dict = field(default_factory=dict)
+    por_grupo_por_ano: dict = field(default_factory=dict)
+
     def ordenado(self, mapa):
         return sorted(mapa.items(), key=lambda par: -par[1])
 
@@ -195,4 +206,14 @@ def medir(conjunto, nome='logistica', repeticoes=REPETICOES_PADRAO, semente=42):
     resultado.por_coluna = media_de(acumulado_coluna)
     resultado.por_grupo = media_de(acumulado_grupo)
     resultado.coeficientes = media_de(acumulado_coef)
+
+    # Os mesmos acumuladores, guardados inteiros. Sao as listas de onde as
+    # medias acima saem — alinhadas com `resultado.anos` por construcao,
+    # porque um valor e anexado a cada uma por dobra avaliada.
+    somente_com_valor = lambda mapa: {  # noqa: E731
+        chave: list(valores) for chave, valores in mapa.items() if valores
+    }
+    resultado.coeficientes_por_ano = somente_com_valor(acumulado_coef)
+    resultado.por_coluna_por_ano = somente_com_valor(acumulado_coluna)
+    resultado.por_grupo_por_ano = somente_com_valor(acumulado_grupo)
     return resultado
