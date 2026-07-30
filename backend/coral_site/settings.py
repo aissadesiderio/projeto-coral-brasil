@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -37,6 +39,51 @@ env = environ.Env()
 
 # Le backend/.env quando existir. Variaveis reais de processo tem precedencia.
 environ.Env.read_env(BASE_DIR / '.env')
+
+# Chave de linha do .env: o mesmo formato que o django-environ reconhece.
+_LINHA_DO_ENV = re.compile(r'\A(?:export )?([A-Za-z_0-9]+)=')
+
+
+def _aparar_valores_do_env(caminho):
+    """Remove espaco em branco nas pontas dos valores vindos do `.env`.
+
+    🚨 **O django-environ nao faz isso, e o resultado e um erro que aponta
+    para o lugar errado.** Ele le a linha com `(.*)\\Z` e so descasca aspas —
+    um espaco sobrando no fim sobrevive ate o valor final. Aconteceu em
+    29/07/2026, num `.env` montado por copiar-e-colar:
+
+        DATABASE_URL=postgres://.../coral_brasil<espaco>
+
+    O PostgreSQL respondeu `FATAL: database "coral_brasil " does not exist`, e
+    a leitura natural dessa mensagem e "o banco nao foi criado" — manda quem
+    esta diagnosticando conferir o Docker, que estava certo o tempo todo. A
+    unica pista era o espaco entre o `l` e a aspa.
+
+    O mesmo caractere em `NEO4J_PASSWORD` produziria "credencial invalida" com
+    a senha certa digitada, e em `NOAA_ERDDAP_DATASET`, um 404.
+
+    ⚠️ **So mexe nas chaves que o proprio `backend/.env` declara.** Varrer
+    `os.environ` inteiro alteraria variaveis do sistema que nao sao nossas —
+    e espaco no fim de uma delas pode ser deliberado. Aqui nao pode: nenhum
+    valor deste projeto termina em espaco de proposito.
+    """
+    if not caminho.exists():
+        return ()
+
+    aparadas = []
+    for linha in caminho.read_text(encoding='utf-8').splitlines():
+        casa = _LINHA_DO_ENV.match(linha)
+        if not casa:
+            continue
+        chave = casa.group(1)
+        valor = os.environ.get(chave)
+        if valor is not None and valor != valor.strip():
+            os.environ[chave] = valor.strip()
+            aparadas.append(chave)
+    return tuple(aparadas)
+
+
+ENV_APARADAS = _aparar_valores_do_env(BASE_DIR / '.env')
 
 DEBUG = env.bool('DJANGO_DEBUG', default=False)
 

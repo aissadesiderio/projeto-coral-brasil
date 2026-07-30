@@ -466,6 +466,44 @@ O primeiro caso e operacao normal com atraso declarado; o segundo nao tem
 numero honesto a dar. Sem essa separacao, ou o painel recusaria toda vez que a
 ingestao atrasasse um dia, ou aceitaria janela furada.
 
+🚨 **Faltava um terceiro estado, e ele era o mais comum de todos — corrigido em
+30/07/2026.** A tabela acima trata a serie como se ela terminasse num dia so.
+Ela nao termina: sao duas fontes com latencias diferentes, e a borda e sempre
+irregular. O CoralTemp da NOAA publica com 1 a 3 dias de atraso; a analise do
+Copernicus vai ate ontem. Como a data-base era `max()` sobre a serie inteira,
+ela caia na ponta do Copernicus, `sst` e `dhw` ainda nao tinham chegado ali, e
+a janela **nunca fechava**.
+
+Medido em duas maquinas independentes, com bancos e ingestoes separadas:
+
+| Quando | Copernicus | NOAA | Painel |
+|---|---|---|---|
+| 29/07/2026 | ate 27/07 | ate 24/07 | `disponivel: false` nos 3 recifes |
+| 30/07/2026 | ate 29/07 | ate 28/07 | `disponivel: false` nos 3 recifes |
+
+Nao era um recife com problema: era o painel inteiro escuro na maior parte dos
+dias, **por um dado que nem entrava na conta daquele dia**. E o pior e que a
+resposta parecia correta — cada item trazia o motivo certo, dizendo exatamente
+qual dia faltava. O defeito nao estava no diagnostico, estava na pergunta.
+
+| Estado | Agora | Por que |
+|---|---|---|
+| **borda irregular** — cada fonte com sua latencia | responde na ultima data em que **todas** as variaveis existem, com `limitado_por` | e o formato normal de uma serie multi-fonte |
+| **buraco no meio** — falta um dia dentro da janela | **recusa**, como sempre | continua sendo defeito |
+
+⚠️ **A correcao nao e "andar para tras ate achar um dia que funcione"** — isso
+mascararia ingestao parada como operacao normal, que era a razao original da
+regra e continua valendo. A janela ainda precisa fechar **na** data escolhida;
+so a borda direita mudou de lugar.
+
+⚠️ **E a troca nao sai de graca.** Uma fonte que quebre de vez deixa de
+bloquear o painel e passa a apenas atrasa-lo — o sintoma mais silencioso dos
+dois. Por isso a resposta ganhou **`limitado_por`**: as variaveis cuja serie
+para exatamente na data-base enquanto as outras seguem adiante. O
+`dias_de_atraso` diz ha quanto tempo; o `limitado_por` diz por causa de quem, e
+sem ele nao haveria como distinguir "a NOAA publica com atraso" de "o conector
+da NOAA parou de funcionar" sem cruzar `/api/medicoes/` variavel a variavel.
+
 **3. O `Ajuste` voltava do disco sem a calibracao.** Defeito real achado ao
 montar o payload: `persistencia.carregar` nao repassava o campo, entao o
 artefato isotonico se apresentava como `calibracao: None`. O pipeline carregado

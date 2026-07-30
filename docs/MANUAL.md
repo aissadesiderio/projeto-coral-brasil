@@ -140,13 +140,21 @@ antes de funcionar.
 
 ### Passo 0 — Abrir o terminal na pasta do projeto
 
-Abra o **PowerShell** e vá até a pasta onde o projeto está. No caso desta
-máquina:
+Abra o **PowerShell** e vá até a pasta onde o projeto está.
 
-▶
+⚠️ **O caminho muda de máquina para máquina** — depende de onde você clonou.
+Nas duas em uso hoje:
+
 ```bash
 cd C:\Users\aissa\Documents\projeto-coral-brasil-main\projeto-coral-brasil
 ```
+
+```bash
+cd C:\Users\Aissa\Documents\GitHub\projeto-coral-brasil
+```
+
+Não sabe qual é o seu? Abra a pasta no Explorador de Arquivos, clique na barra
+de endereço, copie, e cole depois do `cd `.
 
 ✅ **Deu certo se** o começo da linha passar a mostrar esse caminho.
 
@@ -379,8 +387,12 @@ Com o Docker Desktop **aberto**:
 docker compose up -d
 ```
 
-✅ A primeira vez baixa algumas centenas de MB e demora minutos. As próximas
-levam segundos. Termina com duas linhas dizendo `Started`.
+A primeira vez baixa algumas centenas de MB e demora minutos. As próximas levam
+segundos. Termina com duas linhas dizendo `Started`.
+
+🚨 **`Started` não quer dizer que subiu — quer dizer que o Docker *mandou*
+subir.** Um container que morre logo em seguida e reinicia em laço também
+imprime `Started`, toda vez. A única prova é o comando abaixo:
 
 Confira até os dois ficarem saudáveis:
 
@@ -401,6 +413,11 @@ coral-neo4j      neo4j:5-community    Up 17 hours (healthy)
 pronto em segundos; o Neo4j leva uns 30. Rodar `migrate` cedo demais falha com
 "conexão recusada" — espere.
 
+❌ Se disser **`Restarting (1)`**, com a coluna PORTS **vazia**, o container
+está morrendo e nascendo em laço. Rodar `up -d` de novo não resolve: ele
+reinicia o mesmo laço. A causa aparece só no log — veja
+[o container que reinicia sem parar](#o-container-que-reinicia-sem-parar).
+
 Os comandos de Docker do dia a dia:
 
 | Comando | O que faz |
@@ -420,18 +437,45 @@ motivo.
 
 ### Passo 9 — Criar as tabelas
 
-Antes, confirme para onde o Django está apontando:
+Antes, confirme para onde o Django está apontando. Abra o console:
 
 ▶
 ```bash
-python backend\manage.py shell -c "from django.conf import settings as s; print(s.DATABASES['default']['ENGINE'])"
+python backend\manage.py shell
 ```
 
-✅ Precisa dizer `django.db.backends.postgresql`.
+E no prompt `>>>`, uma linha por vez:
 
-❌ Se disser `sqlite3`, a `DATABASE_URL` do passo 7 não foi lida: confira se o
-arquivo se chama `backend/.env` (e não `backend/.env.txt`, que o Bloco de Notas
-gosta de criar) e se a linha não está comentada com `#`.
+▶
+```bash
+from django.conf import settings as s
+```
+
+▶
+```bash
+s.DATABASES['default']['ENGINE']
+```
+
+▶
+```bash
+s.DATABASES['default']['NAME']
+```
+
+Saia com `exit()`.
+
+✅ O primeiro precisa dizer `'django.db.backends.postgresql'`; o segundo,
+`'coral_brasil'` — **sem espaço antes da aspa final**.
+
+⚠️ Peça os dois campos separadamente, e não o dicionário inteiro: ele contém a
+senha do banco, e senha impressa na tela é senha que aparece no próximo print.
+
+❌ Se o `ENGINE` disser `sqlite3`, a `DATABASE_URL` do passo 7 não foi lida:
+confira se o arquivo se chama `backend/.env` (e não `backend/.env.txt`, que o
+Bloco de Notas gosta de criar) e se a linha não está comentada com `#`.
+
+❌ Se o `NAME` sair `'coral_brasil '`, com espaço, vá direto para
+[o espaço invisível no `.env`](#-o-espaço-invisível-no-env) — o `migrate` vai
+falhar dizendo que o banco não existe.
 
 Agora crie as tabelas:
 
@@ -527,16 +571,29 @@ isso deixa a senha guardada no histórico do terminal.
 
 #### Caminho B — copiar de outra máquina
 
-Se outro computador já tem os dados, exporte lá:
+Se outro computador já tem os dados, exporte lá. Primeiro:
 
 ▶
 ```bash
-$env:PYTHONUTF8='1'; python backend\manage.py dumpdata --natural-foreign --natural-primary --exclude contenttypes --exclude auth.Permission --exclude admin.logentry --exclude sessions.session --indent 1 -o backend\dados_sqlite.json
+$env:PYTHONUTF8='1'
 ```
 
-⚠️ O `PYTHONUTF8='1'` **não é opcional no Windows**: sem ele o comando quebra
+⚠️ Esta linha **não é opcional no Windows**: sem ela o comando seguinte quebra
 ao chegar na unidade `mmol·m⁻³` do oxigênio, com um erro que fala de `charmap`
-e não menciona o motivo real.
+e não menciona o motivo real. Ela vale só para esta janela de terminal.
+
+Depois:
+
+▶
+```bash
+python backend\manage.py dumpdata --natural-foreign --natural-primary --exclude contenttypes --exclude auth.Permission --exclude admin.logentry --exclude sessions.session --indent 1 -o backend\dados_sqlite.json
+```
+
+⚠️ **Este é o comando mais longo do manual, e precisa cair no terminal como uma
+linha só.** Se a colagem trouxer uma quebra, ele falha reclamando de um
+argumento — não do que realmente aconteceu. Se não conseguir colar inteiro,
+salve a linha num arquivo `exportar.ps1` na raiz do projeto e rode
+`.\exportar.ps1`.
 
 Copie o arquivo para a outra máquina e importe:
 
@@ -547,14 +604,40 @@ $env:PYTHONUTF8='1'; python backend\manage.py loaddata backend\dados_sqlite.json
 
 #### Conferindo o que entrou
 
+Abra o console do Django:
+
 ▶
 ```bash
-python backend\manage.py shell -c "from aquaculture.models import MedicaoAmbiental as M; print(M.objects.count(), 'medicoes')"
+python backend\manage.py shell
 ```
 
-✅ Nesta máquina, em 29/07/2026, responde **57426 medicoes**, cobrindo
-01/01/2020 a 27/07/2026, em 3 recifes: `abrolhos-ba`, `porto-de-galinhas-pe` e
+No prompt `>>>` que aparecer, uma linha por vez:
+
+▶
+```bash
+from aquaculture.models import MedicaoAmbiental as M
+```
+
+▶
+```bash
+M.objects.count()
+```
+
+Para sair: `exit()`.
+
+✅ Nesta máquina, em 29/07/2026, responde **57426**, cobrindo 01/01/2020 a
+27/07/2026, em 3 recifes: `abrolhos-ba`, `porto-de-galinhas-pe` e
 `picaozinho-pb`.
+
+⚠️ **Num computador novo, espere `0`** — e isso está certo. Cada máquina tem seu
+próprio volume do Postgres; os dados do outro computador não vieram no `git
+pull`. É para isso que existem os dois caminhos acima.
+
+⚠️ **Por que em duas etapas, e não num comando só?** Existe a forma curta,
+`manage.py shell -c "..."`, mas ela é uma linha muito longa — e uma linha longa
+copiada de um terminal costuma trazer uma **quebra invisível** junto. Colada, o
+PowerShell mostra `>>` e o Python reclama de sintaxe. Ver
+[Parte 8](#o-prompt--que-não-sai).
 
 ---
 
@@ -625,6 +708,8 @@ roda; isso é normal, não travou.
 cd C:\Users\aissa\Documents\projeto-coral-brasil-main\projeto-coral-brasil
 ```
 
+*(o caminho é o da sua máquina — veja o [passo 0](#passo-0--abrir-o-terminal-na-pasta-do-projeto))*
+
 ▶
 ```bash
 .\venv\Scripts\activate
@@ -661,6 +746,8 @@ Abra **outra** janela do PowerShell:
 ```bash
 cd C:\Users\aissa\Documents\projeto-coral-brasil-main\projeto-coral-brasil\frontend
 ```
+
+*(de novo: o caminho da sua máquina, com `\frontend` no fim)*
 
 Só na primeira vez (demora, baixa centenas de MB):
 
@@ -754,16 +841,34 @@ Um recife **indisponível** vem assim, e isso é estado normal:
 }
 ```
 
-O modelo precisa de 7 dias seguidos de quatro variáveis. Se falta um dia, ele
-**recusa em vez de preencher com zero** — porque zero é um valor legítimo de
-variação, e preencher diria "nada mudou" exatamente onde o dado sumiu.
+O modelo precisa de 7 dias seguidos de quatro variáveis. Se falta um dia **no
+meio** da janela, ele recusa em vez de preencher com zero — porque zero é um
+valor legítimo de variação, e preencher diria "nada mudou" exatamente onde o
+dado sumiu.
 
-⚠️ **Isso acontece com frequência por um motivo previsível:** as duas fontes
-publicam com atrasos diferentes. Em 29/07/2026 o Copernicus (salinidade,
-oxigênio) já tinha dados até 27/07, e a NOAA (SST, DHW) só até 24/07. Como a
-data-base é sempre **a última data da série**, os três dias em que só o
-Copernicus publicou deixam o painel indisponível até a NOAA alcançar. A saída é
-rodar a ingestão de novo mais tarde — a NOAA publica com 1 a 3 dias de atraso.
+### `dias_de_atraso` e `limitado_por`
+
+As duas fontes publicam com atrasos diferentes: a NOAA (SST, DHW) sai com 1 a 3
+dias de defasagem, e o Copernicus (salinidade, oxigênio) vai até ontem. A série
+por isso nunca termina reta.
+
+O painel responde na **última data em que todas as quatro variáveis existem**, e
+diz duas coisas sobre ela:
+
+| Campo | O que significa |
+|---|---|
+| `dias_de_atraso` | há quantos dias é o dado usado |
+| `limitado_por` | **quais variáveis** estão segurando essa data |
+
+Um `limitado_por: ["dhw", "sst"]` com atraso de 2 ou 3 dias é o dia a dia
+normal — é a NOAA publicando no ritmo dela. O mesmo campo com atraso de duas
+semanas quer dizer outra coisa: aquele conector parou, e é hora de rodar
+`testar_fontes`.
+
+⚠️ **Até 30/07/2026 essa situação deixava o painel indisponível**, porque a
+data-base caía na ponta da fonte mais adiantada e a janela nunca fechava. Se
+você vir capturas de tela antigas com "Dados insuficientes" nos três recifes,
+é isso.
 
 ---
 
@@ -924,6 +1029,9 @@ Quatro entre cinco problemas são um desses.
 | `... não pode ser carregado porque a execução de scripts foi desabilitada` | política do PowerShell | `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` |
 | `connection refused` / `could not connect to server` | bancos não subiram | Docker Desktop aberto? `docker compose up -d`, espere `healthy` |
 | `django.db.utils.OperationalError: password authentication failed` | senha do `.env` ≠ senha do compose | as duas precisam ser a mesma |
+| `FATAL: database "coral_brasil " does not exist` — repare no **espaço antes das aspas** | espaço sobrando no fim da linha `DATABASE_URL` | veja o quadro logo abaixo |
+| O terminal mostra `>>` e fica esperando | quebra de linha no meio do comando colado | `Ctrl+C` e cole em uma linha só — veja abaixo |
+| `SyntaxError: invalid syntax` apontando para `line 2` | a mesma coisa | idem |
 | O site abre com tarja amarela e telas vazias | `OFFLINE_MODE=True` | troque para `False` em `backend/.env` e reinicie o backend |
 | Site abre, mas nenhum dado carrega | backend parado | ligue o `runserver` na porta 8000 |
 | `Something is already running on port 3000` | outra instância aberta | feche o outro terminal, ou responda `Y` para usar outra porta |
@@ -934,11 +1042,145 @@ Quatro entre cinco problemas são um desses.
 | `relation "aquaculture_..." does not exist` | tabelas não criadas | `python backend\manage.py migrate` |
 | `no such table` mencionando SQLite | `DATABASE_URL` não foi lida | confira `backend/.env` (nome do arquivo e `#` na linha) |
 | Página do grafo vazia / erro 503 no grafo | Neo4j sem dados ou parado | `docker compose ps`, depois `neo4j_projetar` |
+| `docker compose ps` diz `Restarting (1)` e a coluna PORTS está vazia | o container morre e nasce em laço | `docker compose logs neo4j` — veja abaixo |
+| `ServiceUnavailable: Couldn't connect to localhost:7687` | mesma coisa, vista do outro lado | idem |
 | `UnicodeEncodeError` num comando | acentuação no console do Windows | rode com `$env:PYTHONUTF8='1';` na frente |
 | `CERTIFICATE_VERIFY_FAILED` na ingestão | cadeia de certificados incompleta **nesta máquina** | `python backend\manage.py testar_fontes --ssl` — a tabela do README diz o que fazer |
 | `HTTP 503` do ERDDAP | servidor sobrecarregado | espere alguns minutos e repita; a ingestão é idempotente |
 | `WinError 10060` / timeout na NOAA | você não está numa rede federal | use o espelho PACIOOS (é o padrão — não configure nada) |
 | Ingestão termina com **0 medições** e explicação | a fonte ainda não publicou | não é falha; satélite sai com 1–3 dias de atraso |
+
+### O container que reinicia sem parar
+
+```
+coral-neo4j   neo4j:5-community   Restarting (1) 5 seconds ago
+```
+
+Duas coisas nessa linha dizem o que aconteceu: o **`(1)`** é o código de saída,
+e a coluna **PORTS está vazia**. Container que não está de pé não publica porta
+— é por isso que o `7687` recusa conexão e o `neo4j_projetar` falha.
+
+🚨 **`docker compose up -d` não conserta, e ainda por cima parece que
+consertou:** ele responde `✔ Started` e reinicia exatamente o mesmo laço. A
+causa nunca aparece no `ps`, só no log:
+
+▶
+```bash
+docker compose logs neo4j --tail=60
+```
+
+As duas causas que já aconteceram neste projeto:
+
+| No log | O que é | Conserto |
+|---|---|---|
+| `Invalid admin username, it must be neo4j.` | um `NEO4J_USER` diferente de `neo4j` chegou ao container | veja abaixo |
+| `The minimum password length is 8 characters` | senha curta | use `coral_dev_local` |
+
+Para a primeira, veja o valor **já resolvido**, depois de todas as substituições:
+
+▶
+```bash
+docker compose config | Select-String "NEO4J_AUTH"
+```
+
+✅ Precisa dizer `NEO4J_AUTH: neo4j/coral_dev_local`.
+
+Desde 30/07/2026 o `docker-compose.yml` fixa o `neo4j/` literal, justamente
+porque **o Neo4j só aceita esse nome** para o administrador inicial — o campo
+era uma variável, e portanto um botão que não existia. Se ainda assim aparecer
+outro valor, a origem é uma variável de ambiente do Windows:
+
+▶
+```bash
+"[$env:NEO4J_USER]"
+```
+
+Se não sair `[]` nem `[neo4j]`, apague em definitivo e reabra o terminal:
+
+▶
+```bash
+[Environment]::SetEnvironmentVariable('NEO4J_USER', $null, 'User')
+```
+
+⚠️ Nada disso ameaça o PostgreSQL, e nenhum dado do projeto está em risco: o
+Neo4j é **projeção derivada**. Se o volume dele estiver corrompido, apagar e
+rodar `neo4j_projetar` reconstrói tudo em ~16 segundos.
+
+---
+
+### O prompt `>>` que não sai
+
+Você colou um comando e o terminal, em vez de executar, passou a mostrar isto e
+ficar esperando:
+
+```
+>>
+```
+
+**Não travou.** O `>>` é o PowerShell dizendo *"suas aspas não fecharam,
+continue digitando"*. Ele aparece quando o texto colado tinha uma **quebra de
+linha no meio**, quase sempre porque o comando era longo, apareceu embrulhado na
+tela, e a seleção levou a quebra junto.
+
+O sintoma seguinte é um erro que parece de programação e não é:
+
+```
+  File "<string>", line 2
+    as M; print(M.objects.count(), 'medicoes')
+    ^^
+SyntaxError: invalid syntax
+```
+
+Repare no `line 2`: o Python recebeu duas linhas onde deveria haver uma.
+
+**Saída:** aperte `Ctrl+C` e cole de novo, garantindo que o comando fique numa
+linha só. Se for um comando comprido, prefira a forma interativa — abrir o
+`manage.py shell` e digitar linha por linha, como no
+[passo 11](#conferindo-o-que-entrou).
+
+⚠️ Isto **não** é defeito da documentação: no arquivo o comando é uma linha só.
+A quebra nasce entre o terminal e a área de transferência.
+
+---
+
+### 🚨 O espaço invisível no `.env`
+
+Este merece seção própria porque a mensagem **aponta para o lugar errado**:
+
+```
+FATAL:  database "coral_brasil " does not exist
+```
+
+Você lê "o banco não existe" e vai conferir o Docker — mas o servidor
+**respondeu**. Ele está no ar; o que ele recusou foi o *nome*. E o nome tem um
+**espaço no fim**, visível só entre as aspas.
+
+A causa é um espaço sobrando no fim da linha `DATABASE_URL` em `backend/.env`,
+geralmente vindo de um copiar-e-colar. Ele sobrevive porque o `django-environ`
+lê a linha com `(.*)\Z` e **não apara espaço em branco no fim** — só remove
+aspas. O espaço entra na URL, o parser o entrega como parte do caminho, e vira
+nome de banco.
+
+Para ver o problema, é a mesma conferência do
+[passo 9](#passo-9--criar-as-tabelas): abra o `manage.py shell` e peça
+`s.DATABASES['default']['NAME']`.
+
+✅ Correto: `'coral_brasil'`. ❌ Com o defeito: `'coral_brasil '` — o espaço fica
+visível porque o Python mostra as aspas em volta.
+
+Para corrigir todas as linhas do arquivo de uma vez:
+
+▶
+```bash
+[IO.File]::WriteAllLines("$PWD\backend\.env", ((Get-Content backend\.env) -replace '\s+$',''))
+```
+
+⚠️ **Vale para qualquer linha do `.env`, não só a do banco.** Um espaço sobrando
+depois de `NEO4J_PASSWORD=coral_dev_local` produz uma senha errada por um
+caractere, e o Neo4j responde "credencial inválida" — sem nenhuma pista de que a
+senha digitada estava certa. Aconteceu em 29/07/2026 com a `DATABASE_URL`.
+
+---
 
 🚨 **Nunca desligue a verificação de certificado** para fazer um erro de SSL
 sumir. Aceitar qualquer certificado aceita também o de quem estiver no meio do

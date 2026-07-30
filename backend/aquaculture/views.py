@@ -378,6 +378,12 @@ class PainelRiscoBase(OfflineModeMixin, APIView):
             # varia; sem isto um risco calculado sobre dado de tres semanas
             # atras se apresenta igualzinho a um calculado sobre ontem.
             'dias_de_atraso': risco.dias_de_atraso,
+            # ⚠️ Quais variaveis seguram a `data_base` — vazio quando a borda
+            # da serie e reta. Desde 30/07/2026 a borda irregular deixou de
+            # bloquear a resposta (ml/predicao.py::_borda_completa), e este
+            # campo e o que impede a troca sair de graca: sem ele, uma fonte
+            # que quebre de vez apareceria so como "dado um pouco mais velho".
+            'limitado_por': list(risco.limitado_por),
             'probabilidade': round(risco.probabilidade, 4),
             'limiar': risco.limiar,
             'alerta': risco.alerta,

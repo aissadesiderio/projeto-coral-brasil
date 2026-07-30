@@ -31,8 +31,8 @@ mesmo defeito do `carregar_historico.py` legado, que gravava pH 0.
 
 **2. A data-base viaja junto.** As duas fontes tem latencia, e ela varia. Um
 risco sem a data sobre a qual foi calculado e lido como "agora", que e
-justamente o que ele nao e. Por isso `Risco` carrega `data_base`, `data_alvo` e
-`dias_de_atraso`.
+justamente o que ele nao e. Por isso `Risco` carrega `data_base`, `data_alvo`,
+`dias_de_atraso` e `limitado_por`.
 
 **3. Local fora do treino nao recebe resposta.** O modelo viu tres pontos do
 litoral; responder sobre um quarto seria inventar cobertura.
@@ -41,6 +41,7 @@ litoral; responder sobre um quarto seria inventar cobertura.
 import threading
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import NamedTuple
 
 from .dataset import Janela, aplicar_janela, carregar_largo
 
@@ -138,6 +139,11 @@ class Risco:
     limiar: float
     dias_de_atraso: int
     entradas: dict = field(default_factory=dict)
+    # As variaveis cuja serie para exatamente na `data_base` enquanto outras
+    # seguem adiante. Vazio quando a borda e reta. Ver `_borda_completa`: sem
+    # este campo, uma fonte quebrada vira "dado um pouco mais velho" e nada na
+    # resposta diz de quem e a culpa.
+    limitado_por: tuple = ()
 
     @property
     def alerta(self):
@@ -166,26 +172,90 @@ class Risco:
         return self.probabilidade <= 0.0 or self.probabilidade >= 1.0
 
 
-def montar_entradas(local, colunas, hoje=None):
-    """Os valores das features na data mais recente da serie do local.
+class Entradas(NamedTuple):
+    """O que a predicao leu: em que dia, com que valores, e quem segurou o dia."""
 
-    Devolve `(data_base, {coluna: valor})`. Levanta `SemDadoSuficiente` se a
-    serie estiver vazia ou se a janela nao fechar na data mais recente.
+    data_base: date
+    valores: dict
+    limitado_por: tuple = ()
 
-    ⚠️ **A data-base e a ultima data da serie, e nao a ultima data que
-    funciona.** Andar para tras ate achar um dia com janela completa daria
-    sempre uma resposta — e mascararia uma serie furada como operacao normal.
 
-    Isso **nao** e o mesmo que uma serie que simplesmente termina mais cedo.
-    Sao dois estados diferentes e o codigo os trata diferente de proposito:
+def _borda_completa(largo, variaveis):
+    """A ultima data em que **todas** as variaveis do modelo existem.
 
-    | Estado | O que acontece | Por que |
+    Devolve `(data_base, limitado_por)`. `limitado_por` so vem preenchido
+    quando a borda e irregular — as variaveis cuja serie para exatamente ali,
+    enquanto outras seguem adiante.
+
+    🚨 **Isto mudou em 30/07/2026, e a mudanca merece a explicacao inteira.**
+    Ate entao a data-base era `max(...)` sobre a serie inteira: a ultima data
+    em que **qualquer** variavel tivesse valor. A intencao era boa e continua
+    valendo — nao andar para tras procurando um dia que funcione, porque isso
+    mascararia ingestao parada como operacao normal.
+
+    O que a intencao nao previu e que **as duas fontes nunca terminam no mesmo
+    dia**. O CoralTemp da NOAA publica com 1 a 3 dias de atraso; a analise do
+    Copernicus publica ate ontem. Entao a serie termina sempre irregular, com
+    salinidade e oxigenio um a tres dias adiante de `sst` e `dhw`. Como a
+    data-base caia na ponta mais adiantada, a janela nunca fechava, e o painel
+    respondia `disponivel: false` **nos tres recifes, na maior parte dos dias**
+    — esperando um dado que ele nem precisaria estar esperando ali.
+
+    Medido em duas maquinas independentes:
+
+    | Quando | Copernicus | NOAA | Painel |
+    |---|---|---|---|
+    | 29/07/2026 | ate 27/07 | ate 24/07 | indisponivel nos 3 |
+    | 30/07/2026 | ate 29/07 | ate 28/07 | indisponivel nos 3 |
+
+    A correcao **nao** e passar a andar para tras. E reconhecer que havia dois
+    estados sendo tratados como um:
+
+    | Estado | Agora | Por que |
     |---|---|---|
-    | a serie acaba em `t-2` | responde, com `data_base = t-2` e atraso 2 | ingestao atrasada e normal, e o atraso fica declarado |
-    | a serie vai ate `t` mas falta `t-7` | **recusa** | a janela nao fecha, e nao ha numero honesto a dar |
+    | **borda irregular** — cada fonte com sua latencia | responde na ultima data completa, declarando `limitado_por` | e o formato normal de uma serie multi-fonte, e o atraso ja viaja no payload |
+    | **buraco no meio** — falta um dia dentro da janela | **recusa** | continua sendo defeito, e nenhum numero honesto sai dali |
 
-    A primeira e indistinguivel de "a ingestao de hoje ainda nao rodou"; a
-    segunda e um buraco no meio do que ja foi coletado.
+    A diferenca e onde a borda direita da janela cai, e nao varrer para tras
+    ate achar um dia que funcione: a janela ainda precisa fechar **na** data
+    escolhida, e um buraco interno continua recusando exatamente como antes.
+
+    ⚠️ **O risco que esta mudanca cria, e como ele fica visivel.** Uma fonte
+    que quebre de vez deixa de bloquear o painel e passa a apenas atrasa-lo —
+    que e o sintoma mais silencioso dos dois. Por isso `limitado_por` existe e
+    vai no payload: quem opera consegue ler *qual* conector esta segurando a
+    borda, sem precisar cruzar `/api/medicoes/` variavel a variavel. O
+    `dias_de_atraso` diz ha quanto tempo; o `limitado_por` diz por causa de
+    quem.
+    """
+    completos = largo[list(variaveis)].dropna(how='any')
+    fim_da_serie = max(largo.dropna(how='all').index)
+
+    if not len(completos):
+        # Nenhum dia tem tudo. Devolve o fim da serie de proposito: a
+        # conferencia da janela, logo adiante, produz o diagnostico por
+        # variavel e por dia, que e mais util do que "nao ha dia completo".
+        return fim_da_serie, ()
+
+    data_base = max(completos.index)
+    if data_base == fim_da_serie:
+        return data_base, ()
+
+    limitado_por = tuple(
+        v for v in variaveis if largo[v].last_valid_index() == data_base
+    )
+    return data_base, limitado_por
+
+
+def montar_entradas(local, colunas, hoje=None):
+    """Os valores das features na ultima data completa da serie do local.
+
+    Devolve `Entradas(data_base, valores, limitado_por)`. Levanta
+    `SemDadoSuficiente` se a serie estiver vazia ou se a janela nao fechar na
+    data escolhida.
+
+    A escolha da data-base — e a razao de ela nao ser mais simplesmente a
+    ultima data da serie — esta em `_borda_completa`.
     """
     import pandas as pd
 
@@ -199,7 +269,7 @@ def montar_entradas(local, colunas, hoje=None):
             f'Rode a ingestao antes de pedir predicao.'
         )
 
-    data_base = max(largo.dropna(how='all').index)
+    data_base, limitado_por = _borda_completa(largo, variaveis)
 
     valores, faltando = {}, []
     for janela in janelas:
@@ -231,7 +301,7 @@ def montar_entradas(local, colunas, hoje=None):
             faltando=sorted(set(faltando)),
         )
 
-    return data_base, valores
+    return Entradas(data_base, valores, limitado_por)
 
 
 def calcular(local, ajuste, limiar, hoje=None):
@@ -239,19 +309,20 @@ def calcular(local, ajuste, limiar, hoje=None):
     import pandas as pd
 
     hoje = hoje or date.today()
-    data_base, entradas = montar_entradas(local, ajuste.colunas, hoje)
+    lidas = montar_entradas(local, ajuste.colunas, hoje)
 
-    quadro = pd.DataFrame([entradas])
+    quadro = pd.DataFrame([lidas.valores])
     probabilidade = float(ajuste.prever_probabilidade(quadro)[0])
 
     return Risco(
         local=local.slug,
-        data_base=data_base,
-        data_alvo=data_base + timedelta(days=ajuste.horizonte),
+        data_base=lidas.data_base,
+        data_alvo=lidas.data_base + timedelta(days=ajuste.horizonte),
         probabilidade=probabilidade,
         limiar=limiar,
-        dias_de_atraso=(hoje - data_base).days,
-        entradas=entradas,
+        dias_de_atraso=(hoje - lidas.data_base).days,
+        entradas=lidas.valores,
+        limitado_por=lidas.limitado_por,
     )
 
 

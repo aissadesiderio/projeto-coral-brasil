@@ -60,6 +60,13 @@ cdsapi==0.7.6
 # certificate" ate alguem lembrar de subir o pin.
 certifi>=2026.2.25
 
+# Le o docker-compose.yml nos testes de configuracao. Ja vinha como
+# dependencia transitiva do copernicusmarine; passa a ser declarada porque
+# agora e usada diretamente — mesma decisao do certifi acima. O teste que
+# depende dela guarda o `NEO4J_AUTH: neo4j/...` literal, cuja violacao derruba
+# o container num laco de reinicio (backend/coral_site/testes_configuracao.py).
+PyYAML==6.0.3
+
 # --- Machine learning ---
 scikit-learn==1.8.0
 joblib==1.5.3

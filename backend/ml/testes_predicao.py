@@ -94,21 +94,36 @@ class BaseComSerie(TestCase):
                 dataset_id='dhw_5km',
             )
 
+    def adiantar(self, variavel, dias):
+        """Estende **uma** variavel alem do fim, produzindo borda irregular.
+
+        E o formato real de uma serie multi-fonte: o Copernicus publica ate
+        ontem e o CoralTemp da NOAA leva de 1 a 3 dias. Nenhuma lacuna e
+        criada — os dias novos simplesmente so existem para uma variavel.
+        """
+        for n in range(1, dias + 1):
+            MedicaoAmbiental.objects.create(
+                local_recife=self.local, data=self.fim + timedelta(days=n),
+                variavel=variavel, valor=30.0 + n, unidade='°C',
+                fonte='copernicus', dataset_id='cmems_anfc',
+            )
+
 
 class MontarEntradasTests(BaseComSerie):
     def test_usa_a_data_mais_recente_da_serie(self):
-        data_base, _ = predicao.montar_entradas(self.local, self.COLUNAS)
+        lidas = predicao.montar_entradas(self.local, self.COLUNAS)
 
-        self.assertEqual(data_base, self.fim)
+        self.assertEqual(lidas.data_base, self.fim)
+        self.assertEqual(lidas.limitado_por, ())
 
     def test_devolve_uma_entrada_por_coluna(self):
-        _, valores = predicao.montar_entradas(self.local, self.COLUNAS)
+        valores = predicao.montar_entradas(self.local, self.COLUNAS).valores
 
         self.assertEqual(sorted(valores), sorted(self.COLUNAS))
 
     def test_a_variacao_e_a_diferenca_de_sete_dias(self):
         """Serie sobe 0,1 por dia, entao sete dias valem 0,7."""
-        _, valores = predicao.montar_entradas(self.local, self.COLUNAS)
+        valores = predicao.montar_entradas(self.local, self.COLUNAS).valores
 
         self.assertAlmostEqual(valores['sst_variacao_7d'], 0.7, places=6)
 
@@ -147,7 +162,7 @@ class MontarEntradasTests(BaseComSerie):
         MedicaoAmbiental.objects.all().delete()
         self.gravar_serie(pular={self.fim - timedelta(days=3)})
 
-        _, valores = predicao.montar_entradas(self.local, self.COLUNAS)
+        valores = predicao.montar_entradas(self.local, self.COLUNAS).valores
 
         self.assertAlmostEqual(valores['sst_variacao_7d'], 0.7, places=6)
 
@@ -165,6 +180,92 @@ class MontarEntradasTests(BaseComSerie):
 
         with self.assertRaises(predicao.SemDadoSuficiente):
             predicao.montar_entradas(self.local, self.COLUNAS)
+
+
+class BordaIrregularTests(BaseComSerie):
+    """🚨 O estado que deixava o painel escuro na maior parte dos dias.
+
+    As duas fontes nunca terminam no mesmo dia: o CoralTemp da NOAA publica
+    com 1 a 3 dias de atraso e a analise do Copernicus vai ate ontem. Ate
+    30/07/2026 a data-base caia na ponta mais adiantada, a janela nunca
+    fechava, e os tres recifes respondiam `disponivel: false` esperando um dado
+    que nem entrava na conta daquele dia.
+
+    O que **nao** pode voltar junto: buraco no meio da janela continua sendo
+    recusa. A diferenca e onde a borda direita cai, nao varrer para tras.
+    """
+
+    def test_borda_irregular_responde_no_ultimo_dia_completo(self):
+        self.adiantar('dhw', dias=3)
+
+        lidas = predicao.montar_entradas(self.local, self.COLUNAS)
+
+        self.assertEqual(lidas.data_base, self.fim)
+
+    def test_diz_qual_variavel_segura_a_borda(self):
+        """Sem isto, uma fonte quebrada vira so "dado um pouco mais velho"."""
+        self.adiantar('dhw', dias=3)
+
+        lidas = predicao.montar_entradas(self.local, self.COLUNAS)
+
+        self.assertEqual(lidas.limitado_por, ('sst',))
+
+    def test_borda_reta_nao_aponta_ninguem(self):
+        lidas = predicao.montar_entradas(self.local, self.COLUNAS)
+
+        self.assertEqual(lidas.limitado_por, ())
+
+    def test_o_valor_e_o_do_dia_completo_e_nao_o_do_dia_adiantado(self):
+        """A conta tem de sair igualzinha a de antes de a outra fonte chegar."""
+        esperado = predicao.montar_entradas(self.local, self.COLUNAS).valores
+
+        self.adiantar('dhw', dias=3)
+        obtido = predicao.montar_entradas(self.local, self.COLUNAS).valores
+
+        self.assertEqual(obtido, esperado)
+
+    def test_buraco_no_meio_continua_recusando_mesmo_com_borda_irregular(self):
+        """🚨 A recusa que a mudanca nao pode ter comprado de volta."""
+        MedicaoAmbiental.objects.all().delete()
+        self.gravar_serie(pular={self.fim - timedelta(days=7)})
+        self.adiantar('dhw', dias=3)
+
+        with self.assertRaises(predicao.SemDadoSuficiente):
+            predicao.montar_entradas(self.local, self.COLUNAS)
+
+    def test_atraso_declara_a_idade_do_dia_completo(self):
+        """O atraso conta da data-base, e nao da ponta adiantada da serie."""
+        self.adiantar('dhw', dias=3)
+        ajuste = _AjusteFalso(self.COLUNAS)
+
+        risco = predicao.calcular(
+            self.local, ajuste, limiar=0.5, hoje=self.fim + timedelta(days=4),
+        )
+
+        self.assertEqual(risco.data_base, self.fim)
+        self.assertEqual(risco.dias_de_atraso, 4)
+        self.assertEqual(risco.limitado_por, ('sst',))
+
+    def test_nenhum_dia_completo_recusa_dizendo_o_que_falta(self):
+        """Uma fonte que nunca foi ingerida nao vira atraso: vira recusa."""
+        MedicaoAmbiental.objects.filter(variavel='sst').delete()
+
+        with self.assertRaises(predicao.SemDadoSuficiente) as capturado:
+            predicao.montar_entradas(self.local, self.COLUNAS)
+
+        self.assertIn('sst', str(capturado.exception))
+
+
+class _AjusteFalso:
+    """Um modelo de mentira: devolve probabilidade fixa sem tocar em sklearn."""
+
+    horizonte = 7
+
+    def __init__(self, colunas):
+        self.colunas = colunas
+
+    def prever_probabilidade(self, quadro):
+        return [0.25] * len(quadro)
 
 
 class MesmaContaDoTreinoTests(BaseComSerie):
@@ -188,7 +289,7 @@ class MesmaContaDoTreinoTests(BaseComSerie):
             for j in janelas
         }
 
-        _, valores = predicao.montar_entradas(self.local, self.COLUNAS)
+        valores = predicao.montar_entradas(self.local, self.COLUNAS).valores
         _, valores_naquele_dia = (
             linha['data'],
             {c: float(linha[c]) for c in self.COLUNAS},

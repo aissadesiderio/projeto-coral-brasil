@@ -51,7 +51,20 @@ services:
     environment:
       # A senha precisa ter no minimo 8 caracteres: o Neo4j 5 recusa a subir
       # com menos, e a mensagem so aparece no log do container.
-      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-coral_dev_local}
+      #
+      # 🚨 O usuario vai **literal**, e nao por variavel. O Neo4j so aceita
+      # `neo4j` como administrador inicial; qualquer outro valor faz o
+      # entrypoint sair com codigo 1 antes de o banco existir, e o Docker
+      # reiniciar para sempre. O `ps` mostra so `Restarting (1)` e a coluna
+      # PORTS vazia — o motivo (`Invalid admin username, it must be neo4j.`)
+      # fica apenas em `docker compose logs neo4j`.
+      #
+      # Ate 30/07/2026 esta linha usava ${NEO4J_USER:-neo4j}, oferecendo um
+      # botao que o Neo4j nao aceita: um NEO4J_USER sobrando no ambiente do
+      # Windows derrubou o container em laco numa das maquinas do projeto. O
+      # NEO4J_USER continua valendo para *conectar* (healthcheck e
+      # backend/.env), que e outra coisa.
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-coral_dev_local}
       # Limites modestos: numa maquina de desenvolvimento o Neo4j reserva
       # memoria com folga por padrao e briga com o resto do sistema.
       NEO4J_server_memory_heap_max__size: 1G

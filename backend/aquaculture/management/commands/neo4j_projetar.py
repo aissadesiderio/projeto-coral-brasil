@@ -10,7 +10,7 @@ Ver docs/arquitetura.md.
 
 import time
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from db import projecao
 
@@ -55,12 +55,23 @@ class Command(BaseCommand):
                 ao_progredir=progresso,
             )
         except Exception as erro:
-            self.stderr.write(self.style.ERROR(
+            # 🚨 `CommandError`, e nao `stderr.write` + `return`. Ate 30/07/2026
+            # este bloco imprimia o erro e saia com **codigo 0**: o
+            # `preparar_deploy` registrava o passo do grafo como executado, e um
+            # deploy seguia adiante com o Neo4j vazio. Falha que sai como
+            # sucesso e o unico formato pior do que falhar.
+            raise CommandError(
                 f'{type(erro).__name__}: {erro}\n\n'
-                'O Neo4j esta de pe? Suba com "docker compose up -d" e '
-                'confira "docker compose ps".'
-            ))
-            return
+                'O Neo4j esta de pe? Confira nesta ordem:\n'
+                '  1. docker compose ps      -> precisa dizer "Up (healthy)" e '
+                'publicar a porta 7687\n'
+                '  2. docker compose logs neo4j\n'
+                '  3. docker compose up -d\n\n'
+                '(!) Um container em "Restarting" nao publica porta nenhuma, e '
+                'o "up -d" nao conserta: ele reinicia o mesmo laco. A causa '
+                'aparece so no log — senha com menos de 8 caracteres e usuario '
+                'diferente de "neo4j" sao as duas que ja aconteceram aqui.'
+            ) from erro
 
         decorrido = time.time() - inicio
 
