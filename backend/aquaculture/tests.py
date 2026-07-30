@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import date
 from io import StringIO
 from pathlib import Path
@@ -748,8 +749,46 @@ class InventarioDatasetsTests(TestCase):
 
         self.assertNotIn('NCBI', fontes)
 
-    def test_inventario_le_tamanho_e_periodo_do_arquivo_real(self):
-        registros, ausentes = construir_inventario()
+    @contextmanager
+    def _dados_no_disco(self):
+        """Uma pasta `dados/` com um CSV minimo para cada dataset catalogado.
+
+        🚨 **Ate 30/07/2026 estes testes liam a pasta `backend/dados/` de
+        verdade**, e por isso so passavam em maquina que ja tinha rodado a
+        ingestao. Os CSVs sao 78 MB e nao sao versionados — entao o CI, que
+        parte de um clone limpo, falhava desde a primeira execucao, e um clone
+        novo tambem falharia.
+
+        O que se quer medir aqui e o comportamento: o inventario le tamanho e
+        periodo **do disco** em vez de repetir numero gravado. Isso um arquivo
+        de tres linhas verifica igual — e verifica em qualquer maquina.
+
+        O caso oposto (pasta vazia) continua coberto por
+        `test_arquivo_ausente_vira_registro_desativado_e_nao_dado_inventado`.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            pasta = base / 'dados'
+            pasta.mkdir()
+            # A coluna `time` e a unica que `ler_metadados_arquivo` procura. O
+            # recheio existe so para o arquivo passar de 5 KB: `tamanho_mb` e
+            # arredondado em duas casas, e tres linhas dariam 0,0 MB — que
+            # falharia a assercao de tamanho por ser pequeno, e nao por estar
+            # errado.
+            conteudo = (
+                'time,valor\n'
+                '2020-01-01T12:00:00Z,1.0\n'
+                + '2021-06-01T12:00:00Z,1.5\n' * 300
+                + '2026-07-24T12:00:00Z,2.0\n'
+            )
+            for fonte in DATASETS_REAIS:
+                (pasta / fonte.arquivo).write_text(conteudo, encoding='utf-8')
+            with override_settings(BASE_DIR=base):
+                yield pasta
+
+    def test_inventario_le_tamanho_e_periodo_do_arquivo(self):
+        with self._dados_no_disco():
+            registros, ausentes = construir_inventario()
 
         self.assertEqual(ausentes, [], 'Arquivos de dados esperados nao encontrados')
         for registro in registros:
@@ -760,6 +799,20 @@ class InventarioDatasetsTests(TestCase):
                 self.assertIsNotNone(d['data_inicio'])
                 self.assertIsNotNone(d['data_fim'])
                 self.assertLessEqual(d['data_inicio'], d['data_fim'])
+
+    def test_o_periodo_vem_do_conteudo_e_nao_de_valor_gravado(self):
+        """O ponto do teste acima, isolado: as datas saem do arquivo.
+
+        Sem isto, trocar a leitura do disco por uma constante passaria — e foi
+        exatamente esse o defeito que o catalogo ja teve (cobertura gravada
+        envelhecendo em silencio, PLANEJAMENTO 27/07).
+        """
+        with self._dados_no_disco():
+            registros, _ = construir_inventario()
+
+        primeiro = registros[0]['defaults']
+        self.assertEqual(primeiro['data_inicio'], date(2020, 1, 1))
+        self.assertEqual(primeiro['data_fim'], date(2026, 7, 24))
 
     def test_nenhum_registro_promete_download_inexistente(self):
         registros, _ = construir_inventario()
@@ -807,11 +860,30 @@ class InventarioDatasetsTests(TestCase):
         DatasetCatalogo.objects.all().delete()
         saida = StringIO()
 
-        call_command('inventariar_datasets', stdout=saida)
+        with self._dados_no_disco():
+            call_command('inventariar_datasets', stdout=saida)
 
         self.assertEqual(DatasetCatalogo.objects.count(), len(DATASETS_REAIS))
         self.assertTrue(DatasetCatalogo.objects.filter(ativo=True).exists())
         self.assertIn('Catalogo atualizado', saida.getvalue())
+
+    def test_sem_arquivo_nenhum_o_comando_roda_e_nao_ativa_nada(self):
+        """O estado de um clone novo: catalogo montado, tudo desativado.
+
+        Nao e erro — e o que a pagina "Banco de Dados" deve mostrar antes de a
+        ingestao rodar. O que seria erro e o comando quebrar, ou marcar como
+        disponivel um arquivo que ninguem tem.
+        """
+        DatasetCatalogo.objects.all().delete()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / 'dados').mkdir()
+            with override_settings(BASE_DIR=base):
+                call_command('inventariar_datasets', stdout=StringIO())
+
+        self.assertEqual(DatasetCatalogo.objects.count(), len(DATASETS_REAIS))
+        self.assertFalse(DatasetCatalogo.objects.filter(ativo=True).exists())
 
     def test_comando_remove_registros_ficticios_remanescentes(self):
         DatasetCatalogo.objects.create(
