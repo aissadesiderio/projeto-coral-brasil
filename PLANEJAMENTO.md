@@ -153,7 +153,7 @@ Nada aqui bloqueia o go-live *técnico*, e tudo aqui bloqueia o go-live
 |---|---|---|
 | 2.1 | **Passo de deploy** | ✅ **28/07** — `manage.py preparar_deploy` roda os cinco passos em ordem, para no primeiro erro e confere o resultado. Executado ponta a ponta: **18,6 s**, exit 0. 14 testes |
 | 2.2 | Agendamento | ✅ **28/07** — `manage.py atualizar` ingere o que falta, reprojeta e relata o envelhecimento. Idempotente, `--silencioso` para cron, exit 1 em falha. Verificado ao vivo: +6 medições. 🚨 **Não retreina, por decisão** — modelo que muda toda noite é modelo que ninguém mediu |
-| 2.3 | CI rodando os testes | ⏳ **30/07 — o CI existe, roda e agora deve passar.** Ele estava vermelho desde a 1ª execução (29/07), e a causa era do projeto, não do CI: **dois testes exigiam os CSVs de 78 MB que não são versionados**. Corrigidos para montar as próprias fixtures. Verificado localmente com os artefatos derivados removidos: 546 ✅. Falta confirmar a execução no GitHub |
+| 2.3 | CI rodando os testes | ✅ **30/07 — verde na execução #7**, 2m 0s, backend e frontend. As seis anteriores falharam, e a causa era do projeto e não do CI: **dois testes exigiam os CSVs de 78 MB que não são versionados**. Corrigidos para montar as próprias fixtures. Agora um clone limpo prova o que a máquina de quem escreveu já provava |
 | 2.4 | Monitorar o envelhecimento | ✅ **28/07** — coberto pelo `atualizar`: avisa com 7 dias sem dado novo, 90 dias sem retreino, ou modelo ausente. Em dia normal **não diz nada**, porque aviso diário treina quem lê a ignorar |
 
 ## Fase 3 — dívida acumulada
