@@ -1527,16 +1527,43 @@ Baixar o corte não o recupera. Isso muda a natureza da conversa: o teto não
 está na escolha do limiar, está **no modelo**. Discutir 0,20 contra 0,30 é
 discutir os outros dois episódios, não este.
 
-Os outros dois que 0,20 perde, e que 0,05 recupera:
+Os outros dois que 0,20 perde:
 
 | Episódio | Duração | Recuperado a partir de |
 |---|---|---|
-| Picãozinho, 26/02–06/03/**2022** | 9 dias | 0,10 |
-| Porto de Galinhas, 07/05/2020 | 1 dia | 0,05 |
+| Porto de Galinhas, 07/05/2020 | 1 dia | **0,10** |
+| Picãozinho, 26/02–06/03/**2022** | 9 dias | **0,05** |
+
+🚨 **Esta tabela saiu com as duas linhas trocadas em 27/07/2026, e o erro
+decidiu o limiar do projeto.** A versão original atribuía o episódio de nove
+dias ao corte 0,10 e o de um dia ao 0,05. É o contrário, e a diferença não é
+de detalhe: foi sobre a linha errada que a §22.9.5 justificou a adoção do
+0,10, escrevendo que ele *"compra o episódio de nove dias"*. Ele não compra —
+**também o perde**. O que 0,10 recupera em relação a 0,20 é o episódio de **um
+dia** de Porto de Galinhas.
+
+Corrigido em 30/07/2026, listando o campo `perdidos` de cada ponto da varredura
+em vez de ler a coluna resumida:
+
+```
+limiar 0.05 -> 18/19   perde: picaozinho-pb 2026-04-21 (3 dias)
+limiar 0.10 -> 17/19   perde: picaozinho-pb 2026-04-21 (3 dias)
+                              picaozinho-pb 2022-02-26 (9 dias)
+limiar 0.20 -> 16/19   perde: os dois acima
+                              porto-de-galinhas-pe 2020-05-07 (1 dia)
+```
+
+⚠️ **O dado nunca esteve errado — a leitura esteve.** `Ponto.perdidos` já
+guardava *quais* episódios escapavam, e existe justamente porque, como diz o
+comentário do campo, *"um evento de nove dias em Picãozinho pesa diferente de
+um de um dia só"*. O campo foi criado para evitar exatamente este erro, e o
+erro aconteceu assim mesmo, porque a tabela do documento foi montada à mão a
+partir da contagem agregada.
 
 ⚠️ O de 2022 conecta com a pendência já aberta *"investigar 2022"* — é o único
-ano em que o modelo perde claramente para a persistência, e agora sabemos que
-o episódio perdido lá é de **nove dias**, não um caso de borda.
+ano em que o modelo perde claramente para a persistência, e o episódio perdido
+lá é de **nove dias**, não um caso de borda. Ele escapa em todos os limiares
+acima de 0,05.
 
 ### 22.9.3 🚨 O patamar de episódios engana, e a correção importa
 
@@ -1595,14 +1622,80 @@ tarde é quase o mesmo que não chegar.
 
 | | 0,20 (anterior) | **0,10 (adotado)** | Diferença |
 |---|---|---|---|
-| Episódios detectados | 16/19 | **17/19** | +1 (o de 9 dias, 2022) |
+| Episódios detectados | 16/19 | **17/19** | +1 (o de **1 dia**, 2020) |
 | Avisados já no 1º dia | 16/20 | **18/20** | +2 |
 | Atraso médio do 1º aviso | 1,50 d | **0,95 d** | −0,55 d |
 | Alarme falso/ano/recife | 10,0 | **16,3** | +6,3 dias |
+| Dias/ano em alerta | 35,5 (10,5% do tempo) | **42,9 (12,7%)** | +7,4 dias |
 
-O que se compra: o episódio de **nove dias** de Picãozinho em 2022 — o mesmo
-ano que já figurava como o pior do modelo. O que se paga: cerca de **seis dias
-a mais de alarme falso por ano em cada recife**.
+🚨 **A linha dos episódios foi corrigida em 30/07/2026.** Ela dizia *"+1 (o de
+9 dias, 2022)"*, herdando a troca de linhas da §22.9.2. O episódio que 0,10
+recupera em relação a 0,20 tem **um dia**, não nove — e o de nove dias é
+perdido pelos dois. Isso não é uma correção cosmética: era **metade da
+justificativa da decisão**, e a metade mais persuasiva.
+
+O que se compra, corrigido:
+
+- o episódio de **um dia** de Porto de Galinhas em 07/05/2020;
+- **dois episódios a mais avisados já no primeiro dia** (18 contra 16);
+- o atraso médio do primeiro aviso caindo de 1,50 para 0,95 dia.
+
+O que se paga: **6,3 dias a mais de alarme falso por ano em cada recife**, e o
+site em alerta 12,7% do tempo em vez de 10,5% — cerca de um dia em cada oito,
+com **38% dos alertas sendo falsos**.
+
+⚠️ **O critério declarado — priorizar antecedência — continua servido, e por
+evidência que não dependia do erro.** Os dois itens de antecedência acima foram
+medidos separadamente e seguem de pé. A decisão pode permanecer a mesma; o que
+não pode permanecer é a razão registrada, porque ela pesava um evento de nove
+dias que nunca esteve em jogo nessa faixa.
+
+### 22.9.7 ✅ Decisão revista em 30/07/2026: uma escala, não um corte
+
+O corte único foi substituído por **três degraus**. A revisão começou pela
+pergunta que faltava — *para quem o alerta existe?* — agora declarada em
+[VISAO_GERAL.md §2.1](VISAO_GERAL.md): **quem age sobre ele**, gestão de
+unidade de conservação e pesquisa de campo.
+
+Com o público declarado e a tabela corrigida, o corte único ficou insustentável
+nos dois sentidos:
+
+- **0,05** é o único que alcança o teto do modelo (18/19) e o único que pega o
+  episódio de nove dias de 2022 — mas metade dos seus avisos é falsa, e o site
+  ficaria aceso 15,9% do tempo;
+- **0,20** acerta 7 em 10, e descarta de propósito dois episódios que o modelo
+  conseguia pegar.
+
+Escolher entre eles era escolher entre **cobrir tudo** e **ser levado a sério**.
+A escala dissolve isso, porque cada degrau passa a carregar uma expectativa de
+ação diferente:
+
+| Degrau | Corte | Precisão | Episódios | Falsos/ano/recife | O que se espera |
+|---|---|---|---|---|---|
+| **Observação** | 0,05 | 0,498 | **18/19** | 27,0 | acompanhar, sem mobilizar |
+| **Alerta** | 0,20 | 0,719 | 16/19 | 10,0 | acionar monitoramento |
+| **Alerta alto** | 0,50 | 0,826 | 14/19 | 4,5 | acionar com prioridade |
+
+O degrau mais baixo garante que **nada que o modelo alcança escape** — a
+objeção contra 0,20 — sem pedir que alguém saia de casa. O mais alto pede ação
+com precisão para sustentá-la — a objeção contra 0,05.
+
+⚠️ **Não é o `RISCO_STATUS` legado de volta.** Aquele tinha quatro níveis
+herdados do `StatusPredicao` e **nenhum número por trás**; foi removido em
+28/07/2026. A diferença entre os dois não é de forma, é de procedência: cada
+corte aqui tem precisão, cobertura e custo medidos.
+
+⚠️ **`alerta` e `limiar` continuam no payload**, e `limiar` passou a valer
+**0,20** — o corte do degrau que exige ação. São contrato desde 27/07 e há
+consumidor lendo os dois; removê-los seria quebra de contrato disfarçada de
+melhoria, que é um erro que este projeto já cometeu uma vez (§paginação).
+
+🚨 **O risco silencioso da escala, e o que o impede.** Uma escala com os cortes
+fora de ordem **não levanta erro**: `classificar` devolve o primeiro corte
+alcançado, então uma probabilidade de 0,9 numa escala embaralhada sai como
+"observação" e ninguém descobre. É o mesmo formato dos dois erros anteriores do
+projeto — o dado certo, lido na ordem errada. Por isso `niveis.validar()` roda
+**dentro de `classificar`**, e não apenas na configuração.
 
 ⚠️ **O 0,20 anterior nunca tinha sido escolhido.** Ele era o ponto de
 desempenho equivalente ao `0,50` do `predict`, que por sua vez operava daquele

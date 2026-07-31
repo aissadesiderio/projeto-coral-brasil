@@ -72,6 +72,34 @@ além da temperatura ajudam a prever branqueamento?*
 
 O rigor vem primeiro. A publicação vem depois, e só do que estiver sustentado.
 
+### 2.1 Para quem o alerta existe
+
+🚨 **Declarado em 30/07/2026, e a falta dessa frase já custou uma decisão
+errada.** O alerta do painel é dirigido a **quem age sobre ele** — gestão de
+unidade de conservação, pesquisa de campo, monitoramento que possa ser
+acionado quando o aviso sobe. Não é um selo decorativo numa página
+informativa.
+
+Essa frase não é retórica: **ela escolhe o limiar**. Para um público que age,
+perder um evento custa mais do que ir a campo à toa, e um aviso que chega no
+terceiro dia de um episódio de nove vale menos que um que chega no primeiro.
+Para um público que apenas lê, a conta se inverte — ali o alarme falso não
+custa diária de campo, custa credibilidade, e um selo aceso um dia em cada oito
+deixa de significar qualquer coisa.
+
+⚠️ **Até 30/07/2026 esta frase não existia em lugar nenhum, e mesmo assim foi
+usada.** A [§22.9.5 do RESULTADOS.md](RESULTADOS.md) justificou o limiar 0,10
+escrevendo *"para um site cujo público age sobre o aviso"* — uma premissa
+presumida na hora, sobre um público que o projeto nunca havia descrito. A
+premissa acabou sendo confirmada, mas isso é sorte, não método: a mesma frase
+escrita ao contrário teria justificado o limiar oposto com igual naturalidade.
+
+⚠️ **Consequência para quem escreve a interface:** o número que o site mostra é
+uma **probabilidade calibrada**, e o aviso é um corte declarado sobre ela. Os
+dois viajam separados no payload de `/api/painel-risco/` (`probabilidade` e
+`limiar`) exatamente para que quem consome possa discordar do corte sem
+refazer a conta.
+
 Isso tem uma consequência prática que aparece o tempo todo no código: **o
 projeto prefere não mostrar um número a mostrar um número errado**. Valor
 reprovado na validação vira nulo com motivo registrado, nunca zero. Lacuna

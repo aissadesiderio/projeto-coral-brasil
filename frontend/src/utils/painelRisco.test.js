@@ -131,6 +131,78 @@ describe('classificarAlerta', () => {
   });
 });
 
+describe('classificarAlerta - a escala de niveis', () => {
+  const nivel = (extra = {}) => ({
+    slug: 'alerta',
+    rotulo: 'Alerta',
+    corte: 0.2,
+    acao: 'Acionar monitoramento.',
+    exige_acao: true,
+    ...extra,
+  });
+
+  test('o rotulo vem do servidor, e nao daqui', () => {
+    // 🚨 Mesma regra do campo `alerta`: o frontend nao opina sobre o nome do
+    // degrau. Duas escalas, uma no servidor e outra na tela, divergiriam em
+    // silencio na primeira vez que alguem mexesse num corte.
+    const visto = classificarAlerta(item({ alerta: true, nivel: nivel({ rotulo: 'Alerta alto' }) }));
+
+    expect(visto.rotulo).toBe('Alerta alto');
+  });
+
+  test('o corte de cada nivel vem do payload', () => {
+    const visto = classificarAlerta(item({ nivel: nivel({ corte: 0.5 }) }));
+
+    expect(visto.corteTexto).toBe('50,0%');
+  });
+
+  test('a acao esperada acompanha o nivel', () => {
+    // Nivel sem acao e nivel que cada leitor interpreta a seu modo.
+    const visto = classificarAlerta(item({ nivel: nivel() }));
+
+    expect(visto.acao).toContain('Acionar');
+  });
+
+  test('observacao nao exige acao', () => {
+    // Se exigisse, a escala perderia o sentido: seria de novo um corte unico
+    // em 0,05, com metade dos avisos falsos.
+    const visto = classificarAlerta(
+      item({ alerta: false, nivel: nivel({ slug: 'observacao', rotulo: 'Observação', corte: 0.05, exige_acao: false }) }),
+    );
+
+    expect(visto.exigeAcao).toBe(false);
+    expect(visto.slug).toBe('observacao');
+  });
+
+  test('cada nivel conhecido tem cor propria', () => {
+    const cores = ['sem_aviso', 'observacao', 'alerta', 'alerta_alto'].map(
+      (slug) => classificarAlerta(item({ nivel: nivel({ slug }) })).cor,
+    );
+
+    expect(new Set(cores).size).toBe(4);
+  });
+
+  test('nivel desconhecido nao quebra a tela', () => {
+    // ⚠️ O servidor pode ganhar um degrau que esta versao do frontend nao
+    // conhece. Cair no visual neutro e melhor do que renderizar `undefined`
+    // como classe CSS.
+    const visto = classificarAlerta(item({ nivel: nivel({ slug: 'inventado' }) }));
+
+    expect(visto.rotulo).toBe('Alerta');
+    expect(visto.cor).toBeTruthy();
+  });
+
+  test('resposta sem nivel continua funcionando', () => {
+    // Contrato antigo: `alerta` e `limiar` viajam desde 27/07 e ha consumidor
+    // lendo os dois.
+    const visto = classificarAlerta(item({ alerta: true }));
+
+    expect(visto.emAlerta).toBe(true);
+    expect(visto.slug).toBeNull();
+    expect(visto.rotulo.toLowerCase()).toContain('estresse termico');
+  });
+});
+
 describe('descreverAtraso', () => {
   test.each([
     [0, 'dado de hoje'],

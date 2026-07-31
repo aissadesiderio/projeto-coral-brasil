@@ -98,6 +98,51 @@ export function formatarProbabilidade(item) {
  * o numero no frontend criaria duas verdades que divergem em silencio no dia
  * em que uma mudar.
  */
+/**
+ * A aparencia de cada degrau da escala.
+ *
+ * 🚨 **So a aparencia.** O nome, o corte e a acao vem do servidor, no campo
+ * `nivel`. Repetir aqui o corte de cada degrau criaria uma segunda escala,
+ * livre para divergir da primeira em silencio — o mesmo defeito que fez o
+ * frontend deixar de recalcular `probabilidade >= limiar` em 27/07.
+ *
+ * A chave e o `slug`. Um degrau que o servidor invente e o frontend nao
+ * conheca cai no visual neutro, e nao numa tela quebrada.
+ */
+const VISUAL_DO_NIVEL = {
+  alerta_alto: {
+    cor: 'bg-red-600',
+    corTexto: 'text-red-700',
+    corFundo: 'bg-red-50',
+    corBorda: 'border-red-200',
+  },
+  alerta: {
+    cor: 'bg-orange-500',
+    corTexto: 'text-orange-700',
+    corFundo: 'bg-orange-50',
+    corBorda: 'border-orange-200',
+  },
+  observacao: {
+    cor: 'bg-amber-400',
+    corTexto: 'text-amber-700',
+    corFundo: 'bg-amber-50',
+    corBorda: 'border-amber-200',
+  },
+  sem_aviso: {
+    cor: 'bg-emerald-600',
+    corTexto: 'text-emerald-700',
+    corFundo: 'bg-emerald-50',
+    corBorda: 'border-emerald-200',
+  },
+};
+
+const VISUAL_NEUTRO = {
+  cor: 'bg-slate-500',
+  corTexto: 'text-slate-700',
+  corFundo: 'bg-slate-50',
+  corBorda: 'border-slate-200',
+};
+
 export function classificarAlerta(item) {
   if (!item || item.disponivel !== true) {
     return null;
@@ -105,12 +150,38 @@ export function classificarAlerta(item) {
 
   const limiar = Number(item.limiar);
   const emAlerta = item.alerta === true;
+  const nivel = item.nivel || null;
+  const visual = (nivel && VISUAL_DO_NIVEL[nivel.slug]) || null;
+
+  // ⚠️ O rotulo vem do servidor quando ha nivel. O texto antigo fica como
+  // reserva para resposta de uma versao anterior da API — nao como opiniao
+  // propria sobre o que exibir.
+  const rotulo =
+    (nivel && nivel.rotulo) || (emAlerta ? 'Alerta de estresse termico' : 'Sem alerta');
+
+  const corte = nivel && Number(nivel.corte);
+
+  // Tres casos, escritos como tres casos. A versao anterior resolvia isto com
+  // dois spreads condicionais encadeados: funcionava, e ninguem conseguiria
+  // dizer por que sem simular na cabeca.
+  let aparencia;
+  if (visual) {
+    aparencia = visual; // nivel conhecido
+  } else if (nivel) {
+    aparencia = VISUAL_NEUTRO; // nivel que esta versao do site nao conhece
+  } else {
+    aparencia = emAlerta ? VISUAL_DO_NIVEL.alerta : VISUAL_DO_NIVEL.sem_aviso;
+  }
 
   return {
     emAlerta,
-    rotulo: emAlerta ? 'Alerta de estresse termico' : 'Sem alerta',
-    cor: emAlerta ? 'bg-orange-500' : 'bg-emerald-600',
-    corTexto: emAlerta ? 'text-orange-700' : 'text-emerald-700',
+    exigeAcao: nivel ? nivel.exige_acao === true : emAlerta,
+    slug: nivel ? nivel.slug : null,
+    rotulo,
+    acao: (nivel && nivel.acao) || null,
+    ...aparencia,
+    corte: Number.isFinite(corte) ? corte : null,
+    corteTexto: Number.isFinite(corte) ? formatarPercentual(corte) : null,
     limiar: Number.isFinite(limiar) ? limiar : null,
     limiarTexto: Number.isFinite(limiar) ? formatarPercentual(limiar) : null,
   };

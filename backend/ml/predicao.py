@@ -149,6 +149,18 @@ class Risco:
     def alerta(self):
         return self.probabilidade >= self.limiar
 
+    def nivel(self, escala=None):
+        """O degrau da escala em que esta probabilidade cai.
+
+        ⚠️ Nao substitui `alerta`, que continua sendo o corte binario que viaja
+        no payload desde 27/07. Os dois coexistem porque respondem a perguntas
+        diferentes: `alerta` diz *"e para agir?"*, `nivel` diz *"com que
+        urgencia, e o que se espera de quem le"*. Ver `ml/niveis.py`.
+        """
+        from . import niveis
+
+        return niveis.classificar(self.probabilidade, escala)
+
     @property
     def no_extremo(self):
         """A probabilidade saiu exatamente 0 ou exatamente 1.

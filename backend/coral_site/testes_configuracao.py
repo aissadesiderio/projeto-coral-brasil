@@ -25,6 +25,159 @@ from coral_site import settings
 RAIZ = Path(settings.BASE_DIR).parent
 
 
+class TodoTesteEDescobertoTests(SimpleTestCase):
+    """🚨 Um arquivo de teste com o nome errado nunca roda, e nao reclama.
+
+    O `manage.py test` usa o discovery do unittest, cujo padrao e `test*.py`.
+    Um arquivo cheio de `TestCase` chamado `verificacoes_x.py` simplesmente
+    nao e encontrado: a suite passa, o numero total sobe zero, e nada na saida
+    diz que faltou alguem. E o mesmo formato de falha silenciosa que ja custou
+    caro tres vezes aqui — inclusive o `NO TESTS RAN` de 29/07, em que a suite
+    inteira ficou invisivel e **saiu com sucesso**.
+
+    Este teste percorre o codigo com AST — sem importar nada — e exige que todo
+    arquivo que defina um `TestCase` tenha nome descobrivel.
+
+    ⚠️ A direcao contraria nao e verificada de proposito: `testar_fontes.py`
+    casa com `test*.py` sem conter teste nenhum, e isso e inofensivo. O
+    discovery importa o modulo, nao encontra `TestCase` e segue.
+    """
+
+    PADRAO_DO_DISCOVERY = 'test*.py'
+    BASES_DE_TESTE = ('TestCase', 'SimpleTestCase', 'TransactionTestCase')
+
+    def _define_teste(self, caminho):
+        import ast
+
+        try:
+            arvore = ast.parse(caminho.read_text(encoding='utf-8'))
+        except SyntaxError:  # pragma: no cover - arquivo quebrado ja falha antes
+            return False
+
+        for no in ast.walk(arvore):
+            if not isinstance(no, ast.ClassDef):
+                continue
+            for base in no.bases:
+                nome = base.attr if isinstance(base, ast.Attribute) else getattr(base, 'id', '')
+                if nome.endswith(self.BASES_DE_TESTE):
+                    return True
+        return False
+
+    def test_todo_arquivo_com_testcase_tem_nome_descobrivel(self):
+        import fnmatch
+
+        raiz = Path(settings.BASE_DIR)
+        escondidos = []
+
+        for caminho in sorted(raiz.rglob('*.py')):
+            if '__pycache__' in caminho.parts or 'migrations' in caminho.parts:
+                continue
+            if fnmatch.fnmatch(caminho.name, self.PADRAO_DO_DISCOVERY):
+                continue
+            if self._define_teste(caminho):
+                escondidos.append(str(caminho.relative_to(raiz)))
+
+        self.assertEqual(
+            escondidos, [],
+            f'Estes arquivos definem TestCase e NAO casam com '
+            f'"{self.PADRAO_DO_DISCOVERY}", entao o "manage.py test" nunca os '
+            f'roda — e nao avisa: {escondidos}',
+        )
+
+    def test_o_proprio_guarda_pegaria_um_arquivo_mal_nomeado(self):
+        """Um teste que nunca falha nao protege nada. Este confere a si mesmo."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            impostor = Path(tmp) / 'verificacoes_do_recife.py'
+            impostor.write_text(
+                'from django.test import TestCase\n'
+                'class Alguma(TestCase):\n    pass\n',
+                encoding='utf-8',
+            )
+
+            self.assertTrue(self._define_teste(impostor))
+
+    def test_arquivo_sem_testcase_nao_e_acusado(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            comum = Path(tmp) / 'modulo.py'
+            comum.write_text('class Coisa:\n    pass\n', encoding='utf-8')
+
+            self.assertFalse(self._define_teste(comum))
+
+
+class SemConfiguracaoDePytestTests(SimpleTestCase):
+    """⚠️ A seção `[tool.pytest.ini_options]` foi removida em 30/07/2026.
+
+    Ela declarava `python_files = ["test_*.py", "tests.py"]`, que não casa com
+    os `testes_*.py` deste projeto — 20 dos 24 arquivos ficavam invisíveis. E
+    nem corrigindo o padrão funcionaria: `pytest` e `pytest-django` não são
+    dependências. Uma IDE que detectasse a seção ligaria o pytest sozinha e
+    exibiria "4 testes" num projeto com mais de 600.
+
+    Este teste existe para que ela não volte por reflexo. Se alguém quiser
+    pytest de verdade, o caminho é declarar as duas dependências primeiro — e
+    aí este teste é o lugar certo para registrar essa decisão.
+    """
+
+    @staticmethod
+    def _sem_comentarios(caminho):
+        """O TOML sem as linhas de comentário.
+
+        ⚠️ Necessário, e a primeira versão deste teste falhou por não ter:
+        o comentário que explica a remoção da seção **cita a seção**, e uma
+        busca por substring no arquivo inteiro encontra a citação. Ler texto
+        sem respeitar a estrutura dele é o mesmo erro que a tabela de
+        episódios trocada — só que aqui ele falha alto, em vez de calado.
+        """
+        texto = caminho.read_text(encoding='utf-8')
+        return '\n'.join(
+            linha for linha in texto.splitlines()
+            if not linha.lstrip().startswith('#')
+        )
+
+    def test_pyproject_nao_declara_pytest_sem_a_dependencia(self):
+        pyproject = self._sem_comentarios(RAIZ / 'pyproject.toml')
+        requirements = (RAIZ / 'requirements.txt').read_text(encoding='utf-8')
+
+        declara_pytest = '[tool.pytest.ini_options]' in pyproject
+        instala_pytest = 'pytest' in requirements.lower()
+
+        if declara_pytest and not instala_pytest:
+            self.fail(
+                'pyproject.toml configura o pytest, mas ele não está no '
+                'requirements.txt. Configuração de uma ferramenta ausente não '
+                'falha — ela faz uma IDE mostrar uma contagem parcial de '
+                'testes, que se lê como baixa cobertura.'
+            )
+
+    def test_o_padrao_de_arquivo_do_pytest_cobriria_os_testes_daqui(self):
+        """Se a seção voltar, que volte com o padrão certo.
+
+        `test_*.py` exige o sublinhado logo após "test"; os arquivos daqui são
+        `testes_*.py`, em português. O discovery do Django usa `test*.py`, sem
+        sublinhado, e por isso enxerga os dois.
+        """
+        import fnmatch
+        import re
+
+        pyproject = self._sem_comentarios(RAIZ / 'pyproject.toml')
+        casa = re.search(r'python_files\s*=\s*\[([^\]]*)\]', pyproject)
+        if not casa:
+            return  # sem seção de pytest: nada a conferir
+
+        padroes = re.findall(r'"([^"]+)"', casa.group(1))
+        exemplo = 'testes_predicao.py'
+
+        self.assertTrue(
+            any(fnmatch.fnmatch(exemplo, p) for p in padroes),
+            f'Nenhum de {padroes} casa com "{exemplo}". Os arquivos de teste '
+            f'deste projeto começam com "testes_", em português.',
+        )
+
+
 class AparaEspacoDoEnvTests(SimpleTestCase):
     """🚨 Verificado em 29/07/2026, num `.env` montado por copiar-e-colar."""
 

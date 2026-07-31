@@ -329,29 +329,57 @@ PAINEL_MODELO = env('PAINEL_MODELO', default='entrega1_baa')
 # 🚨 **O limiar de alerta e decisao de produto, e por isso mora aqui e vai no
 # payload — nao esta escondido no codigo do modelo.**
 #
-# **Decidido em 27/07/2026: 0,10**, com o material de docs/RESULTADOS.md secao
-# 22.9 na mesa. O criterio declarado foi **priorizar antecedencia**: para um
-# site cujo publico age sobre o aviso, perder um evento custa mais que um
-# alarme falso, e chegar tarde e quase o mesmo que nao chegar.
+# 🚨 **Substituido por uma ESCALA em 30/07/2026.** Ver `PAINEL_NIVEIS` abaixo.
+# Este valor continua existindo porque `alerta` e `limiar` viajam no payload
+# desde 27/07 e ha consumidor lendo os dois; ele passou a ser **derivado** do
+# degrau que exige acao, e nao mais a decisao em si.
 #
-#   limiar  episodios  avisados no 1o dia  atraso medio  alarme falso/ano/recife
-#    0,05     18/19          18/20            0,80 d              27,0
-#   >0,10<    17/19          18/20            0,95 d              16,3
-#    0,20     16/19          16/20            1,50 d              10,0
-#    0,30     16/19          13/20            2,60 d               8,0
+# O historico da decisao antiga, e por que ela caiu:
 #
-# O que 0,10 compra sobre o 0,20 anterior: o episodio de **nove dias** de
-# Picaozinho em 2022, e o aviso no primeiro dia em 18 dos 20 em vez de 16.
-# O que custa: de 10,0 para 16,3 dias de alarme falso por ano e por recife.
+# Adotou-se 0,10 em 27/07/2026 com o criterio "priorizar antecedencia". A
+# justificativa registrada dizia que 0,10 comprava o episodio de **nove dias**
+# de Picaozinho em 2022. 🚨 **Era falso, e o erro so apareceu em 30/07**: a
+# tabela de docs/RESULTADOS.md secao 22.9.2 saiu com duas linhas trocadas.
+# 0,10 tambem perde o episodio de nove dias; o que ele recuperava sobre o 0,20
+# era um episodio de **um dia** (Porto de Galinhas, 07/05/2020). O de nove
+# dias so volta em 0,05.
 #
-# ⚠️ **Nao existe corte natural, e o numero anterior nunca foi escolhido.** Ate
-# a recalibracao, `class_weight='balanced'` empurrava a probabilidade para
-# cima, o que equivale a baixar o limiar sem declarar: o 0,50 do `predict`
-# operava como 0,20. O 0,20 herdou essa equivalencia — nao uma decisao.
+# ⚠️ **Nao existe corte natural, e o 0,20 anterior nunca foi escolhido.** Ate a
+# recalibracao, `class_weight='balanced'` empurrava a probabilidade para cima,
+# o que equivale a baixar o limiar sem declarar: o 0,50 do `predict` operava
+# como 0,20. O 0,20 herdou essa equivalencia — nao uma decisao.
 #
-# ⚠️ **Nenhum limiar pega todos os episodios.** Um evento de Picaozinho
-# (21–23/04/2026) escapa em todos os cortes varridos. O teto ai e do modelo, e
-# baixar mais o limiar nao o recupera — so compra alarme falso.
+# ⚠️ **Nenhum corte pega todos os episodios.** Um evento de Picaozinho
+# (21–23/04/2026) escapa em todos os varridos. O teto ai e do modelo.
+PAINEL_LIMIAR = env.float('PAINEL_LIMIAR', default=0.20)
+
+# ---------------------------------------------------------------------------
+# A escala de aviso
+# ---------------------------------------------------------------------------
+# 🚨 **Tres degraus em vez de um corte, decidido em 30/07/2026.** Um corte
+# unico obrigava a escolher entre duas coisas que nao se conciliam:
 #
-# Reproduza o material com: python backend/manage.py limiar
-PAINEL_LIMIAR = env.float('PAINEL_LIMIAR', default=0.10)
+#   - cobrir tudo  -> so 0,05 alcanca o teto do modelo (18/19 episodios),
+#                     e ali metade dos avisos e falsa;
+#   - ser levado a serio -> 0,20 acerta 7 em 10, mas descarta de proposito
+#                     dois episodios que o modelo conseguia pegar.
+#
+# Com escala os dois deixam de competir: o degrau mais baixo garante cobertura
+# **sem pedir acao**, e o mais alto pede acao com precisao para sustenta-la.
+#
+# Medido em 30/07/2026 sobre as predicoes fora da dobra (7.095 amostras):
+#
+#   corte  precisao  episodios  1o dia  atraso  falsos/ano/recife  dias/ano
+#    0,05    0,498     18/19      19    0,45 d       27,0            53,7
+#    0,20    0,719     16/19      16    1,50 d       10,0            35,5
+#    0,50    0,826     14/19      10    4,94 d        4,5            25,7
+#
+# ⚠️ **Isto nao e o `RISCO_STATUS` legado de volta.** Aquele tinha quatro
+# niveis herdados do `StatusPredicao` e nenhum numero por tras; foi removido em
+# 28/07/2026. A diferenca nao e de forma, e de procedencia.
+#
+# O publico a que a escala responde esta declarado em docs/VISAO_GERAL.md
+# secao 2.1. Reproduza o material com: python backend/manage.py limiar
+#
+# Deixe vazio para usar a escala canonica de `ml/niveis.py`.
+PAINEL_NIVEIS = []

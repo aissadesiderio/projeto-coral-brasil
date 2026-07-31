@@ -324,6 +324,22 @@ class PainelRiscoBase(OfflineModeMixin, APIView):
     def limiar(self):
         return float(getattr(settings, 'PAINEL_LIMIAR', 0.20))
 
+    def escala(self):
+        """A escala de aviso configurada, ou a canonica de `ml/niveis.py`."""
+        from ml import niveis
+
+        return niveis.de_configuracao(getattr(settings, 'PAINEL_NIVEIS', None))
+
+    def nivel_como_payload(self, risco):
+        nivel = risco.nivel(self.escala())
+        return {
+            'slug': nivel.slug,
+            'rotulo': nivel.rotulo,
+            'corte': nivel.corte,
+            'acao': nivel.acao,
+            'exige_acao': nivel.exige_acao,
+        }
+
     def cabecalho(self, metadados):
         """O bloco `modelo`: o que a probabilidade quer dizer.
 
@@ -347,7 +363,16 @@ class PainelRiscoBase(OfflineModeMixin, APIView):
             'treinado_em': metadados.get('gerado_em'),
             'n_treino': metadados.get('n_treino'),
             'limiar': self.limiar(),
+            # A escala inteira viaja junto: sem ela, quem consome ve o nome do
+            # nivel e nao tem como saber de que corte ele veio. Mesma razao
+            # pela qual `limiar` acompanha `probabilidade` desde 27/07.
+            'escala': self.escala_como_payload(),
         }
+
+    def escala_como_payload(self):
+        from ml import niveis
+
+        return niveis.como_payload(self.escala())
 
     def avaliar(self, local, ajuste):
         """Um item da resposta. Nunca levanta por falta de dado."""
@@ -387,6 +412,13 @@ class PainelRiscoBase(OfflineModeMixin, APIView):
             'probabilidade': round(risco.probabilidade, 4),
             'limiar': risco.limiar,
             'alerta': risco.alerta,
+            # 🚨 O degrau da escala, desde 30/07/2026. Um corte unico obrigava
+            # a escolher entre cobrir tudo (0,05, com metade dos avisos falsos)
+            # e ser levado a serio (0,20, descartando episodios que o modelo
+            # pegava). Com tres degraus os dois objetivos deixam de competir.
+            # `alerta` continua ao lado, porque e contrato desde 27/07.
+            # Ver ml/niveis.py.
+            'nivel': self.nivel_como_payload(risco),
             # 🚨 A probabilidade saiu 0 ou 1 exatos. A recalibracao isotonica
             # e funcao escada: 12,2% das amostras de treino caem em p = 0,000.
             # Isso significa "nenhum alerta neste degrau", e nao "impossivel".
