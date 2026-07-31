@@ -628,6 +628,30 @@ Em 17/05/2024 a nova regra grava BAA 4 e `baa_area_alerta` = 115/121 = **0,950**
 
 A ingestão sofreu 10 `ReadTimeout` do PACIOOS, todos absorvidos pela retentativa. Nenhum bloco perdido.
 
+#### Quanto a agregação afasta o banco da regra publicada — medido em 30/07/2026
+
+O parágrafo acima sobre o efeito colateral (a média espacial quebra a relação determinística entre BAA e HotSpot/DHW) estava certo e era **qualitativo**: dizia que a relação quebra, não quanto. Ao construir a linha de base da NOAA foi preciso saber o tamanho, e ele foi medido nos 7.173 dias das três séries.
+
+Regra publicada — `HotSpot ≥ 1 °C` **e** `DHW ≥ 4 °C·semana` ⟺ `BAA ≥ 3`, Alerta Nível 1 — aplicada aos valores **agregados** do banco:
+
+| | regra diz **não** | regra diz **sim** |
+|---|---|---|
+| `BAA < 3` no banco | 6.575 | **0** |
+| `BAA ≥ 3` no banco | 261 | 337 |
+
+Concordância **0,964**, e o desvio é inteiramente de um lado: **a regra nunca dispara onde o BAA agregado não disparou**, e perde 261 dos 598 dias de alerta (43,6%).
+
+O sentido único é consequência direta da regra de agregação da tabela acima — máximo para o BAA, média para HotSpot e DHW. O máximo é sempre ≥ a média, então o BAA do recife pode subir sem que nenhuma das duas médias alcance seu corte; o contrário não acontece.
+
+Duas medições laterais, do mesmo dia:
+
+- **Só `DHW ≥ 4`, sem a metade do HotSpot:** concordância cai para 0,903, e aparecem **479 dias** em que a regra dispararia e o BAA não. Nos 479, o HotSpot está abaixo de 1 — são os dias em que a água já esfriou e o calor acumulado ainda não decaiu. É a metade da regra que evita o alarme tardio.
+- **Os 215 dias com `BAA ≥ 3` e `DHW < 4`:** DHW mediano 2,39 e HotSpot mediano 1,13. Recife com um pedaço em alerta e média morna.
+
+⚠️ **Isto não é defeito de nenhum dos dois lados**, e nada aqui pede correção. `BAA = máximo` responde "qual o pior pedaço do recife"; `DHW = média` responde "quanto calor o recife acumulou em média". A regra da NOAA é exata **por pixel** — ver [VARIAVEIS.md](VARIAVEIS.md) §4.2 — e é a agregação, escolhida deliberadamente nesta seção, que faz as duas perguntas divergirem em escala de recife.
+
+**Consequência prática, em [RESULTADOS.md](RESULTADOS.md) §24.2:** o corte publicado de `DHW ≥ 4` chega tarde na escala do recife. Ele pega 10 dos 19 episódios; movido para `DHW ≥ 1` — mantido o HotSpot — pega 15, com precisão 0,880. O número 4 continua correto para a grade de 5 km da NOAA; o que ele não é é transferível para uma média de bbox sem ser remedido.
+
 ### 6.21 Os arquivos defeituosos foram apagados — ✅ 28/07/2026
 
 Os sete arquivos que as seções anteriores declaram inutilizáveis foram
@@ -746,12 +770,40 @@ funcionava. O problema é que existiam **dois caminhos de escrita no mesmo
 grafo** — e o legado sobrescreveria a projeção com os dados de abril de 2026.
 Ficou um teste que falha se o par voltar.
 
-#### O que fica de pé, e por quê
+#### O que ficou de pé — e por que não bastava
 
-O **modelo `StatusPredicao`** continua existindo, com os 3 registros. Removê-lo
-é mudança de esquema — migração, e mais admin, `code_sync`, `neo4j_schema` e o
-campo `monitoramento_recente` que `/api/locais/<slug>/` ainda devolve. É
-trabalho de outra natureza que apagar comando morto, e merece decisão própria.
+O **modelo `StatusPredicao`** continuou existindo, com os 3 registros mais o
+global. Removê-lo era mudança de esquema — migração, e mais admin, `code_sync`,
+`neo4j_schema` e o campo `monitoramento_recente` que `/api/locais/<slug>/`
+ainda devolvia.
+
+🚨 **✅ REMOVIDO em 30/07/2026, e a decisão de adiar tinha um custo maior do que
+o registrado acima.** Aposentar o endpoint não aposentou o dado: os mesmos 4
+registros de demonstração continuaram saindo por `monitoramento_recente`, com
+`risco_integrado` e `nivel_alerta` — dois campos com nome de resultado e
+nenhuma conta por trás. O parágrafo original tratava isso como pendência de
+esquema; era **um problema de proveniência ativo**, servido por HTTP.
+
+E havia um segundo, não notado até agora: `possui_painel_risco` era
+`bool(StatusPredicao)` **com queda para o registro global**. Como o global
+existia, o campo respondia `true` para **qualquer** recife cadastrado —
+inclusive um recém-criado, sobre o qual `/api/painel-risco/<slug>/` responde
+404 por decisão explícita. A API afirmava cobertura que ela mesma negava uma
+rota adiante.
+
+Agora o campo sai da lista `locais` dos metadados do artefato, a mesma fonte
+que decide o 404, e vale `false` quando não há artefato. Conferido ao vivo em
+30/07/2026: os dois endpoints declaram o mesmo conjunto de três recifes.
+
+| Também caiu junto | O que era |
+|---|---|
+| 4 consultas `UPSERT_*` e 8 funções do `neo4j_schema.py` | a camada de escrita do `neo4j_seed`, **chamada só pelos próprios testes** — o que lhe dava aparência de coberta e viva |
+| a cascata de `utils/recifes.js` | `risco_atual`, `nivel_alerta_atual`, `monitoramento_recente` e `quantidade_predicoes`, computados em `??` de seis níveis e **renderizados por nenhum componente** |
+
+⚠️ O `FALLBACK_RECIFES` versionado no `.js` também carregava `risco_atual` —
+número de demonstração dentro de arquivo de código, que sobrevive a qualquer
+limpeza do banco e reaparece justamente quando a API cai. Regenerado, e há
+teste que falha se voltar.
 
 ### 6.20 O catálogo anunciava nove conjuntos; a API servia três — ✅ RESOLVIDO em 27/07/2026
 
@@ -1101,6 +1153,8 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 30/07/2026 | 🚨 **`StatusPredicao` removido (§6.21).** Aposentar o `/api/monitoramento/` em 28/07 **não** aposentou o dado: os mesmos 4 registros de demonstração continuaram saindo por `monitoramento_recente`, e `possui_painel_risco` era derivado deles com queda para o registro global — dizendo `true` para todo recife cadastrado, inclusive os que o painel responde com 404. Migração `0021`; o campo passou a sair dos metadados do artefato, e os dois endpoints concordam ao vivo. Caíram junto a camada de escrita legada do `neo4j_schema.py` (chamada só por testes) e a cascata morta do `utils/recifes.js`. |
+| 30/07/2026 | **§6.16 quantificada.** O parágrafo sobre o efeito colateral da agregação (a média espacial quebra a relação entre BAA e HotSpot/DHW) estava certo e era qualitativo. Medido nos 7.173 dias: concordância **0,964** entre a regra publicada da NOAA e o `baa` do banco, com o desvio **inteiramente de um lado** — 0 casos em que a regra dispara sem o BAA, 261 em que o BAA dispara sem a regra. É consequência direta de agregar BAA por máximo e HotSpot/DHW por média, e não pede correção: são perguntas diferentes. **Consequência prática:** o corte publicado `DHW ≥ 4` não é transferível para média de bbox — pega 10 dos 19 episódios contra 15 do corte remedido de 1,0. Ver [RESULTADOS.md](RESULTADOS.md) §24 e [VARIAVEIS.md](VARIAVEIS.md) §4.6. |
 | 28/07/2026 | **§6.21 — os arquivos defeituosos foram apagados, e um comando que não existia foi construído.** Removidos os **7 arquivos declarados inutilizáveis: 179,9 MB, 72% da pasta**. O que justifica apagar sem perda é que **o conhecimento sobre eles nunca esteve neles** — está nesta seção e em `inventario_datasets.EXCLUIDOS`, que continua listando os sete com o motivo depois de os arquivos sumirem. ⚠️ Nenhum estava no Git: remoção definitiva, confirmada antes. Mantidos os 9 catalogados (apagá-los esvazia a página, é decisão de produto) e os **7 órfãos** — nem catalogados nem declarados defeituosos, ou seja **não documentados**, e apagá-los sem entender repetiria em pequena escala o erro da §6.14. Removido também o `.pkl` legado que predizia `0.0` para tudo, via `git rm` (recuperável). 🚨 **Achado maior no caminho: `manage.py treinar_modelo` nunca existiu.** O README ensinava a rodá-lo, o `treinar_final` mandava usá-lo e o aviso de envelhecimento da rotina diária apontava para ele — confusão com o arquivo legado `backend/ml_models/treinar_modelo.py`, de mesmo nome. A falta importava porque a decisão de **não retreinar automaticamente** se apoia em "medir é ato deliberado", e não havia como medir sem escrever Python. Construído sobre o código que já existia e era testado. |
 | 27/07/2026 | 🚨 **§6.20 criada — o catálogo anunciava nove conjuntos e a API servia três.** Descoberto ao verificar se o endpoint `banco-de-dados` do checklist existia: ele existia, e o problema era outro. **Seis dos nove datasets não têm uma única linha em `MedicaoAmbiental`** — pH, clorofila, nitrato, `thetao`, KD490 e o SST do Met Office apareciam na página com título, formato, período e tamanho, indistinguíveis dos três reais. Nenhum é invenção (ao contrário da §6.14): os arquivos existem em `backend/dados/` e o inventário lê deles. **O erro não era número nenhum** — era a página não dizer que *"período do arquivo em disco"* e *"até quando a API tem dado"* são perguntas diferentes. E os dois divergem no pior sentido: `noaa_crw_dhw` declarava fim em **2025-11-30** enquanto a série no banco vai a **2026-07-24**, ou seja o catálogo ao mesmo tempo anunciava dado inexistente e **escondia dado existente**. A causa é estrutural: cobertura estava **gravada**, e cópia guardada envelhece em silêncio — quarta vez que essa mesma regra cobra o preço, depois do `.docx`, do `.joblib` e do grafo. Agora é derivada a cada resposta em `aquaculture/cobertura.py`. Cada número anunciado vem com **`consulta`, o recibo**: a URL do `/api/medicoes/` que devolve exatamente aquilo, conferida nos três. Na tela, três estados que não se implicam: *disponível*, *referência externa* e *não verificada* — o terceiro porque afirmar ausência a partir de silêncio seria o mesmo erro invertido. ⚠️ Fica registrado o efeito colateral: **apagar `backend/dados/` esvazia a página do catálogo**, porque a regra 2 do inventário desativa registro sem arquivo. Isso precisa ser decidido, não descoberto. 29 testes. |
 | 24/07/2026 | Criação do documento. Auditoria inicial de proveniência dos 19 CSVs, das imagens e das referências: 15 problemas registrados na §6. |

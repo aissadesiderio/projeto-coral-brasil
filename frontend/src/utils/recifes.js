@@ -1,24 +1,22 @@
+/**
+ * Junta o que a API devolve com o fallback gerado do banco.
+ *
+ * 🚨 **Nao ha calculo de risco aqui, e isso e deliberado.** Ate 30/07/2026
+ * este arquivo montava `risco_atual`, `nivel_alerta_atual`,
+ * `monitoramento_recente` e `quantidade_predicoes` — quatro campos com nome de
+ * resultado, encadeados em cascatas de `??` de seis niveis, e **nenhum deles
+ * era renderizado por componente nenhum**. Vinham do `StatusPredicao`, o
+ * caminho legado do backend, removido no mesmo dia.
+ *
+ * Codigo morto que calcula risco e pior que codigo morto qualquer: ele parece
+ * a fonte da verdade sobre o alerta. Quem viesse consertar o painel mexeria
+ * aqui, e nada mudaria na tela.
+ *
+ * O risco vem de `/api/painel-risco/` e passa por `utils/painelRisco.js`. Este
+ * arquivo cuida so de identidade e conteudo do recife.
+ */
+
 import { FALLBACK_DETALHES, FALLBACK_RECIFES } from '../data/recifeData';
-
-function normalizarNumero(valor) {
-  const numero = Number(valor);
-  return Number.isFinite(numero) ? numero : null;
-}
-
-function normalizarPredicao(predicao) {
-  if (!predicao || typeof predicao !== 'object') {
-    return null;
-  }
-
-  const riscoIntegrado = normalizarNumero(predicao.risco_integrado ?? predicao.risco_atual);
-
-  return {
-    ...predicao,
-    data: predicao.data || predicao.ultima_predicao_data || null,
-    risco_integrado: riscoIntegrado,
-    nivel_alerta: predicao.nivel_alerta || predicao.nivel_alerta_atual || null,
-  };
-}
 
 function normalizarEspecie(especie, index) {
   if (!especie || typeof especie !== 'object') {
@@ -41,46 +39,25 @@ export function combinarLocais(apiLocais = []) {
     .filter((local) => local && typeof local === 'object' && local.slug)
     .map((local) => {
       const anterior = FALLBACK_RECIFES.find((item) => item.slug === local.slug) || {};
-      const monitoramentoRecente =
-        normalizarPredicao(local.monitoramento_recente) ||
-        normalizarPredicao({
-          data: local.ultima_predicao_data,
-          risco_atual: local.risco_atual,
-          nivel_alerta_atual: local.nivel_alerta_atual ?? local.nivel_alerta,
-        });
       const quantidadeEspecies =
         local.quantidade_especies ??
         local.informacoes_disponiveis ??
         anterior.informacoes_disponiveis ??
         FALLBACK_DETALHES[local.slug]?.especies?.length ??
         0;
-      const quantidadePredicoes = local.quantidade_predicoes ?? anterior.quantidade_predicoes ?? 0;
-      const riscoAtual = normalizarNumero(local.risco_atual);
-      const nivelAlertaAtual =
-        local.nivel_alerta_atual ||
-        local.nivel_alerta ||
-        monitoramentoRecente?.nivel_alerta ||
-        anterior.nivel_alerta_atual ||
-        null;
 
       return {
         ...anterior,
         ...local,
         imagem_url: local.imagem_url || anterior.imagem_url || '',
-        ultima_atualizacao:
-          local.ultima_atualizacao || local.ultima_predicao_data || anterior.ultima_atualizacao || '',
+        ultima_atualizacao: local.ultima_atualizacao || anterior.ultima_atualizacao || '',
         quantidade_especies: quantidadeEspecies,
-        quantidade_predicoes: quantidadePredicoes,
-        risco_atual: riscoAtual,
-        ultima_predicao_data: local.ultima_predicao_data || monitoramentoRecente?.data || null,
-        nivel_alerta_atual: nivelAlertaAtual,
-        nivel_alerta: local.nivel_alerta || monitoramentoRecente?.nivel_alerta || null,
         informacoes_disponiveis: quantidadeEspecies,
-        possui_painel_risco:
-          local.possui_painel_risco ??
-          anterior.possui_painel_risco ??
-          Boolean(quantidadePredicoes || monitoramentoRecente),
-        monitoramento_recente: monitoramentoRecente,
+        // ⚠️ Passa direto, sem reserva local. Desde 30/07/2026 o servidor o
+        // deriva dos metadados do modelo — a mesma fonte que decide o 404 do
+        // painel. Uma queda para o fallback poderia afirmar que ha painel
+        // sobre um recife que o modelo nunca viu.
+        possui_painel_risco: local.possui_painel_risco === true,
       };
     });
 }
@@ -95,16 +72,7 @@ export function combinarDetalhe(recifeBase, detalheApi) {
     Array.isArray(detalheApi?.especies) && detalheApi.especies.length > 0
       ? detalheApi.especies.map(normalizarEspecie).filter(Boolean)
       : null;
-  const predicoesApi =
-    Array.isArray(detalheApi?.predicoes) && detalheApi.predicoes.length > 0
-      ? detalheApi.predicoes.map(normalizarPredicao).filter(Boolean)
-      : null;
-  const monitoramentoFallback = normalizarPredicao(detalheFallback.monitoramento_recente);
-  const monitoramentoBase = normalizarPredicao(recifeBase.monitoramento_recente);
-  const monitoramentoApi =
-    normalizarPredicao(detalheApi?.monitoramento_recente) || predicoesApi?.[0] || null;
-  const monitoramentoRecente =
-    monitoramentoApi || monitoramentoFallback || monitoramentoBase || null;
+  const especies = especiesApiNormalizadas || detalheFallback.especies || [];
   const quantidadeEspecies =
     detalheApi?.quantidade_especies ??
     detalheApi?.informacoes_disponiveis ??
@@ -113,66 +81,18 @@ export function combinarDetalhe(recifeBase, detalheApi) {
     recifeBase.informacoes_disponiveis ??
     detalheFallback.especies?.length ??
     0;
-  const quantidadePredicoes =
-    detalheApi?.quantidade_predicoes ??
-    (predicoesApi ? predicoesApi.length : null) ??
-    recifeBase.quantidade_predicoes ??
-    0;
-  const riscoAtual =
-    normalizarNumero(detalheApi?.risco_atual) ??
-    monitoramentoApi?.risco_integrado ??
-    normalizarNumero(recifeBase.risco_atual) ??
-    monitoramentoFallback?.risco_integrado ??
-    monitoramentoBase?.risco_integrado ??
-    null;
-  const nivelAlertaAtual =
-    detalheApi?.nivel_alerta_atual ||
-    detalheApi?.nivel_alerta ||
-    monitoramentoApi?.nivel_alerta ||
-    recifeBase.nivel_alerta_atual ||
-    recifeBase.nivel_alerta ||
-    monitoramentoFallback?.nivel_alerta ||
-    monitoramentoBase?.nivel_alerta ||
-    null;
 
   return {
     ...recifeBase,
     ...detalheFallback,
     ...detalheApi,
     imagem_url: detalheApi?.imagem_url || recifeBase.imagem_url || '',
-    especies: especiesApiNormalizadas || detalheFallback.especies || [],
-    predicoes: predicoesApi || detalheApi?.predicoes || [],
-    monitoramento_recente:
-      monitoramentoRecente && {
-        ...monitoramentoRecente,
-        data:
-          monitoramentoRecente.data ||
-          detalheApi?.ultima_predicao_data ||
-          recifeBase.ultima_predicao_data ||
-          null,
-        risco_integrado: monitoramentoRecente.risco_integrado ?? riscoAtual,
-        nivel_alerta: monitoramentoRecente.nivel_alerta || nivelAlertaAtual,
-      },
-    informacoes_disponiveis: quantidadeEspecies,
+    especies,
     quantidade_especies: quantidadeEspecies,
-    quantidade_predicoes: quantidadePredicoes,
-    risco_atual: riscoAtual,
-    ultima_predicao_data:
-      detalheApi?.ultima_predicao_data || monitoramentoRecente?.data || recifeBase.ultima_predicao_data || null,
-    ultima_atualizacao:
-      detalheApi?.ultima_atualizacao || recifeBase.ultima_atualizacao || monitoramentoRecente?.data || null,
+    informacoes_disponiveis: quantidadeEspecies,
+    ultima_atualizacao: detalheApi?.ultima_atualizacao || recifeBase.ultima_atualizacao || null,
     possui_painel_risco:
-      detalheApi?.possui_painel_risco ??
-      recifeBase.possui_painel_risco ??
-      Boolean(monitoramentoRecente || quantidadePredicoes),
-    nivel_alerta_atual: nivelAlertaAtual,
-    nivel_alerta:
-      detalheApi?.nivel_alerta ||
-      monitoramentoRecente?.nivel_alerta ||
-      recifeBase.nivel_alerta ||
-      monitoramentoFallback?.nivel_alerta ||
-      monitoramentoBase?.nivel_alerta ||
-      null,
+      detalheApi?.possui_painel_risco === true || recifeBase.possui_painel_risco === true,
   };
 }
 
@@ -180,4 +100,3 @@ export function obterQuantidadeEspeciesLocal(local) {
   const especiesFallback = FALLBACK_DETALHES[local.slug]?.especies?.length;
   return local.quantidade_especies ?? local.informacoes_disponiveis ?? especiesFallback ?? 0;
 }
-

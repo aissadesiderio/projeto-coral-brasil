@@ -75,7 +75,7 @@ Duas perguntas que a tabela responde mal, e que sao contribuicao real do trabalh
 
 ### PostgreSQL — fonte unica da verdade
 - autenticacao, admin e configuracoes operacionais;
-- `LocalRecife`, `Especie`, `StatusPredicao`, `MedicaoAmbiental`, `ExecucaoIngestao` e `DatasetCatalogo`;
+- `LocalRecife`, `Especie`, `MedicaoAmbiental`, `ExecucaoIngestao` e `DatasetCatalogo`;
 - integridade relacional e operacao normal dos endpoints REST;
 - **origem de tudo o que o modelo treina** e de tudo o que o grafo projeta.
 
@@ -195,19 +195,18 @@ Compatibilidade legada:
 - propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `status_conservacao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`, `origem_registro`, `django_pk`
 
 `MedicaoAmbiental`
-- id canonico: `localizacao_slug:data_iso`
-- origem atual: derivada de `StatusPredicao`
-- propriedades principais: `id`, `localizacao_id`, `local_slug`, `data`, `fonte_dados_id`, `sst`, `limite_termico`, `anomalia_termica`, `dhw`, `vento_velocidade`, `par`, `kd490`, `salinidade`, `ph`, `oxigenio`, `nitrato`, `clorofila`, `origem_registro`, `django_pk`
+- id canonico: `slug:data:variavel:fonte` — 🚨 o antigo era `slug:data`, herdado de quando uma linha era um dia inteiro; ele colidiria oito vezes por dia e o `MERGE` sobrescreveria em silencio. Ver `db/projecao.py`
+- origem atual: **`MedicaoAmbiental` do PostgreSQL**, via `neo4j_projetar`
+- propriedades principais: `id`, `local_slug`, `data`, `variavel`, `valor`, `unidade`, `fonte`, `dataset_id`, `quality_flag`, `observacao`
 
 `Predicao`
-- id canonico: `localizacao_slug:data_iso:status-predicao-django`
-- origem atual: derivada de `StatusPredicao`
-- propriedades principais: `id`, `localizacao_id`, `local_slug`, `data`, `modelo_slug`, `medicao_id`, `fonte_dados_id`, `risco_integrado`, `nivel_alerta`, `origem_registro`, `django_pk`
+- id canonico: `localizacao_slug:data_iso:modelo_slug`
+- origem atual: **nenhuma** — o modelo atual nao grava saida em lugar nenhum. Ver PLANEJAMENTO fase 4.4
+- propriedades principais: `id`, `localizacao_id`, `local_slug`, `data`, `modelo_slug`, `medicao_id`, `fonte_dados_id`
 
 `FonteDados`
 - id canonico: `fonte_slug:versao`
-- origem atual: seed tecnico do backend
-- no implementado agora: `django-statuspredicao:v1`
+- origem atual: as fontes reais de ingestao (`noaa_crw`, `copernicus`, …)
 - propriedades principais: `id`, `slug`, `nome`, `tipo`, `descricao`, `versao`, `pipeline`, `status`
 
 ### Relacoes implementadas agora
@@ -235,9 +234,14 @@ Compatibilidade legada:
 
 - `LocalRecife` alimenta `Localizacao`
 - `Especie` alimenta `Especie`
-- `StatusPredicao` e dividido em:
-  - `MedicaoAmbiental` para variaveis ambientais
-  - `Predicao` para risco e nivel de alerta
+- `MedicaoAmbiental` do PostgreSQL alimenta `MedicaoAmbiental` no grafo
+
+⚠️ **Corrigido em 30/07/2026.** Esta secao dizia que `StatusPredicao` era
+dividido em `MedicaoAmbiental` + `Predicao`, e as tres entradas acima diziam
+"origem atual: derivada de `StatusPredicao`". Isso descrevia o `neo4j_seed`,
+substituido em 27/07 — e a propria secao seguinte ja dizia isso, na mesma
+pagina. O modelo `StatusPredicao` foi removido do Django em 30/07/2026
+([FONTES.md](FONTES.md) §6.21).
 
 ### Mantido por compatibilidade
 

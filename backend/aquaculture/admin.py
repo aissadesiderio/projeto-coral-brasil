@@ -3,7 +3,7 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from .code_sync import sync_project_code_from_db
-from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife
 
 
 class SyncToCodeAdminMixin:
@@ -68,20 +68,6 @@ class EspecieLocalInline(admin.TabularInline):
     autocomplete_fields = ('especie',)
 
 
-class StatusPredicaoInline(admin.TabularInline):
-    model = StatusPredicao
-    extra = 0
-    fields = (
-        'data',
-        'nivel_alerta',
-        'risco_integrado',
-        'sst_atual',
-        'dhw_calculado',
-    )
-    show_change_link = True
-    ordering = ('-data',)
-
-
 @admin.register(LocalRecife)
 class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     list_display = (
@@ -90,7 +76,6 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         'cidade',
         'tem_coordenadas',
         'quantidade_especies',
-        'quantidade_monitoramentos',
         'ultima_atualizacao',
         'ativo',
         'mostrar_imagem',
@@ -99,7 +84,7 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     search_fields = ('nome', 'estado', 'cidade', 'slug')
     prepopulated_fields = {'slug': ('nome', 'estado', 'cidade')}
     readonly_fields = ('mostrar_imagem_grande',)
-    inlines = [EspecieLocalInline, StatusPredicaoInline]
+    inlines = [EspecieLocalInline]
     save_on_top = True
 
     fieldsets = (
@@ -142,11 +127,6 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         return obj.especies.count()
 
     quantidade_especies.short_description = 'Especies'
-
-    def quantidade_monitoramentos(self, obj):
-        return obj.monitoramentos.count()
-
-    quantidade_monitoramentos.short_description = 'Monitoramentos'
 
     def mostrar_imagem(self, obj):
         if obj.imagem:
@@ -269,23 +249,6 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
 
     tem_fonte_imagem.boolean = True
     tem_fonte_imagem.short_description = 'Fonte imagem'
-
-
-@admin.register(StatusPredicao)
-class StatusPredicaoAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
-    list_display = (
-        'data',
-        'local_recife',
-        'nivel_alerta',
-        'risco_integrado',
-        'sst_atual',
-        'dhw_calculado',
-    )
-    list_filter = ('nivel_alerta', 'local_recife')
-    search_fields = ('local_recife__nome',)
-    date_hierarchy = 'data'
-    autocomplete_fields = ('local_recife',)
-    save_on_top = True
 
 
 @admin.register(DatasetCatalogo)

@@ -1,11 +1,12 @@
 from contextlib import contextmanager
 from datetime import date
 from io import StringIO
+import json
 from pathlib import Path
 import re
 import shutil
 import tempfile
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
@@ -28,15 +29,8 @@ from .inventario_datasets import (
     EXCLUIDOS,
     construir_inventario,
 )
-from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
-from .neo4j_schema import (
-    DJANGO_STATUS_PREDICAO_MODEL_SLUG,
-    SCHEMA_QUERIES,
-    build_especie_row,
-    build_fonte_dados_seed_payload,
-    build_localizacao_row,
-    build_status_predicao_row,
-)
+from .models import DatasetCatalogo, Especie, LocalRecife
+from .neo4j_schema import SCHEMA_QUERIES
 from .neo4j_service import Neo4jServiceError, listar_localizacoes_grafo, obter_localizacao_grafo
 
 
@@ -60,27 +54,8 @@ class LocalRecifeApiTests(TestCase):
             },
         )
         self.especie.locais.add(self.local)
-        StatusPredicao.objects.update_or_create(
-            local_recife=self.local,
-            data=date(2026, 4, 16),
-            defaults={
-                'sst_atual': 29.1,
-                'limite_termico': 27.0,
-                'anomalia': 2.1,
-                'dhw_calculado': 6.4,
-                'irradiancia': 32.5,
-                'turbidez': 0.18,
-                'salinidade': 36.0,
-                'ph': 8.1,
-                'oxigenio': 6.5,
-                'nitrato': 0.4,
-                'clorofila': 0.7,
-                'risco_integrado': 78.0,
-                'nivel_alerta': 'ALERTA_1',
-            },
-        )
 
-    def test_local_detail_returns_species_and_monitoring(self):
+    def test_local_detail_returns_species(self):
         response = self.client.get(reverse('local_recife_detail', kwargs={'slug': self.local.slug}))
 
         self.assertEqual(response.status_code, 200)
@@ -88,7 +63,66 @@ class LocalRecifeApiTests(TestCase):
         self.assertEqual(payload['slug'], self.local.slug)
         nomes = [item['nome_cientifico'] for item in payload['especies']]
         self.assertIn('Mussismilia braziliensis', nomes)
-        self.assertEqual(payload['monitoramento_recente']['nivel_alerta'], 'ALERTA_1')
+
+    def test_a_api_nao_serve_mais_o_caminho_legado(self):
+        """🚨 `monitoramento_recente` era `StatusPredicao`, removido em 30/07.
+
+        Ele publicava `risco_integrado` e `nivel_alerta` — dois campos com
+        nome de resultado e nenhuma conta por tras — para qualquer cliente da
+        API, muito depois de o site ter parado de exibi-los.
+        """
+        for rota in (
+            reverse('local_recife_detail', kwargs={'slug': self.local.slug}),
+            reverse('local_recife_list'),
+        ):
+            with self.subTest(rota=rota):
+                corpo = self.client.get(rota).json()
+                texto = json.dumps(corpo)
+
+                for campo in (
+                    'monitoramento_recente', 'risco_integrado',
+                    'nivel_alerta', 'nivel_alerta_atual', 'risco_atual',
+                ):
+                    self.assertNotIn(campo, texto)
+
+    def test_possui_painel_risco_sai_do_artefato_e_nao_de_registro_legado(self):
+        """A resposta precisa concordar com quem devolve 404 no painel.
+
+        Antes de 30/07/2026 este campo era `bool(StatusPredicao)`, com queda
+        para o registro global — e por isso dizia `true` para **todo** recife
+        cadastrado, inclusive um que o modelo nunca viu.
+        """
+        fora_do_treino = LocalRecife.objects.create(
+            slug='recife-fora-do-treino', nome='Fora do Treino',
+            estado='Bahia', cidade='Caravelas',
+        )
+
+        with patch(
+            'ml.persistencia.ler_metadados',
+            return_value={'locais': [self.local.slug]},
+        ):
+            por_slug = {
+                item['slug']: item
+                for item in self.client.get(reverse('local_recife_list')).json()
+            }
+
+        self.assertTrue(por_slug[self.local.slug]['possui_painel_risco'])
+        self.assertFalse(por_slug[fora_do_treino.slug]['possui_painel_risco'])
+
+    def test_sem_artefato_nenhum_recife_anuncia_painel(self):
+        """⚠️ O catalogo nao pode cair porque `treinar_final` nao rodou."""
+        from ml import persistencia
+
+        with patch(
+            'ml.persistencia.ler_metadados',
+            side_effect=persistencia.ArtefatoAusente('sem artefato'),
+        ):
+            response = self.client.get(reverse('local_recife_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            all(item['possui_painel_risco'] is False for item in response.json())
+        )
 
     def test_especie_list_can_filter_by_local(self):
         response = self.client.get(f"{reverse('especie_list')}?local={self.local.slug}")
@@ -416,78 +450,6 @@ class Neo4jServiceReadTests(TestCase):
         self.assertEqual(executar_read_mock.call_args_list[2].args[1], expected_parameters)
 
 
-class Neo4jSchemaBuilderTests(TestCase):
-    def setUp(self):
-        self.local = LocalRecife.objects.create(
-            slug='schema-recife-ba',
-            nome='Recife de Schema',
-            estado='Bahia',
-            cidade='Caravelas',
-            descricao='Local de teste para schema Neo4j.',
-            ultima_atualizacao=date(2026, 4, 16),
-        )
-        self.especie = Especie.objects.create(
-            nome_cientifico='Mussismilia schemaensis',
-            nome_comum='Coral de schema',
-            tipo='CORAL',
-            descricao='Especie de teste.',
-            status_conservacao='Vulneravel',
-            credito_imagem='Equipe local',
-            fonte_imagem_url='https://exemplo.org/imagem',
-            fonte_url='https://exemplo.org/especie',
-        )
-        self.predicao = StatusPredicao.objects.create(
-            local_recife=self.local,
-            data=date(2026, 4, 16),
-            sst_atual=29.1,
-            limite_termico=27.0,
-            anomalia=2.1,
-            dhw_calculado=6.4,
-            vento_velocidade=5.2,
-            irradiancia=32.5,
-            turbidez=0.18,
-            salinidade=36.0,
-            ph=8.1,
-            oxigenio=6.5,
-            nitrato=0.4,
-            clorofila=0.7,
-            risco_integrado=78.0,
-            nivel_alerta='ALERTA_1',
-        )
-
-    def test_build_localizacao_and_especie_rows_use_canonical_ids(self):
-        local_row = build_localizacao_row(self.local)
-        especie_row = build_especie_row(self.local, self.especie)
-
-        self.assertEqual(local_row['id'], 'schema-recife-ba')
-        self.assertEqual(local_row['props']['slug'], 'schema-recife-ba')
-        self.assertEqual(especie_row['id'], 'mussismilia-schemaensis')
-        self.assertEqual(especie_row['localizacao_id'], 'schema-recife-ba')
-        self.assertEqual(especie_row['props']['nome_cientifico'], 'Mussismilia schemaensis')
-
-    def test_build_status_predicao_row_splits_measurement_and_prediction_nodes(self):
-        row = build_status_predicao_row(self.predicao)
-
-        self.assertEqual(row['localizacao_id'], 'schema-recife-ba')
-        self.assertEqual(row['medicao']['id'], 'schema-recife-ba:2026-04-16')
-        self.assertEqual(
-            row['predicao']['id'],
-            f'schema-recife-ba:2026-04-16:{DJANGO_STATUS_PREDICAO_MODEL_SLUG}',
-        )
-        self.assertEqual(row['medicao']['props']['sst'], 29.1)
-        self.assertEqual(row['medicao']['props']['par'], 32.5)
-        self.assertEqual(row['medicao']['props']['kd490'], 0.18)
-        self.assertEqual(row['predicao']['props']['risco_integrado'], 78.0)
-        self.assertEqual(row['predicao']['props']['nivel_alerta'], 'ALERTA_1')
-
-    def test_build_fonte_dados_seed_payload_returns_current_transition_source(self):
-        payload = build_fonte_dados_seed_payload()
-
-        self.assertEqual(payload['id'], 'django-statuspredicao:v1')
-        self.assertEqual(payload['props']['pipeline'], 'neo4j_seed')
-        self.assertEqual(payload['props']['status'], 'ativo')
-
-
 class Neo4jCommandWiringTests(TestCase):
     @patch('aquaculture.management.commands.neo4j_init.executar_queries_schema')
     @patch('aquaculture.management.commands.neo4j_init.verificar_conexao_neo4j')
@@ -624,23 +586,6 @@ class SyncCodeTests(TestCase):
             fonte_imagem_url='https://exemplo.org/imagem',
         )
         especie.locais.add(local)
-        StatusPredicao.objects.create(
-            local_recife=local,
-            data=date(2026, 4, 20),
-            sst_atual=28.1,
-            limite_termico=27.0,
-            anomalia=1.1,
-            dhw_calculado=2.8,
-            irradiancia=27.0,
-            turbidez=0.2,
-            salinidade=35.5,
-            ph=8.0,
-            oxigenio=6.2,
-            nitrato=0.3,
-            clorofila=0.5,
-            risco_integrado=49.0,
-            nivel_alerta='OBSERVACAO',
-        )
 
         output_dir = Path(__file__).resolve().parent / '_sync_test_output'
         output_dir.mkdir(exist_ok=True)
@@ -662,6 +607,37 @@ class SyncCodeTests(TestCase):
         self.assertIn('Recife Teste', backend_text)
         self.assertIn('Especie de teste', backend_text)
         self.assertIn('https://exemplo.org/imagem', frontend_text)
+
+    def test_o_codigo_exportado_nao_carrega_mais_numero_de_risco(self):
+        """🚨 O fallback do frontend guardava risco e nivel de alerta.
+
+        Eram os campos do `StatusPredicao`, gravados dentro de um arquivo `.js`
+        versionado — o pior lugar possivel para um numero de demonstracao,
+        porque ele sobrevive a qualquer limpeza do banco e reaparece quando a
+        API cai.
+        """
+        LocalRecife.objects.create(
+            slug='recife-sem-risco-rj', nome='Recife Sem Risco',
+            estado='Rio de Janeiro', cidade='Arraial do Cabo',
+        )
+
+        output_dir = Path(__file__).resolve().parent / '_sync_test_sem_risco'
+        output_dir.mkdir(exist_ok=True)
+        try:
+            frontend_out = output_dir / 'generated_sync.js'
+            sync_project_code_from_db(
+                backend_output_path=output_dir / 'generated_sync.py',
+                frontend_output_path=frontend_out,
+            )
+            texto = frontend_out.read_text(encoding='utf-8')
+        finally:
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+        for campo in (
+            'monitoramento_recente', 'risco_integrado', 'nivel_alerta',
+            'risco_atual', 'possui_painel_risco',
+        ):
+            self.assertNotIn(campo, texto)
 
 
 class AdminCodeSyncFlagTests(TestCase):

@@ -30,7 +30,7 @@ O estado real:
 |---|---|
 | Ingestao NOAA/CRW e Copernicus | **implementada e verificada ao vivo**, escrevendo em `MedicaoAmbiental` com proveniencia por valor |
 | Projecao do grafo | `manage.py neo4j_projetar` deriva do **PostgreSQL**, nao de `StatusPredicao` |
-| `StatusPredicao` | caminho **legado**, 3 registros, sem consumidor desde que o frontend migrou |
+| `StatusPredicao` | ✅ **removido em 30/07/2026** — migracao `0021`, junto com a camada de escrita legada do `neo4j_schema.py` |
 | `Predicao` no grafo | **ainda nao existe** — o modelo novo nao grava saida em lugar nenhum |
 
 ## Tabela canonica — o caminho legado
@@ -39,6 +39,11 @@ O estado real:
 `neo4j_seed` usava. Ela **nao** e o vocabulario em vigor: a lista viva e a da
 secao seguinte, que e a que `ingestao/normalizacao.py` implementa e a que tem
 dado no banco.
+
+📌 **O modelo `StatusPredicao` nao existe mais** (30/07/2026), e as funcoes que
+faziam esta traducao sairam do `neo4j_schema.py` junto. A tabela fica como
+registro historico: e o unico lugar onde continua escrito de onde vieram nomes
+como `par` e `kd490`.
 
 Fica registrada porque explica de onde vieram nomes como `par` (era
 `irradiancia`) e `kd490` (era `turbidez`), e porque quatro nomes daqui —

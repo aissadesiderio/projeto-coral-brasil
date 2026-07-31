@@ -5,37 +5,7 @@ from .models import (
     Especie,
     LocalRecife,
     MedicaoAmbiental,
-    StatusPredicao,
 )
-
-
-class StatusPredicaoSerializer(serializers.ModelSerializer):
-    local_recife_slug = serializers.SlugRelatedField(
-        source='local_recife',
-        read_only=True,
-        slug_field='slug',
-    )
-
-    class Meta:
-        model = StatusPredicao
-        fields = [
-            'id',
-            'local_recife_slug',
-            'data',
-            'sst_atual',
-            'limite_termico',
-            'anomalia',
-            'dhw_calculado',
-            'nivel_alerta',
-            'risco_integrado',
-            'turbidez',
-            'irradiancia',
-            'salinidade',
-            'ph',
-            'oxigenio',
-            'nitrato',
-            'clorofila',
-        ]
 
 
 class EspecieSerializer(serializers.ModelSerializer):
@@ -100,35 +70,31 @@ class LocalRecifeListSerializer(serializers.ModelSerializer):
         return obj.especies.count()
 
     def get_possui_painel_risco(self, obj):
-        return bool(self._get_monitoramento(obj))
+        """O recife esta entre os que o modelo servido viu no treino?
 
-    def _get_monitoramento(self, obj):
-        return (
-            obj.monitoramentos.order_by('-data').first()
-            or StatusPredicao.objects.filter(local_recife__isnull=True).order_by('-data').first()
-        )
+        🚨 **Ate 30/07/2026 este campo respondia outra pergunta**, e a resposta
+        era falsa: `bool(StatusPredicao)`, com queda para o registro global
+        quando o recife nao tinha o seu. Como a migracao 0011 semeou tres
+        registros de demonstracao e um global, o campo dizia `true` para
+        **qualquer** recife cadastrado — inclusive um recem-criado, sobre o
+        qual o painel devolve 404.
+
+        Agora ele sai da mesma fonte que decide o 404: a lista `locais` dos
+        metadados do artefato, injetada no contexto pela view. Sem artefato o
+        campo e `false`, que e a resposta certa — sem modelo nao ha painel.
+        """
+        return obj.slug in (self.context.get('locais_do_modelo') or ())
 
 
 class LocalRecifeDetailSerializer(LocalRecifeListSerializer):
     especies = serializers.SerializerMethodField()
-    monitoramento_recente = serializers.SerializerMethodField()
 
     class Meta(LocalRecifeListSerializer.Meta):
-        fields = LocalRecifeListSerializer.Meta.fields + [
-            'especies',
-            'monitoramento_recente',
-        ]
+        fields = LocalRecifeListSerializer.Meta.fields + ['especies']
 
     def get_especies(self, obj):
         especies = obj.especies.order_by('nome_comum', 'nome_cientifico')
         return EspecieSerializer(especies, many=True, context=self.context).data
-
-    def get_monitoramento_recente(self, obj):
-        monitoramento = self._get_monitoramento(obj)
-        if not monitoramento:
-            return None
-
-        return StatusPredicaoSerializer(monitoramento, context=self.context).data
 
 
 class DatasetCatalogoSerializer(serializers.ModelSerializer):

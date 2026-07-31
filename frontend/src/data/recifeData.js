@@ -8,8 +8,7 @@ export const FALLBACK_RECIFES = [
     "descricao": "Area de referencia para monitoramento e biodiversidade coralinea.",
     "imagem_url": "",
     "ultima_atualizacao": "2026-04-14",
-    "informacoes_disponiveis": 5,
-    "possui_painel_risco": true
+    "informacoes_disponiveis": 3
   },
   {
     "slug": "porto-de-galinhas-pe",
@@ -19,8 +18,7 @@ export const FALLBACK_RECIFES = [
     "descricao": "Zona recifal turistica com ocorrencia de corais e peixes costeiros.",
     "imagem_url": "",
     "ultima_atualizacao": "2026-04-15",
-    "informacoes_disponiveis": 1,
-    "possui_painel_risco": true
+    "informacoes_disponiveis": 3
   },
   {
     "slug": "picaozinho-pb",
@@ -30,8 +28,7 @@ export const FALLBACK_RECIFES = [
     "descricao": "Recife costeiro raso com especies recifais e monitoramento ambiental.",
     "imagem_url": "",
     "ultima_atualizacao": "2026-04-10",
-    "informacoes_disponiveis": 3,
-    "possui_painel_risco": true
+    "informacoes_disponiveis": 3
   }
 ];
 
@@ -63,30 +60,6 @@ export const FALLBACK_DETALHES = {
         "fonte_url": ""
       },
       {
-        "id": 8,
-        "nome_comum": "Coral-fogo-vermelho",
-        "nome_cientifico": "Muricea flamma",
-        "tipo": "CORAL",
-        "descricao": "Octocoral associado a ambientes recifais com boa circulacao de agua.",
-        "status_conservacao": "Nao avaliado",
-        "foto_url": "/media/especies/Muricea_flamma.jpg",
-        "credito_imagem": "inaturalist.org",
-        "fonte_imagem_url": "https://www.inaturalist.org/observations/137432286",
-        "fonte_url": ""
-      },
-      {
-        "id": 9,
-        "nome_comum": "Coral-pilar",
-        "nome_cientifico": "Dendrogyra cylindrus",
-        "tipo": "CORAL",
-        "descricao": "Coral de formato colunar com registros em areas recifais tropicais.",
-        "status_conservacao": "Criticamente ameacado",
-        "foto_url": "/media/especies/Dendrogyra_cylindrus.jpeg",
-        "credito_imagem": "inaturalist.org",
-        "fonte_imagem_url": "https://www.inaturalist.org/observations/276213882",
-        "fonte_url": ""
-      },
-      {
         "id": 3,
         "nome_comum": "Peixe-anjo-rainha",
         "nome_cientifico": "Holacanthus ciliaris",
@@ -98,26 +71,34 @@ export const FALLBACK_DETALHES = {
         "fonte_imagem_url": "/media/especies/Holacanthus_ciliaris.jpeg",
         "fonte_url": ""
       }
-    ],
-    "monitoramento_recente": {
-      "data": "2026-04-14",
-      "sst_atual": 29.4,
-      "limite_termico": 27.0,
-      "anomalia": 2.4,
-      "dhw_calculado": 6.3,
-      "irradiancia": 31.8,
-      "turbidez": 0.17,
-      "salinidade": 36.1,
-      "ph": 8.09,
-      "oxigenio": 6.42,
-      "nitrato": 0.36,
-      "clorofila": 0.64,
-      "risco_integrado": 78.0,
-      "nivel_alerta": "ALERTA_1"
-    }
+    ]
   },
   "porto-de-galinhas-pe": {
     "especies": [
+      {
+        "id": 8,
+        "nome_comum": "Coral-fogo-vermelho",
+        "nome_cientifico": "Muricea flamma",
+        "tipo": "CORAL",
+        "descricao": "Octocoral associado a ambientes recifais com boa circulacao de agua.",
+        "status_conservacao": "Nao avaliado",
+        "foto_url": "/media/especies/Muricea_flamma.jpg",
+        "credito_imagem": "Acervo local do projeto",
+        "fonte_imagem_url": "/media/especies/Muricea_flamma.jpg",
+        "fonte_url": ""
+      },
+      {
+        "id": 9,
+        "nome_comum": "Coral-pilar",
+        "nome_cientifico": "Dendrogyra cylindrus",
+        "tipo": "CORAL",
+        "descricao": "Coral de formato colunar com registros em areas recifais tropicais.",
+        "status_conservacao": "Criticamente ameacado",
+        "foto_url": "/media/especies/Dendrogyra_cylindrus.jpeg",
+        "credito_imagem": "Acervo local do projeto",
+        "fonte_imagem_url": "/media/especies/Dendrogyra_cylindrus.jpeg",
+        "fonte_url": ""
+      },
       {
         "id": 7,
         "nome_comum": "Gorgonia-roxa",
@@ -130,23 +111,7 @@ export const FALLBACK_DETALHES = {
         "fonte_imagem_url": "/media/especies/Phyllogorgia_dilatata.jpg",
         "fonte_url": ""
       }
-    ],
-    "monitoramento_recente": {
-      "data": "2026-04-15",
-      "sst_atual": 29.0,
-      "limite_termico": 27.0,
-      "anomalia": 2.0,
-      "dhw_calculado": 5.1,
-      "irradiancia": 30.4,
-      "turbidez": 0.22,
-      "salinidade": 35.9,
-      "ph": 8.07,
-      "oxigenio": 6.27,
-      "nitrato": 0.43,
-      "clorofila": 0.71,
-      "risco_integrado": 69.0,
-      "nivel_alerta": "ALERTA_1"
-    }
+    ]
   },
   "picaozinho-pb": {
     "especies": [
@@ -186,22 +151,6 @@ export const FALLBACK_DETALHES = {
         "fonte_imagem_url": "/media/especies/Ocyurus_chrysurus.jpeg",
         "fonte_url": ""
       }
-    ],
-    "monitoramento_recente": {
-      "data": "2026-04-10",
-      "sst_atual": 28.7,
-      "limite_termico": 27.0,
-      "anomalia": 1.7,
-      "dhw_calculado": 3.9,
-      "irradiancia": 29.6,
-      "turbidez": 0.28,
-      "salinidade": 35.7,
-      "ph": 8.05,
-      "oxigenio": 6.31,
-      "nitrato": 0.51,
-      "clorofila": 0.82,
-      "risco_integrado": 58.0,
-      "nivel_alerta": "OBSERVACAO"
-    }
+    ]
   }
 };

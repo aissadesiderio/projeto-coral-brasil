@@ -66,19 +66,53 @@ class EspecieDetail(OfflineModeMixin, generics.RetrieveAPIView):
     serializer_class = EspecieSerializer
 
 
-class LocalRecifeList(OfflineModeMixin, generics.ListAPIView):
+class LocaisDoModeloNoContextoMixin:
+    """Injeta os slugs que o artefato do modelo cobre.
+
+    Mesmo padrao de `CoberturaNoContextoMixin`: uma leitura serve a resposta
+    inteira, e o serializer nao vai ao disco por item.
+
+    ⚠️ Le **so o JSON de metadados**, nunca o `.joblib`. A pergunta e "quais
+    recifes o modelo viu", e carregar o pipeline para respondê-la poria o custo
+    de uma inferencia numa listagem que nao infere nada.
+
+    Artefato ausente devolve tupla vazia em vez de levantar: o catalogo de
+    recifes nao depende do modelo existir, e derrubar `/api/locais/` porque
+    `treinar_final` nao rodou trocaria um campo errado por uma pagina em
+    branco.
+    """
+
+    def locais_do_modelo(self):
+        from ml import persistencia
+
+        nome = getattr(settings, 'PAINEL_MODELO', 'entrega1_baa')
+        try:
+            metadados = persistencia.ler_metadados(nome)
+        except (persistencia.ArtefatoAusente, persistencia.ArtefatoIncompativel):
+            return ()
+        return tuple(metadados.get('locais') or ())
+
+    def get_serializer_context(self):
+        contexto = super().get_serializer_context()
+        contexto['locais_do_modelo'] = self.locais_do_modelo()
+        return contexto
+
+
+class LocalRecifeList(LocaisDoModeloNoContextoMixin, OfflineModeMixin,
+                      generics.ListAPIView):
     serializer_class = LocalRecifeListSerializer
 
     def get_queryset(self):
-        return LocalRecife.objects.filter(ativo=True).prefetch_related('especies', 'monitoramentos')
+        return LocalRecife.objects.filter(ativo=True).prefetch_related('especies')
 
 
-class LocalRecifeDetail(OfflineModeMixin, generics.RetrieveAPIView):
+class LocalRecifeDetail(LocaisDoModeloNoContextoMixin, OfflineModeMixin,
+                        generics.RetrieveAPIView):
     serializer_class = LocalRecifeDetailSerializer
     lookup_field = 'slug'
 
     def get_queryset(self):
-        return LocalRecife.objects.filter(ativo=True).prefetch_related('especies', 'monitoramentos')
+        return LocalRecife.objects.filter(ativo=True).prefetch_related('especies')
 
 
 class CoberturaNoContextoMixin:
