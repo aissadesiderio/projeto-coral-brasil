@@ -289,6 +289,66 @@ A fração conta apenas pixels com valor válido. Dividir pelo total da grade mi
 
 Medições, evidência e o registro do defeito em [FONTES.md](FONTES.md) §6.16. A regra geral — variável ordinal precisa declarar sua agregação — está no [contrato canônico](../backend/docs/contrato_canonico_variaveis.md), regra 5.
 
+### 4.6 Por que a regra da NOAA vale por pixel e não vale por recife
+
+*Escrito em 30/07/2026, ao construir a linha de base da regra publicada.*
+
+A §4.2 mediu, no dado por pixel, que o BAA é **função determinística** de
+(HotSpot, DHW): 178.759 combinações distintas, **zero** ambíguas. A §4.5
+decidiu agregar o BAA por **máximo** e as contínuas por **média**. As duas
+coisas são certas, e juntas produzem um resultado que não é óbvio e já causou
+um erro de leitura:
+
+> **A regra da NOAA deixa de valer depois da agregação.** Não porque ela esteja
+> errada, mas porque passou a ser aplicada a números que respondem a outra
+> pergunta.
+
+#### O exemplo, com quatro pixels
+
+Recife com 4 pixels, todos com HotSpot acima de 1 °C:
+
+| Pixel | DHW | BAA daquele pixel |
+|---|---|---|
+| 1 | 9,0 | **4** (Alerta Nível 2, DHW ≥ 8) |
+| 2 | 1,0 | 2 (Aviso) |
+| 3 | 1,0 | 2 |
+| 4 | 1,0 | 2 |
+
+O que o banco grava, pelas regras da §4.5:
+
+- `baa` = **máximo** dos pixels = **4**
+- `dhw` = **média** dos pixels = (9 + 1 + 1 + 1) / 4 = **3,0**
+
+Agora aplique a regra publicada aos valores gravados: `DHW = 3,0 < 4`, logo
+"sem Alerta Nível 1" — sobre um recife cujo próprio `baa` gravado diz **4**. O
+registro se contradiz, e nenhum dos dois campos está errado. Um diz *o pior
+pedaço*; o outro, *o pedaço médio*.
+
+**O desvio só acontece nesse sentido.** O máximo é sempre ≥ a média, então o
+BAA pode subir sem as médias alcançarem o corte; o contrário exigiria a média
+ultrapassar o máximo. Medido na série inteira ([FONTES.md](FONTES.md) §6.16):
+**0** casos do lado impossível, 261 do lado possível.
+
+#### As duas consequências
+
+1. **O corte 4 não é transferível.** Ele é o número certo para a grade de 5 km
+   da NOAA e chega tarde demais para uma média de bbox. Remedido nesta escala,
+   o ponto de operação é `DHW ≥ 1` mantido o HotSpot — 15 dos 19 episódios
+   contra 10 do corte publicado ([RESULTADOS.md](RESULTADOS.md) §24.2).
+2. **`hotspot` continua proibido como feature, e a regra continua permitida
+   como linha de base.** São coisas diferentes: um modelo que visse o HotSpot
+   estaria lendo metade da resposta; uma linha de base que o vê não prevê nada,
+   só aplica hoje o critério publicado para que a previsão de daqui a N dias
+   tenha contra o que se medir. Ver `ml/dataset.py`,
+   `VARIAVEIS_DE_LINHA_DE_BASE`.
+
+🚨 **O erro que isto corrige.** Em 30/07/2026 foi afirmado que, como o alvo é
+`BAA ≥ 3` e o BAA é função do DHW, o modelo "apenas extrapola uma curva de DHW
+sete dias à frente". A frase junta a §4.2 (verdadeira por pixel) com o alvo do
+banco (agregado) como se fossem o mesmo número. Só com DHW, a regra faz F1
+**0,480**; o modelo faz 0,671. **Mais importante não é suficiente** — e essa
+distinção é exatamente o que a agregação torna mensurável.
+
 ---
 
 ## 5. Variáveis opcionais

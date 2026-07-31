@@ -1,9 +1,10 @@
-"""Testes do modelo e da comparacao contra a persistencia.
+"""Testes do modelo e da comparacao contra as linhas de base.
 
 O que estes testes protegem: que a ordem das colunas deixe de ser contrato
 implicito (o defeito que fazia o modelo antigo predizer 0.0 para tudo), que
-ano sem evento nao entre na media, e que a comparacao seja feita nas mesmas
-amostras - comparar em conjuntos diferentes nao diria nada.
+ano sem evento nao entre na media, que a comparacao seja feita nas mesmas
+amostras - comparar em conjuntos diferentes nao diria nada -, e que o corte da
+regra da NOAA seja escolhido dentro do treino da dobra.
 """
 
 from datetime import date, timedelta
@@ -17,20 +18,26 @@ from ml.modelo import (
     MODELOS,
     ColunaAusente,
     alvo_binario,
-    comparar_com_persistencia,
+    comparar_com_linhas_de_base,
     como_baa,
     construir,
     treinar,
 )
 
 FEATURES = ('sst', 'dhw')
-UNIDADES = {'sst': '°C', 'dhw': '°C·semana', 'baa': 'categoria'}
+UNIDADES = {
+    'sst': '°C', 'dhw': '°C·semana', 'baa': 'categoria', 'hotspot': '°C',
+}
 
 
 def serie_com_evento(local, inicio, dias):
     """Serie sintetica em que o DHW sobe antes do alerta chegar.
 
     Da ao modelo algo aprendivel - senao os testes mediriam so o ruido.
+
+    O `hotspot` acompanha o DHW porque a linha de base da NOAA precisa dos
+    dois. Sem ele a regra ficaria muda aqui, e um teste sobre uma regra que
+    nunca dispara nao testa a regra.
     """
     for i in range(dias):
         ciclo = i % 120
@@ -39,6 +46,7 @@ def serie_com_evento(local, inicio, dias):
         for variavel, valor in (
             ('sst', 28.0 + dhw / 10),
             ('dhw', dhw),
+            ('hotspot', 1.5 if dhw > 0 else 0.0),
             ('baa', baa),
         ):
             MedicaoAmbiental.objects.create(
@@ -123,17 +131,51 @@ class ComparacaoTests(TestCase):
         self.conjunto = montar(self.local, 7, features=FEATURES, janelas=())
 
     def test_compara_nas_mesmas_amostras(self):
-        comparacao = comparar_com_persistencia(self.conjunto)
+        comparacao = comparar_com_linhas_de_base(self.conjunto)
 
         for ano in comparacao.anos_com_evento:
             self.assertEqual(
                 ano.desempenho_modelo.n, ano.desempenho_persistencia.n,
                 'comparar em conjuntos diferentes nao diria nada',
             )
+            self.assertEqual(
+                ano.desempenho_modelo.n, ano.desempenho_regra.n,
+                'a regra da NOAA tambem precisa ser medida nas mesmas amostras',
+            )
+
+    def test_a_regra_da_noaa_e_medida_em_todo_ano_com_evento(self):
+        """Linha de base que nao aparece nao e piso, e decoracao."""
+        comparacao = comparar_com_linhas_de_base(self.conjunto)
+
+        for ano in comparacao.anos_com_evento:
+            self.assertIsNotNone(ano.desempenho_regra)
+            self.assertIsNotNone(ano.episodios_regra)
+            self.assertGreater(ano.corte_regra, 0.0)
+
+    def test_o_corte_da_regra_sai_do_treino_e_nao_do_teste(self):
+        """🚨 Escolher o corte no teste enviesaria a comparacao a favor da regra.
+
+        Refaz a escolha a mao sobre a dobra de treino e exige o mesmo corte.
+        Se `comparar_com_linhas_de_base` passasse a olhar o teste, os dois
+        numeros se separariam.
+        """
+        from ml.baseline import (
+            dividir_deixando_um_ano_de_fora,
+            escolher_corte_dhw,
+        )
+
+        comparacao = comparar_com_linhas_de_base(self.conjunto)
+
+        for ano in comparacao.anos_com_evento:
+            treino, _ = dividir_deixando_um_ano_de_fora(
+                self.conjunto.quadro, ano.ano
+            )
+            esperado, _ = escolher_corte_dhw(treino)
+            self.assertEqual(ano.corte_regra, esperado)
 
     def test_ano_sem_evento_nao_entra_na_media(self):
         """F1 zero num ano sem nada a detectar mede o clima, nao o modelo."""
-        comparacao = comparar_com_persistencia(self.conjunto)
+        comparacao = comparar_com_linhas_de_base(self.conjunto)
         comparacao.anos.append(
             type(comparacao.anos[0])(ano=1999, n_teste=10, positivos_teste=0)
         )
@@ -144,11 +186,12 @@ class ComparacaoTests(TestCase):
         self.assertNotIn(1999, [r.ano for r in avaliados])
 
     def test_ano_sem_evento_e_relatado_e_nao_omitido(self):
-        comparacao = comparar_com_persistencia(self.conjunto)
+        comparacao = comparar_com_linhas_de_base(self.conjunto)
         texto = comparacao.resumo()
 
         self.assertIn('leave-year-out', texto)
         self.assertIn('persistencia', texto)
+        self.assertIn('regra NOAA', texto)
 
     def test_treino_nunca_contem_o_ano_de_teste(self):
         """Se contivesse, o resultado seria decoreba e nao previsao."""
@@ -162,7 +205,7 @@ class ComparacaoTests(TestCase):
             self.assertTrue(all(d.year == ano for d in teste['alvo_data']))
 
     def test_metricas_probabilisticas_ficam_na_faixa_valida(self):
-        comparacao = comparar_com_persistencia(self.conjunto)
+        comparacao = comparar_com_linhas_de_base(self.conjunto)
 
         for r in comparacao.anos_com_evento:
             self.assertGreaterEqual(r.pr_auc, 0.0)

@@ -31,7 +31,13 @@ from dataclasses import dataclass, field
 
 from ingestao.conectores.noaa_crw import LIMIAR_ALERTA
 
-from .baseline import avaliar, avaliar_episodios, prever_persistencia
+from .baseline import (
+    avaliar,
+    avaliar_episodios,
+    escolher_corte_dhw,
+    prever_persistencia,
+    prever_regra_noaa,
+)
 
 # Modelos oferecidos. Deliberadamente dois, e ambos simples:
 #
@@ -208,8 +214,11 @@ class ResultadoAno:
     brier: float = 0.0
     desempenho_modelo: object = None
     desempenho_persistencia: object = None
+    desempenho_regra: object = None
     episodios_modelo: object = None
     episodios_persistencia: object = None
+    episodios_regra: object = None
+    corte_regra: float = 0.0
 
     @property
     def teve_evento(self):
@@ -221,12 +230,16 @@ class ResultadoAno:
         return (
             f'  {self.ano}: n={self.n_teste:5d}  PR-AUC={self.pr_auc:.3f}  '
             f'Brier={self.brier:.3f}  '
-            f'F1 modelo={self.desempenho_modelo.f1_alerta:.3f} vs '
-            f'persistencia={self.desempenho_persistencia.f1_alerta:.3f}  |  '
+            f'F1 modelo={self.desempenho_modelo.f1_alerta:.3f} '
+            f'persist={self.desempenho_persistencia.f1_alerta:.3f} '
+            f'regra={self.desempenho_regra.f1_alerta:.3f} '
+            f'(DHW>={self.corte_regra:g})  |  '
             f'episodios {self.episodios_modelo.episodios_detectados}/'
             f'{self.episodios_modelo.episodios_reais} vs '
             f'{self.episodios_persistencia.episodios_detectados}/'
-            f'{self.episodios_persistencia.episodios_reais}'
+            f'{self.episodios_persistencia.episodios_reais} vs '
+            f'{self.episodios_regra.episodios_detectados}/'
+            f'{self.episodios_regra.episodios_reais}'
         )
 
 
@@ -252,32 +265,60 @@ class Comparacao:
             return 0.0
         return sum(getattr(r, atributo) for r in avaliados) / len(avaliados)
 
+    def _f1_medio(self, atributo, avaliados):
+        return sum(getattr(r, atributo).f1_alerta for r in avaliados) / len(avaliados)
+
+    def episodios(self, atributo):
+        """(detectados, reais, falsos) somados sobre os anos com evento."""
+        avaliados = self.anos_com_evento
+        return (
+            sum(getattr(r, atributo).episodios_detectados for r in avaliados),
+            sum(getattr(r, atributo).episodios_reais for r in avaliados),
+            sum(getattr(r, atributo).episodios_falsos for r in avaliados),
+        )
+
     def resumo(self):
         linhas = [f'Modelo "{self.modelo}" - leave-year-out', '']
         linhas += [str(r) for r in self.anos]
         avaliados = self.anos_com_evento
         if avaliados:
-            f1_m = sum(r.desempenho_modelo.f1_alerta for r in avaliados) / len(avaliados)
-            f1_p = sum(
-                r.desempenho_persistencia.f1_alerta for r in avaliados
-            ) / len(avaliados)
+            f1_m = self._f1_medio('desempenho_modelo', avaliados)
+            f1_p = self._f1_medio('desempenho_persistencia', avaliados)
+            f1_r = self._f1_medio('desempenho_regra', avaliados)
             linhas += [
                 '',
                 f'  media sobre os {len(avaliados)} anos COM evento:',
                 f'    PR-AUC = {self.media("pr_auc"):.3f}   '
                 f'Brier = {self.media("brier"):.3f}',
-                f'    F1 alerta: modelo = {f1_m:.3f}  |  persistencia = {f1_p:.3f}'
-                f'   ({"modelo ganha" if f1_m > f1_p else "persistencia ganha"})',
+                f'    F1 alerta: modelo = {f1_m:.3f}  |  '
+                f'persistencia = {f1_p:.3f}  |  regra NOAA = {f1_r:.3f}',
             ]
+            for rotulo, atributo in (
+                ('modelo      ', 'episodios_modelo'),
+                ('persistencia', 'episodios_persistencia'),
+                ('regra NOAA  ', 'episodios_regra'),
+            ):
+                detectados, reais, falsos = self.episodios(atributo)
+                linhas.append(
+                    f'    episodios {rotulo}: {detectados}/{reais} detectados, '
+                    f'{falsos} alarme(s) falso(s)'
+                )
         return '\n'.join(linhas)
 
 
-def comparar_com_persistencia(conjunto, nome='logistica', limiar=0.5, semente=42):
-    """Leave-year-out: treina sem um ano, testa nele, compara com persistencia.
+def comparar_com_linhas_de_base(conjunto, nome='logistica', limiar=0.5,
+                                semente=42, usar_hotspot=True):
+    """Leave-year-out: treina sem um ano, testa nele, compara com os dois pisos.
 
     A divisao e por ano da **data do alvo** - o dia sobre o qual a previsao
     fala. Divisao aleatoria seria vazamento puro: dias vizinhos do mesmo
     episodio cairiam dos dois lados.
+
+    🚨 **O corte da regra da NOAA e escolhido dentro da dobra de treino**, ano
+    a ano, exatamente como o modelo e treinado ali. Fixa-lo em 4,0 seria dar ao
+    modelo a vantagem de ser ajustado contra um adversario parado; escolhe-lo
+    no teste seria dar a vantagem contraria. Nenhum dos dois responde a
+    pergunta.
     """
     from sklearn.metrics import average_precision_score, brier_score_loss
 
@@ -311,10 +352,16 @@ def comparar_com_persistencia(conjunto, nome='logistica', limiar=0.5, semente=42
         previsto_baa = como_baa(previsto)
         persistencia = prever_persistencia(teste)
 
+        corte, _ = escolher_corte_dhw(treino, usar_hotspot=usar_hotspot)
+        resultado.corte_regra = corte
+        regra = prever_regra_noaa(teste, corte, usar_hotspot)
+
         resultado.desempenho_modelo = avaliar(teste['alvo'], previsto_baa)
         resultado.desempenho_persistencia = avaliar(teste['alvo'], persistencia)
+        resultado.desempenho_regra = avaliar(teste['alvo'], regra)
         resultado.episodios_modelo = avaliar_episodios(teste, previsto_baa)
         resultado.episodios_persistencia = avaliar_episodios(teste, persistencia)
+        resultado.episodios_regra = avaliar_episodios(teste, regra)
 
         comparacao.anos.append(resultado)
 

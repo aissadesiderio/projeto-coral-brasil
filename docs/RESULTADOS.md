@@ -241,6 +241,13 @@ que isso não vale seria justamente onde ele erra.
 
 Não é conclusão — é a próxima coisa a medir.
 
+⚠️ **Atualização de 30/07/2026 (§24.4): a regra publicada da NOAA também erra
+2022** — 3/4, o mesmo que o modelo, e a persistência é a única a acertar os
+quatro. Isso estreita a hipótese: se um critério puramente térmico, publicado e
+independente deste projeto tropeça no mesmo ano, o problema tem menos cara de
+"o modelo aprendeu errado" e mais de "2022 teve episódio que o sinal térmico
+agregado não descreve bem".
+
 ---
 
 ## 7. Importância das variáveis — e o indício do oxigênio **não** se confirmou
@@ -1752,7 +1759,8 @@ A versão sem jargão desta seção inteira está em
 | **Alta** | **Decidir o limiar de alerta** | §22.9 — material medido, com as três dimensões: episódios pegos, **quando** o aviso chega, e alarme falso. Dois achados: **nenhum limiar pega os 19 episódios**, e o patamar 0,15–0,40 **não** é de graça — o aviso só chega mais tarde |
 | **Alta** | **A interface não pode exibir "0%" nem "100%"** | §22.8 — a isotônica devolve 0 e 1 exatos por construção (12,2% e 1,7% das amostras). A API sinaliza com `no_extremo`; traduzir isso em impossibilidade ou certeza é decisão de exibição, e seria errada |
 | ✅ feito | ~~Curva de calibração~~ | Feito em 27/07/2026 (§22): o modelo prometia **o dobro** do que acontecia. Corrigido com recalibração isotônica, ECE de 0,081 para **0,0039** |
-| Média | Investigar 2022 (entrega 1) | Único ano em que o modelo perde claramente |
+| **Alta** | **Declarar §24 junto de qualquer número de desempenho** | O modelo pega 2 episódios a mais que a regra publicada da NOAA e cobra 5 a 7 alarmes falsos a mais. Relatar 17/19 sem esse contraste afirma demais |
+| Média | Investigar 2022 (entrega 1) | Único ano em que o modelo perde claramente. Duas pistas agora: menor dependência do DHW (§7) e **a regra da NOAA também erra o ano** (§24.4) |
 | Baixa | Dado *in situ* | Resolveria §18 e §21.5, mas não existe para estes sítios |
 | ⛔ | **Conector do ERA5** | §20 — o vento medido piora o modelo. Ver [ERA5.md](ERA5.md) |
 | ⛔ | ~~Qualidade da água~~ | §21 — feita, e nenhuma combinação melhora |
@@ -1786,11 +1794,145 @@ Três leituras possíveis, e **estes dados não separam**:
 
 ---
 
+## 24. 🚨 O piso era o adversário errado
+
+*Medido em 30/07/2026.*
+
+Até aqui a entrega 1 tinha **uma** linha de base: a persistência, que copia o
+BAA de hoje. Faltava a que qualquer gestor já tem de graça — **a regra
+publicada da NOAA**, que sai todo dia no site deles e não depende deste
+projeto existir:
+
+> `BAA ≥ 3` (Alerta Nível 1) ⟺ `HotSpot ≥ 1 °C` **e** `DHW ≥ 4 °C·semana`
+
+Ganhar de uma cópia não é o mesmo que ganhar do produto que já está no ar, e
+enquanto só a cópia era medida não havia como saber a diferença.
+
+### 24.1 A regra **não** reproduz o BAA do banco, e a causa é a agregação
+
+Que a agregação espacial quebra a relação entre BAA e (HotSpot, DHW) já estava
+registrado em [FONTES.md](FONTES.md) §6.16, desde 25/07/2026 — mas
+qualitativamente: dizia que quebra, não quanto. Construir a linha de base
+exigiu o tamanho. Conferido nos 7.173 dias das três séries:
+
+| | regra diz **não** | regra diz **sim** |
+|---|---|---|
+| `BAA < 3` | 6.575 | **0** |
+| `BAA ≥ 3` | 261 | 337 |
+
+Concordância 0,964, e o desvio é **inteiramente de um lado**: a regra nunca
+avisa onde o BAA não avisou, e perde 261 dos 598 dias de alerta (43,6%).
+
+A causa está em [`noaa_crw.py`](../backend/ingestao/conectores/noaa_crw.py): o
+BAA é reduzido dos ~121 pixels da *bbox* por **máximo**, porque é categoria
+ordinal (§6.16 de [FONTES.md](FONTES.md)); DHW e HotSpot vão por **média**. Um
+pixel quente sozinho levanta o BAA do recife inteiro sem mexer na média de
+nenhum dos dois.
+
+📖 **O raciocínio completo, com exemplo trabalhado de quatro pixels, está em
+[VARIAVEIS.md](VARIAVEIS.md) §4.6** — inclusive por que o desvio só pode
+acontecer nesse sentido. Aqui ficam as medições; lá, o motivo.
+
+### 24.2 O corte publicado é alto demais nesta escala
+
+Consequência direta de 24.1: como o DHW médio subestima o pior pixel, o corte
+de 4 herdado da grade de 5 km chega tarde no recife inteiro. Varredura sobre
+os 7.095 dias do conjunto, com o HotSpot junto:
+
+| corte de DHW | F1 | precisão | revocação | episódios | falsos |
+|---|---|---|---|---|---|
+| 0,00 *(só HotSpot)* | 0,812 | 0,803 | 0,820 | 15/19 | 17 |
+| 0,50 | 0,827 | 0,836 | 0,819 | 15/19 | 12 |
+| **1,00** | **0,837** | **0,880** | 0,799 | **15/19** | **6** |
+| 2,00 | 0,783 | 0,893 | 0,698 | 13/19 | 6 |
+| **4,00** *(publicado)* | 0,654 | 0,905 | 0,512 | **10/19** | 3 |
+| 8,00 | 0,399 | 0,875 | 0,258 | 6/19 | 3 |
+
+O corte publicado pega **10 de 19 episódios**; movido para 1,0 pega 15, sem
+perder precisão que importe. E o máximo é **interior** à varredura — há ponto
+medido dos dois lados dele —, o que não era verdade na primeira tentativa, que
+começava em 1,0 e escolhia 1,0 nas cinco dobras.
+
+⚠️ Só o HotSpot já faz 15/19, mas com **17 alarmes falsos**. O DHW não muda
+quais eventos são pegos; ele corta o alarme falso de 17 para 6. É essa a
+função dele aqui, e não a detecção.
+
+### 24.3 O modelo contra os dois pisos
+
+Leave-year-out, limiar de operação do painel (0,20), médias sobre os 5 anos
+com evento. **O corte da regra é escolhido dentro da dobra de treino**, ano a
+ano — fixá-lo daria ao modelo a vantagem de enfrentar um adversário parado;
+escolhê-lo no teste daria a vantagem contrária.
+
+| | precisão | revocação | F1 | episódios | alarmes falsos |
+|---|---|---|---|---|---|
+| modelo | 0,560 | **0,876** | 0,671 | **17/19** | **11** |
+| persistência | 0,738 | 0,738 | 0,738 | 15/19 | **4** |
+| regra NOAA | **0,819** | 0,751 | **0,779** | 15/19 | 6 |
+
+> **O modelo ganha no critério declarado e perde nos outros dois.** Ele pega 2
+> episódios a mais que os dois pisos, e cobra por isso **5 a 7 alarmes falsos
+> a mais**. A precisão diária cai de 0,819 para 0,560.
+
+Isso não anula a decisão de §22.9 — ela foi tomada sabendo que antecedência se
+compra com alarme falso. Mas muda o que se pode **afirmar**: o modelo não é
+melhor que a regra da NOAA, é **mais sensível** que ela, e a escala de três
+degraus (§22.9.7) é justamente o que dá ao leitor como distinguir os dois
+regimes. No degrau "Alerta alto" (0,50) a precisão medida foi 0,826 — a mesma
+faixa da regra.
+
+Por ano:
+
+| ano | corte | modelo | persistência | regra NOAA |
+|---|---|---|---|---|
+| 2020 | 1,0 | **6/6** (1 falso) | 4/6 (3) | 4/6 (2) |
+| 2022 | 1,0 | 3/4 (3) | **4/4** (0) | 3/4 (1) |
+| 2024 | 1,0 | 3/3 (0) | 3/3 (0) | 3/3 (0) |
+| 2025 | 1,0 | **4/4** (3) | 3/4 (0) | **4/4** (2) |
+| 2026 | 1,0 | 1/2 (4) | 1/2 (1) | 1/2 (1) |
+
+### 24.4 O que isto responde sobre 2022 — e o que não responde
+
+**A regra também falha em 2022** (3/4), e a persistência é a única que acerta
+os quatro. Isso restringe a hipótese aberta em §6: o problema de 2022 não é do
+modelo, porque um critério puramente térmico e publicado tropeça no mesmo ano.
+O que sobrevive ao evento de 2022 é justamente o método que não olha nada
+além do estado de ontem.
+
+⚠️ Não responde **por quê**. Continua valendo como próximo passo, agora com
+duas pistas em vez de uma: 2022 é o ano de menor dependência do DHW na
+importância por permutação (0,30 contra 0,72–0,84) **e** o ano em que a regra
+térmica publicada erra.
+
+### 24.5 A hipótese que esta seção derrubou
+
+A medição começou por uma afirmação que estava **errada**, e o registro fica
+porque ela é convincente: *"o alvo `BAA ≥ 3` é função determinística do DHW,
+logo o modelo só extrapola uma curva de DHW sete dias à frente"*.
+
+Duas coisas quebram:
+
+1. **A regra tem duas metades, não uma.** `BAA` depende de HotSpot **e** DHW —
+   o que [`dataset.py`](../backend/ml/dataset.py) já dizia ao proibir
+   `hotspot` como feature. Só com DHW, a regra faz F1 de **0,480** no melhor
+   corte, contra 0,671 do modelo.
+2. **Nem a regra completa reproduz o alvo**, por 24.1.
+
+O DHW é de longe a variável mais importante do modelo (§7), mas "mais
+importante" não é "suficiente". A diferença entre as duas frases é a seção
+inteira.
+
+---
+
 ## Reprodução
 
 ```bash
-python backend\manage.py shell -c "from aquaculture.models import LocalRecife; from ml.dataset import montar_todos; from ml.modelo import comparar_com_persistencia; locais=list(LocalRecife.objects.filter(latitude__isnull=False)); print(comparar_com_persistencia(montar_todos(locais, horizonte=7), nome='boosting').resumo())"
+python backend\manage.py treinar_modelo --horizonte 7
 ```
+
+Compara o modelo com as duas linhas de base. `--regra-so-dhw` roda a versão da
+regra sem a metade do HotSpot (§24.5), e `--modelo boosting` troca o
+estimador.
 
 Semente fixa (`42`) em ambos os modelos; o resultado é determinístico.
 
@@ -1829,6 +1971,7 @@ python backend\manage.py treinar_gcbd --so-ambiental --importancia
 
 | Data | Alteração |
 |---|---|
+| 30/07/2026 | 🚨 **§24 criada — o piso era o adversário errado.** A entrega 1 tinha **uma** linha de base, a persistência, que copia o BAA de hoje. Faltava a que qualquer gestor já tem de graça: **a regra publicada da NOAA** (`HotSpot ≥ 1` e `DHW ≥ 4`), que sai diariamente no site deles. Medida agora, ela é o **piso mais alto**: F1 0,779 e precisão 0,819 contra 0,671 e 0,560 do modelo, com os mesmos 15/19 episódios da persistência. **O modelo ganha no critério declarado e perde nos outros dois** — pega 2 episódios a mais e cobra 5 a 7 alarmes falsos a mais. Isso não reverte §22.9, que escolheu antecedência sabendo o preço, mas muda o que se pode afirmar: o modelo não é melhor que a regra, é **mais sensível** que ela. Dois achados laterais: **o corte publicado de 4 é alto demais nesta escala** (10/19 episódios; remedido dá `DHW ≥ 1`, 15/19 com precisão 0,880), porque o BAA é agregado por máximo e o DHW por média — quantificado em [FONTES.md](FONTES.md) §6.16, raciocinado em [VARIAVEIS.md](VARIAVEIS.md) §4.6 —, e **a regra também erra 2022** (3/4), o que estreita a pendência de §6. §24.5 registra a hipótese que a própria medição derrubou: *"o alvo é função do DHW, logo o modelo só extrapola DHW"* — falso, porque a regra tem duas metades e só com DHW ela faz F1 0,480 contra 0,671 do modelo. O corte da regra é escolhido **dentro da dobra de treino**, com teste que refaz a escolha à mão. 11 testes novos. |
 | 27/07/2026 | **§22.9.3 corrigida no mesmo dia — eu havia concluído domínio onde não havia.** A primeira versão dizia que *"0,20 é dominado por 0,30"*, olhando só episódios detectados e alarme falso. Ao medir **quando** o aviso chega, o suposto domínio some: entre 0,20 e 0,30 os episódios pegos são os mesmos, mas os avisados já no 1º dia caem de **16/20 para 13/20** e o atraso médio sobe de **1,50 para 2,60 dias**. O evento continua detectado — mais tarde. Fica o aviso de método: um patamar numa métrica agregada quase sempre esconde movimento em algo que ela não mede. Com a dimensão nova, **0,10 vira candidato sério** (recupera o episódio de nove dias de 2022, mantém aviso no 1º dia em 18/20). |
 | 27/07/2026 | **§22.9 criada — a troca do limiar, medida e traduzida.** `manage.py limiar` varre 19 cortes sobre as predições fora da dobra e converte tudo para *dias de alarme falso por ano e por recife*, porque "precisão 0,719" não é uma frase sobre a qual alguém consiga formar opinião. 🚨 **O achado principal não é sobre o limiar:** nenhum dos 19 cortes detecta os 19 episódios — **Picãozinho, 21–23/04/2026, escapa em todos**. Baixar o corte não o recupera, então o teto é do modelo e não da escolha. Medido também que **entre 0,15 e 0,40 a contagem de episódios não se move** (sempre 16/19): nessa faixa apertar o limiar é de graça em termos de evento, e só reduz alarme falso (12,4 → 6,2 dias/ano/recife). Disso sai que **0,20 é dominado por 0,30** — mesma cobertura, 20% menos alarme falso. Os dois episódios que 0,20 perde e 0,05 recupera custam quase o triplo de alarme falso, e um deles dura um dia. ⚠️ O de 2022 (nove dias, Picãozinho) conecta com a pendência já aberta de investigar 2022. Viés de seleção declarado: os limiares são comparados sobre as mesmas predições que os avaliam. 19 testes. |
 | 27/07/2026 | **§22.8 acrescentada — o custo da isotônica, achado ao aplicar o modelo pela primeira vez.** Os três recifes voltaram com **exatamente 0,0029**, apesar de entradas bem diferentes. Não é defeito: a isotônica é **função escada**, e as probabilidades cruas 0,083 e 0,066 caem no mesmo degrau. Medido sobre o treino: **313 valores distintos em 7.095 amostras, 864 (12,2%) em `p = 0,000` exato e 121 em `p = 1,000` exato**. O problema real é de comunicação — `p = 0` significa "nenhum alerta neste degrau", e exibir isso como "0% de risco" traduz um degrau finito em impossibilidade. **Deliberadamente não houve corte para 0,001/0,999**: falsificar o número na direção oposta inventaria precisão inexistente e esconderia da interface justamente o que ela precisa saber. A API sinaliza com `no_extremo`. O custo não reverte a decisão da §22.4 — 0,081 → 0,0039 de ECE continua valendo muito mais que a granularidade perdida — mas passa a acompanhá-la. |

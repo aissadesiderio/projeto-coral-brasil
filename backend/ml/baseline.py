@@ -1,9 +1,18 @@
-"""Linha de base de persistencia e as metricas que fazem sentido aqui.
+"""Linhas de base e as metricas que fazem sentido aqui.
 
 **A persistencia e o piso.** Ela responde "o BAA daqui a N dias e igual ao de
 hoje" e nao usa feature nenhuma. Um modelo que nao a supere nao se justifica -
 e, com episodios que duram semanas (docs/VARIAVEIS.md secao 7.2), ela tende a
 ser forte. Melhor descobrir isso antes de treinar do que depois.
+
+**A regra da NOAA e o segundo piso, e ele e mais alto.** A persistencia copia o
+BAA de hoje, que e categoria de 0 a 4 e nao tem meio-termo: ou ela avisa, ou
+nao. A regra publicada da NOAA trabalha sobre o DHW, que e continuo - e por
+isso pode ter o corte movido para trocar revocacao por precisao, coisa que a
+persistencia nao permite. Comparar so com a persistencia responde "o modelo
+bate uma copia?"; comparar tambem com a regra responde **"o modelo bate o que
+a NOAA ja publica de graca?"**, que e a pergunta de quem opera. Ver
+`prever_regra_noaa` e docs/RESULTADOS.md secao 24.
 
 **Por que as metricas daqui nao sao acuracia.** 92% dos dias nao tem alerta.
 Um modelo que sempre responde "sem alerta" acerta 92% e nao serve para nada.
@@ -31,6 +40,85 @@ FOLGA_EPISODIO_DIAS = 3
 def prever_persistencia(quadro):
     """A predicao da linha de base: o alvo de hoje vale para t+N."""
     return quadro['alvo_atual']
+
+
+# Os dois cortes da regra publicada da NOAA para "Alerta Nivel 1", o mesmo
+# patamar que `LIMIAR_ALERTA` marca no BAA:
+#
+#     BAA >= 3  <=>  HotSpot >= 1 °C  E  DHW >= 4 °C-semana
+#
+# https://coralreefwatch.noaa.gov/product/5km/  (ver docs/FONTES.md secao 6.16)
+CORTE_DHW_ALERTA_1 = 4.0
+CORTE_HOTSPOT_ALERTA_1 = 1.0
+
+# Cortes de DHW varridos ao escolher o ponto de operacao da regra.
+#
+# ⚠️ O piso e 0,5 **para que a varredura contenha o otimo em vez de encostar
+# nele**. A primeira versao comecava em 1,0 e escolhia 1,0 em todas as cinco
+# dobras - um otimo na borda nao e otimo, e um sinal de que a varredura acabou
+# cedo demais. Medido em 30/07/2026 sobre os 7.095 dias, com o HotSpot junto:
+#
+#   corte    0,00    0,25    0,50    1,00    2,00    4,00
+#   F1      0,812   0,817   0,827   0,837   0,783   0,654
+#
+# O maximo esta mesmo em 1,0, e agora ha ponto medido dos dois lados dele.
+# Ver docs/RESULTADOS.md secao 24.
+CORTES_DHW = (0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0)
+
+
+def prever_regra_noaa(quadro, corte_dhw=CORTE_DHW_ALERTA_1, usar_hotspot=True):
+    """A regra publicada da NOAA aplicada em `t`, lida como previsao para t+N.
+
+    Devolve serie no nivel do BAA (0 ou `LIMIAR_ALERTA`), para poder passar por
+    `avaliar` e `avaliar_episodios` sem tratamento especial - o mesmo truque de
+    `modelo.como_baa`.
+
+    🚨 **Ela nao preve nada, e esse e o ponto.** A regra descreve o estado de
+    hoje; usa-la como previsao de daqui a N dias e apostar que o estado nao
+    muda. Se o modelo nao vencer isso, o que ele tem nao e capacidade de
+    previsao - e a inercia termica do oceano, que a regra tambem tem de graca.
+
+    ⚠️ **Ela nao reproduz o BAA do banco, e o desvio nao e defeito.** Medido em
+    30/07/2026 sobre os 7.173 dias das tres series: concordancia de 0,964, com
+    **0 dias** em que a regra avisa e o BAA nao, e **261 dias** em que o BAA
+    avisa e a regra nao. A causa e a agregacao, decidida em
+    `ingestao/conectores/noaa_crw.py`: o BAA e reduzido dos ~121 pixels da bbox
+    por **maximo** (categoria ordinal), enquanto DHW e HotSpot vao por
+    **media**. Um pixel quente sozinho levanta o BAA do recife sem levantar a
+    media de nenhum dos dois. A regra so erra para menos, nunca para mais.
+
+    `usar_hotspot=False` deixa so `DHW >= corte`. E a versao mais fraca, e
+    existe para separar as duas metades da regra: sem o HotSpot ela dispara nos
+    dias em que a agua ja esfriou mas o calor acumulado ainda nao decaiu - 479
+    dias na serie, todos com HotSpot abaixo de 1.
+    """
+    quente = quadro['dhw_atual'] >= corte_dhw
+    if usar_hotspot:
+        quente = quente & (quadro['hotspot_atual'] >= CORTE_HOTSPOT_ALERTA_1)
+    # `fillna(False)`: dia sem a variavel e dia em que a regra nao tem o que
+    # dizer, e "nao avisar" e a resposta honesta - nao um alerta a esmo.
+    return quente.fillna(False).astype(float) * LIMIAR_ALERTA
+
+
+def escolher_corte_dhw(treino, cortes=CORTES_DHW, usar_hotspot=True,
+                       criterio='f1_alerta'):
+    """O corte de DHW que maximiza `criterio` **no conjunto de treino**.
+
+    🚨 Escolher o corte olhando a dobra de teste seria dar a linha de base uma
+    vantagem que o modelo nao tem, e o resultado sairia enviesado a favor dela.
+    Quem chama precisa passar so o treino da dobra. Ver
+    `modelo.comparar_com_linhas_de_base`.
+
+    Empate resolve pelo corte **maior**: entre dois pontos que medem igual no
+    treino, o mais conservador e o que produz menos alarme falso fora dele.
+    """
+    melhor_corte, melhor_valor = None, -1.0
+    for corte in sorted(cortes):
+        previsto = prever_regra_noaa(treino, corte, usar_hotspot)
+        valor = getattr(avaliar(treino['alvo'], previsto), criterio)
+        if valor >= melhor_valor:
+            melhor_corte, melhor_valor = corte, valor
+    return melhor_corte, melhor_valor
 
 
 def taxa_da_classe_majoritaria(verdadeiro):

@@ -34,7 +34,10 @@ from ml import dataset, modelo
 
 
 class Command(BaseCommand):
-    help = 'Avalia o modelo com leave-year-out e compara com a persistencia.'
+    help = (
+        'Avalia o modelo com leave-year-out contra as duas linhas de base: '
+        'persistencia e a regra publicada da NOAA.'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -52,6 +55,14 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument('--semente', type=int, default=42)
+        parser.add_argument(
+            '--regra-so-dhw', action='store_true',
+            help=(
+                'Roda a linha de base da NOAA sem a metade do HotSpot, so com '
+                'DHW >= corte. Mede quanto a regra perde quando lhe falta a '
+                'informacao de que a agua ainda esta quente hoje.'
+            ),
+        )
 
     def handle(self, *args, **opcoes):
         from django.conf import settings
@@ -86,8 +97,9 @@ class Command(BaseCommand):
         )
         self.stdout.write('')
 
-        comparacao = modelo.comparar_com_persistencia(
-            conjunto, opcoes['modelo'], limiar, opcoes['semente']
+        comparacao = modelo.comparar_com_linhas_de_base(
+            conjunto, opcoes['modelo'], limiar, opcoes['semente'],
+            usar_hotspot=not opcoes['regra_so_dhw'],
         )
 
         self.stdout.write(comparacao.resumo())
@@ -114,6 +126,15 @@ class Command(BaseCommand):
 
         Nos mesmos numeros: **18 de 19 episodios contra 15** — o modelo ganha
         com folga na metrica declarada, e perde na que o projeto rejeitou.
+
+        🚨 **E havia um segundo defeito, corrigido em 30/07/2026: o piso era o
+        adversario errado.** Ate aqui a unica linha de base era a persistencia,
+        que copia o BAA de hoje. Faltava a que qualquer gestor tem de graca —
+        **a regra publicada da NOAA**, `HotSpot >= 1 e DHW >= 4`, que sai todo
+        dia no site deles. Ganhar de uma copia nao e o mesmo que ganhar do
+        produto que ja existe, e enquanto so a copia era medida ninguem
+        conseguia saber a diferenca. Agora o veredito julga contra o **maior**
+        dos dois pisos.
         """
         avaliados = comparacao.anos_com_evento
         if not avaliados:
@@ -123,11 +144,9 @@ class Command(BaseCommand):
             ))
             return
 
-        modelo_ep = sum(r.episodios_modelo.episodios_detectados for r in avaliados)
-        persist_ep = sum(
-            r.episodios_persistencia.episodios_detectados for r in avaliados
-        )
-        total_ep = sum(r.episodios_modelo.episodios_reais for r in avaliados)
+        modelo_ep, total_ep, modelo_fp = comparacao.episodios('episodios_modelo')
+        persist_ep, _, persist_fp = comparacao.episodios('episodios_persistencia')
+        regra_ep, _, regra_fp = comparacao.episodios('episodios_regra')
 
         f1_modelo = sum(
             r.desempenho_modelo.f1_alerta for r in avaliados
@@ -138,32 +157,58 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.MIGRATE_HEADING('  Veredito'))
         self.stdout.write(
-            f'  episodios detectados : modelo {modelo_ep}/{total_ep}  |  '
-            f'persistencia {persist_ep}/{total_ep}   <- criterio declarado'
+            '  episodios detectados (alarmes falsos)   <- criterio declarado'
         )
+        for rotulo, detectados, falsos in (
+            ('modelo      ', modelo_ep, modelo_fp),
+            ('persistencia', persist_ep, persist_fp),
+            ('regra NOAA  ', regra_ep, regra_fp),
+        ):
+            self.stdout.write(
+                f'    {rotulo} : {detectados}/{total_ep}  ({falsos} falso(s))'
+            )
         self.stdout.write(
             f'  F1 por dia           : modelo {f1_modelo:.3f}  |  '
             f'persistencia {f1_persistencia:.3f}'
         )
         self.stdout.write('')
 
-        if modelo_ep > persist_ep:
+        # 🚨 O piso e o MAIOR dos dois. Comparar so com a persistencia foi o
+        # que fez este comando anunciar vitoria sem nunca ter medido a regra
+        # que a NOAA ja publica de graca todo dia.
+        piso, nome_piso = max(
+            (persist_ep, 'a persistencia'), (regra_ep, 'a regra da NOAA')
+        )
+
+        if modelo_ep > piso:
             self.stdout.write(self.style.SUCCESS(
-                f'  O modelo bate a linha de base: pega {modelo_ep - persist_ep} '
-                f'episodio(s) a mais.'
+                f'  O modelo bate as duas linhas de base: pega '
+                f'{modelo_ep - piso} episodio(s) a mais que {nome_piso}, '
+                f'que e a mais forte.'
             ))
-        elif modelo_ep == persist_ep:
+        elif modelo_ep == piso:
             self.stdout.write(self.style.WARNING(
-                '  Empate em episodios. O modelo nao acrescenta deteccao — '
-                'avalie se a antecedencia compensa mante-lo.'
+                f'  Empate com {nome_piso} em episodios ({modelo_ep}/'
+                f'{total_ep}). O modelo nao acrescenta deteccao — o que sobra '
+                f'a favor dele e alarme falso e antecedencia, e os dois '
+                f'precisam ser conferidos acima antes de mante-lo.'
             ))
         else:
             self.stdout.write(self.style.ERROR(
                 f'  (!) O modelo NAO bate a linha de base: '
-                f'{modelo_ep}/{total_ep} contra {persist_ep}/{total_ep}.\n'
-                f'      A previsao "amanha sera igual a hoje" pega mais '
-                f'eventos. Isto e motivo para nao servir o modelo.'
+                f'{modelo_ep}/{total_ep} contra {piso}/{total_ep} de '
+                f'{nome_piso}.\n'
+                f'      Isto e motivo para nao servir o modelo.'
             ))
+
+        if regra_ep >= modelo_ep:
+            self.stdout.write(
+                f'\n  (!) A regra da NOAA nao e um adversario qualquer: ela e '
+                f'publicada\n      diariamente e nao precisa deste projeto '
+                f'para ser lida. Empatar com\n      ela em deteccao significa '
+                f'que o que o modelo acrescenta e o numero\n      de '
+                f'probabilidade e a antecedencia, e nao o aviso em si.'
+            )
 
         if f1_persistencia > f1_modelo:
             # Nao e contradicao, e o preco declarado. Dizer aqui evita que

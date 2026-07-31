@@ -594,6 +594,21 @@ Usa o banco. Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) §1–§10.
 python backend\manage.py treinar_modelo
 ```
 
+Ele compara o modelo com **duas** linhas de base, e o veredito julga contra a
+mais forte das duas:
+
+| Linha de base | O que é | Por que está ali |
+|---|---|---|
+| persistência | "daqui a 7 dias vai estar como está hoje" | o piso mínimo — um modelo que não a supere não se justifica |
+| **regra da NOAA** | `HotSpot ≥ 1` e `DHW ≥ 4`, aplicada hoje | **é publicada diariamente e não depende deste projeto existir** |
+
+🚨 **A segunda é a que importa e faltava até 30/07/2026.** Ganhar de uma cópia
+do dado de ontem não é o mesmo que ganhar do produto que a NOAA já põe no ar.
+Medido: o modelo detecta **17 dos 19 episódios** contra 15 das duas linhas de
+base, e cobra por isso **11 alarmes falsos contra 6**. Ver
+[docs/RESULTADOS.md](docs/RESULTADOS.md) §24 antes de citar qualquer um desses
+números sozinho.
+
 Para *gravar* o que será servido — treina uma vez sobre todos os dados:
 
 ```bash

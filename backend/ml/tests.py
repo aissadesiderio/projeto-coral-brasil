@@ -13,15 +13,19 @@ from django.test import TestCase
 
 from aquaculture.models import LocalRecife, MedicaoAmbiental
 from ml.baseline import (
+    CORTE_DHW_ALERTA_1,
     agrupar_episodios,
     avaliar,
     avaliar_episodios,
     avaliar_persistencia,
     dividir_deixando_um_ano_de_fora,
+    escolher_corte_dhw,
     prever_persistencia,
+    prever_regra_noaa,
 )
 from ml.dataset import (
     JANELAS_PADRAO,
+    VARIAVEIS_DE_LINHA_DE_BASE,
     FeatureComVazamento,
     Janela,
     aplicar_janela,
@@ -32,7 +36,9 @@ from ml.dataset import (
 )
 
 FEATURES = ('sst', 'dhw')
-UNIDADES = {'sst': '°C', 'dhw': '°C·semana', 'baa': 'categoria'}
+UNIDADES = {
+    'sst': '°C', 'dhw': '°C·semana', 'baa': 'categoria', 'hotspot': '°C',
+}
 
 
 def gravar(local, data, valores, fonte='noaa_crw'):
@@ -429,6 +435,121 @@ class PersistenciaTests(TestCase):
 
         self.assertEqual(d.precisao_alerta, 0.0)
         self.assertEqual(d.f1_alerta, 0.0)
+
+
+def quadro_da_regra(linhas):
+    """Quadro minimo para a regra: (dhw_atual, hotspot_atual, alvo)."""
+    return pd.DataFrame(
+        linhas, columns=['dhw_atual', 'hotspot_atual', 'alvo']
+    )
+
+
+class RegraDaNoaaTests(TestCase):
+    """A segunda linha de base: `HotSpot >= 1 e DHW >= 4`, aplicada em `t`.
+
+    Ela existe porque a persistencia sozinha e um adversario fraco - copia o
+    BAA de hoje e nao tem corte que se possa mover. A regra da NOAA e o que
+    qualquer gestor ja tem de graca, e e contra ela que o modelo precisa se
+    justificar.
+    """
+
+    def test_precisa_das_duas_metades_para_disparar(self):
+        quadro = quadro_da_regra([
+            (6.0, 1.5, 0.0),   # quente e acumulado -> avisa
+            (6.0, 0.2, 0.0),   # acumulado, mas a agua ja esfriou -> nao avisa
+            (1.0, 1.5, 0.0),   # quente, mas sem acumulo -> nao avisa
+            (1.0, 0.2, 0.0),
+        ])
+
+        previsto = prever_regra_noaa(quadro)
+
+        self.assertEqual(list(previsto), [3.0, 0.0, 0.0, 0.0])
+
+    def test_sem_hotspot_a_regra_dispara_no_calor_que_ja_passou(self):
+        """A metade que falta, medida: 479 dias assim na serie real."""
+        quadro = quadro_da_regra([(6.0, 0.2, 0.0)])
+
+        self.assertEqual(list(prever_regra_noaa(quadro)), [0.0])
+        self.assertEqual(
+            list(prever_regra_noaa(quadro, usar_hotspot=False)), [3.0]
+        )
+
+    def test_dia_sem_a_variavel_nao_vira_alerta(self):
+        """🚨 NaN nao pode virar aviso. Nao saber nao e motivo para avisar."""
+        quadro = quadro_da_regra([
+            (float('nan'), 1.5, 0.0),
+            (6.0, float('nan'), 0.0),
+        ])
+
+        self.assertEqual(list(prever_regra_noaa(quadro)), [0.0, 0.0])
+
+    def test_devolve_serie_no_nivel_do_baa_e_nao_binaria(self):
+        """Sem isso `avaliar` compararia 1 contra 3 e contaria erro."""
+        quadro = quadro_da_regra([(6.0, 1.5, 4.0)])
+
+        d = avaliar(quadro['alvo'], prever_regra_noaa(quadro))
+
+        self.assertEqual(d.verdadeiros_positivos, 1)
+        self.assertEqual(d.falsos_positivos, 0)
+
+    def test_o_corte_padrao_e_o_publicado_pela_noaa(self):
+        self.assertEqual(CORTE_DHW_ALERTA_1, 4.0)
+
+    def test_escolher_corte_prefere_o_que_mede_melhor_no_treino(self):
+        # Alerta so acima de 8; um corte baixo enche de alarme falso.
+        treino = quadro_da_regra(
+            [(float(d), 1.5, 4.0 if d >= 8 else 0.0) for d in range(0, 16)]
+        )
+
+        corte, f1 = escolher_corte_dhw(treino)
+
+        self.assertEqual(corte, 8.0)
+        self.assertEqual(f1, 1.0)
+
+    def test_empate_no_treino_resolve_pelo_corte_mais_conservador(self):
+        """Entre dois cortes que medem igual, o maior erra menos fora."""
+        treino = quadro_da_regra(
+            [(float(d), 1.5, 4.0 if d >= 12 else 0.0) for d in range(0, 16)]
+        )
+
+        corte, _ = escolher_corte_dhw(treino, cortes=(12.0, 11.0))
+
+        self.assertEqual(corte, 12.0)
+
+
+class ColunasDeLinhaDeBaseTests(TestCase):
+    """As colunas `_atual` sao para as linhas de base, nunca para o modelo."""
+
+    def setUp(self):
+        self.local = LocalRecife.objects.create(
+            slug='local-linha-base', nome='LB', estado='Bahia',
+            cidade='Caravelas', latitude=-17.972, longitude=-38.688,
+        )
+
+    def test_nenhuma_coluna_atual_entra_como_entrada_do_modelo(self):
+        """🚨 `hotspot` e proibido como feature: junto com o DHW da o alvo."""
+        serie(self.local, date(2024, 1, 1), 40)
+
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
+
+        for variavel in VARIAVEIS_DE_LINHA_DE_BASE:
+            self.assertIn(f'{variavel}_atual', conjunto.quadro.columns)
+            self.assertNotIn(f'{variavel}_atual', conjunto.colunas_de_entrada)
+
+    def test_falta_de_hotspot_nao_custa_amostra_ao_modelo(self):
+        """🚨 A linha de base nao pode encolher em silencio o conjunto medido.
+
+        `serie` nao grava `hotspot`. Se a coluna entrasse em algum `dropna`, o
+        conjunto inteiro sumiria - e a comparacao passaria a ser feita sobre
+        outros dados sem ninguem perceber.
+        """
+        serie(self.local, date(2024, 1, 1), 40)
+
+        conjunto = montar(self.local, horizonte=7, features=FEATURES, janelas=())
+
+        self.assertEqual(conjunto.n, 33)   # 40 dias - 7 de horizonte
+        self.assertTrue(conjunto.quadro['hotspot_atual'].isna().all())
+        self.assertFalse(conjunto.quadro['dhw_atual'].isna().any())
 
 
 class EpisodioTests(TestCase):

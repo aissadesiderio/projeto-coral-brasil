@@ -74,6 +74,21 @@ PROIBIDAS_COMO_FEATURE = {
     ),
 }
 
+# Variaveis lidas em `t` para as **linhas de base**, nunca para o modelo.
+#
+# 🚨 A distincao e o ponto todo. `hotspot` esta em `PROIBIDAS_COMO_FEATURE`
+# logo acima porque, junto com o DHW, ele *determina* o BAA pela regra da NOAA
+# — um modelo que o visse estaria lendo a resposta. Mas uma **linha de base**
+# pode le-lo: ela nao preve nada, so aplica hoje a regra publicada e deixa esse
+# resultado ser comparado com a previsao de daqui a N dias. E justamente essa
+# comparacao que diz se o modelo acrescenta alguma coisa.
+#
+# Por isso as colunas saem com sufixo `_atual`, do mesmo jeito que `alvo_atual`
+# — que existe desde o inicio pelo mesmo motivo, e pela mesma razao nao e
+# feature. `colunas_de_entrada` continua sendo `(*features, *janelas)`, e um
+# teste garante que nenhuma coluna `_atual` entre ali por acidente.
+VARIAVEIS_DE_LINHA_DE_BASE = ('dhw', 'hotspot')
+
 
 @dataclass(frozen=True)
 class Janela:
@@ -294,12 +309,14 @@ def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
            janelas=None):
     """Tabela supervisionada de um local: features em `t`, alvo em `t+horizonte`.
 
-    Colunas devolvidas: `data` (= t), as features, as janelas, `alvo_data`
-    (= t+horizonte), `alvo`, e `alvo_atual` — o alvo medido em `t`.
+    Colunas devolvidas: `data` (= t), as features, as janelas, as colunas
+    `_atual` das linhas de base, `alvo_data` (= t+horizonte), `alvo`, e
+    `alvo_atual` — o alvo medido em `t`.
 
-    ⚠️ `alvo_atual` **nao e feature**. Existe para a linha de base de
-    persistencia poder ser calculada sobre exatamente as mesmas amostras que o
-    modelo ve; compara-los sobre conjuntos diferentes nao diria nada.
+    ⚠️ Nenhuma coluna terminada em `_atual` **e feature**. Elas existem para as
+    linhas de base poderem ser calculadas sobre exatamente as mesmas amostras
+    que o modelo ve; compara-las sobre conjuntos diferentes nao diria nada. Ver
+    `VARIAVEIS_DE_LINHA_DE_BASE`.
 
     `janelas=None` usa o padrao derivado das proprias features
     (`janelas_para`); `janelas=()` monta o conjunto sem features
@@ -323,16 +340,18 @@ def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
 
     # A janela pode pedir uma variavel que nao esta entre as features - ler
     # a serie dela e necessario mesmo assim.
-    necessarias = {*features, alvo, *(j.variavel for j in janelas)}
+    necessarias = {*features, alvo, *(j.variavel for j in janelas),
+                   *VARIAVEIS_DE_LINHA_DE_BASE}
     largo, conflitos = carregar_largo(local, sorted(necessarias))
     dias = len(largo)
 
     nomes_janela = [j.nome for j in janelas]
+    nomes_base = [f'{v}_atual' for v in VARIAVEIS_DE_LINHA_DE_BASE]
 
     if dias == 0:
         vazio = pd.DataFrame(
-            columns=['data', *features, *nomes_janela, 'alvo_atual',
-                     'alvo_data', 'alvo']
+            columns=['data', *features, *nomes_janela, *nomes_base,
+                     'alvo_atual', 'alvo_data', 'alvo']
         )
         return ConjuntoSupervisionado(vazio, horizonte, features, alvo, janelas)
 
@@ -342,6 +361,16 @@ def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
     tabela = largo[list(features)].copy()
     for janela in janelas:
         tabela[janela.nome] = aplicar_janela(largo[janela.variavel], janela)
+
+    # ⚠️ Fora de qualquer `dropna` de proposito. Uma linha de base que nao
+    # existisse num dia nao pode custar ao MODELO uma amostra que ele teria:
+    # isso trocaria em silencio o conjunto medido pelo conjunto que a
+    # comparacao conseguiu montar. Dia sem a variavel vira NaN, e a linha de
+    # base o descarta na hora de se avaliar.
+    for variavel in VARIAVEIS_DE_LINHA_DE_BASE:
+        tabela[f'{variavel}_atual'] = (
+            largo[variavel] if variavel in largo.columns else float('nan')
+        )
 
     tabela['alvo_atual'] = largo[alvo]
     tabela['alvo'] = largo[alvo].shift(-horizonte)
@@ -364,7 +393,8 @@ def montar(local, horizonte, features=FEATURES_PADRAO, alvo=ALVO_PADRAO,
     sem_janela = antes - len(tabela)
 
     tabela = tabela[
-        ['data', *features, *nomes_janela, 'alvo_atual', 'alvo_data', 'alvo']
+        ['data', *features, *nomes_janela, *nomes_base, 'alvo_atual',
+         'alvo_data', 'alvo']
     ]
 
     return ConjuntoSupervisionado(
