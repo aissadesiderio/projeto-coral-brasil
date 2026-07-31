@@ -6,6 +6,7 @@ import DatasetCard from '../components/DatasetCard';
 import ImagemRecife from '../components/ImagemRecife';
 import PainelPredicao from '../components/PainelPredicao';
 import SectionTitle from '../components/SectionTitle';
+import SerieAmbiental from '../components/SerieAmbiental';
 import { formatarData, formatarLocal } from '../utils/formatters';
 import { ROTAS_APP } from '../utils/navigation';
 
@@ -82,6 +83,15 @@ export default function LocalRecifePage({
             (`possuiPainelCompleto`) foi removida em 28/07/2026 junto com o
             resto da camada legada. */}
         <PainelPredicao slug={recife.slug} publicOffline={siteOffline} />
+      </section>
+
+      <section className="space-y-4">
+        <SectionTitle
+          titulo="A serie medida"
+          descricao={`O que o satelite registrou em ${recife.nome}, com a proveniencia de cada valor. E a entrada da previsao acima — nao a previsao.`}
+        />
+
+        <SerieAmbiental slug={recife.slug} publicOffline={siteOffline} />
       </section>
 
       <section className="space-y-4">

@@ -1120,6 +1120,43 @@ precisa ser encontrada primeiro.
 da fonte original, e algumas exigem atribuição na própria página que os exibe,
 não só numa seção de créditos.
 
+### 7.5 Como citar a série **deste** projeto — ✅ desde 31/07/2026
+
+Até aqui esta seção só respondia "como citar as fontes". Faltava o outro lado:
+**como alguém cita o recorte que este projeto montou.** Todo `url_download` do
+catálogo aponta para o provedor, o que deixava o site na posição estranha de se
+apresentar como banco de dados sem oferecer download de nada.
+
+`/api/medicoes/?formato=csv` devolve o recorte inteiro, respeitando os mesmos
+filtros do JSON:
+
+```
+GET /api/medicoes/?local=picaozinho-pb&formato=csv
+GET /api/medicoes/?variavel=dhw&de=2024-01-01&ate=2024-12-31&formato=csv
+```
+
+| Coluna | O que é |
+|---|---|
+| `local`, `data`, `variavel`, `valor`, `unidade` | a medida |
+| **`fonte`, `dataset_id`, `quality_flag`, `observacao`** | **a proveniência** |
+
+🚨 **As quatro últimas não são opcionais, e é por isso que elas vão no arquivo
+e não só na tela.** Um CSV sem `fonte` e sem `quality_flag` é uma planilha
+qualquer: quem o receber de segunda mão não tem como saber de onde veio o
+número nem se ele passou na validação física. Todo o esforço de proveniência
+por valor deste documento se perde no momento em que o dado sai por um download
+que não a carrega.
+
+⚠️ **Valor nulo sai como célula vazia, nunca `0`.** É o defeito do pipeline
+legado (pH 0, salinidade 0) reaparecendo em formato de arquivo — e num CSV o
+leitor abre no Excel sem nenhum aviso por perto.
+
+**Ao citar, declarar as duas camadas:** a fonte primária (§7.2, com o DOI dela)
+e o recorte deste projeto — data de extração, filtros usados e o total de
+linhas. O nome do arquivo baixado já carrega os filtros
+(`medicoes-picaozinho-pb.csv`); a data de extração não, e precisa ser anotada
+por quem baixa.
+
 ---
 
 ## 8. Modelo para registrar uma nova fonte
@@ -1153,6 +1190,7 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 31/07/2026 | **§7.5 criada — o projeto passou a publicar a própria série.** Até aqui todo `url_download` do catálogo apontava para o **provedor**: um banco de dados público sem nenhuma forma de baixar o que ele mesmo guarda, e sem forma de citar o recorte que este projeto montou. `/api/medicoes/?formato=csv` devolve o recorte inteiro com as quatro colunas de proveniência junto — sem `fonte` e `quality_flag`, o arquivo baixado perde exatamente o que distingue esta série de uma planilha qualquer. Valor nulo sai como célula vazia, nunca `0`. |
 | 30/07/2026 | 🚨 **`StatusPredicao` removido (§6.21).** Aposentar o `/api/monitoramento/` em 28/07 **não** aposentou o dado: os mesmos 4 registros de demonstração continuaram saindo por `monitoramento_recente`, e `possui_painel_risco` era derivado deles com queda para o registro global — dizendo `true` para todo recife cadastrado, inclusive os que o painel responde com 404. Migração `0021`; o campo passou a sair dos metadados do artefato, e os dois endpoints concordam ao vivo. Caíram junto a camada de escrita legada do `neo4j_schema.py` (chamada só por testes) e a cascata morta do `utils/recifes.js`. |
 | 30/07/2026 | **§6.16 quantificada.** O parágrafo sobre o efeito colateral da agregação (a média espacial quebra a relação entre BAA e HotSpot/DHW) estava certo e era qualitativo. Medido nos 7.173 dias: concordância **0,964** entre a regra publicada da NOAA e o `baa` do banco, com o desvio **inteiramente de um lado** — 0 casos em que a regra dispara sem o BAA, 261 em que o BAA dispara sem a regra. É consequência direta de agregar BAA por máximo e HotSpot/DHW por média, e não pede correção: são perguntas diferentes. **Consequência prática:** o corte publicado `DHW ≥ 4` não é transferível para média de bbox — pega 10 dos 19 episódios contra 15 do corte remedido de 1,0. Ver [RESULTADOS.md](RESULTADOS.md) §24 e [VARIAVEIS.md](VARIAVEIS.md) §4.6. |
 | 28/07/2026 | **§6.21 — os arquivos defeituosos foram apagados, e um comando que não existia foi construído.** Removidos os **7 arquivos declarados inutilizáveis: 179,9 MB, 72% da pasta**. O que justifica apagar sem perda é que **o conhecimento sobre eles nunca esteve neles** — está nesta seção e em `inventario_datasets.EXCLUIDOS`, que continua listando os sete com o motivo depois de os arquivos sumirem. ⚠️ Nenhum estava no Git: remoção definitiva, confirmada antes. Mantidos os 9 catalogados (apagá-los esvazia a página, é decisão de produto) e os **7 órfãos** — nem catalogados nem declarados defeituosos, ou seja **não documentados**, e apagá-los sem entender repetiria em pequena escala o erro da §6.14. Removido também o `.pkl` legado que predizia `0.0` para tudo, via `git rm` (recuperável). 🚨 **Achado maior no caminho: `manage.py treinar_modelo` nunca existiu.** O README ensinava a rodá-lo, o `treinar_final` mandava usá-lo e o aviso de envelhecimento da rotina diária apontava para ele — confusão com o arquivo legado `backend/ml_models/treinar_modelo.py`, de mesmo nome. A falta importava porque a decisão de **não retreinar automaticamente** se apoia em "medir é ato deliberado", e não havia como medir sem escrever Python. Construído sobre o código que já existia e era testado. |

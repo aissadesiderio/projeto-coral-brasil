@@ -75,14 +75,66 @@ test('🚨 probabilidade zero exata nao vira "0%" nem no cartao', () => {
   expect(screen.getByText(/faixa mais baixa/i)).toBeInTheDocument();
 });
 
-test('o selo e binario, e nao os quatro niveis do modelo legado', () => {
-  montar({ predicao: predicao({ alerta: true }) });
+function nivel(extras = {}) {
+  return {
+    slug: 'alerta',
+    rotulo: 'Alerta',
+    corte: 0.2,
+    acao: 'Acionar monitoramento. Sete em cada dez avisos neste nivel se confirmam.',
+    exige_acao: true,
+    ...extras,
+  };
+}
 
-  expect(screen.getByText('Alerta termico')).toBeInTheDocument();
-  expect(screen.queryByText(/Alerta nivel/i)).not.toBeInTheDocument();
+test('o selo mostra o degrau, com o nome que o servidor deu', () => {
+  montar({ predicao: predicao({ alerta: true, nivel: nivel() }) });
+
+  expect(screen.getByText('Alerta')).toBeInTheDocument();
 });
 
-test('sem alerta aparece como sem alerta', () => {
+test('🚨 o selo nao reconstroi o rotulo — ele vem do servidor', () => {
+  // Um degrau que este cartao nao conhece precisa aparecer como o servidor o
+  // nomeou, e nao virar "Alerta" ou "Sem alerta" por reconstrucao local.
+  montar({
+    predicao: predicao({
+      alerta: true,
+      nivel: nivel({ slug: 'alerta_maximo', rotulo: 'Alerta maximo' }),
+    }),
+  });
+
+  expect(screen.getByText('Alerta maximo')).toBeInTheDocument();
+});
+
+test('degrau que exige acao vem preenchido; os outros, contornados', () => {
+  const { unmount } = montar({
+    predicao: predicao({ alerta: true, nivel: nivel() }),
+  });
+  const exigente = screen.getByText('Alerta').className;
+  unmount();
+
+  montar({
+    predicao: predicao({
+      nivel: nivel({ slug: 'observacao', rotulo: 'Observacao', exige_acao: false }),
+    }),
+  });
+  const tranquilo = screen.getByText('Observacao').className;
+
+  expect(exigente).toContain('text-white');
+  expect(tranquilo).not.toContain('text-white');
+});
+
+test('a acao esperada fica no title, para quem passar o mouse', () => {
+  montar({ predicao: predicao({ alerta: true, nivel: nivel() }) });
+
+  expect(screen.getByText('Alerta')).toHaveAttribute(
+    'title',
+    expect.stringContaining('Acionar monitoramento'),
+  );
+});
+
+test('⚠️ resposta sem `nivel` continua legivel, pelo caminho de reserva', () => {
+  // Uma versao anterior da API nao manda `nivel`. O cartao nao pode ficar sem
+  // selo por causa disso.
   montar({ predicao: predicao({ alerta: false }) });
 
   expect(screen.getByText('Sem alerta')).toBeInTheDocument();

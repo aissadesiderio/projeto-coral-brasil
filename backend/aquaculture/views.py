@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils.text import slugify
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -249,11 +250,20 @@ class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
     | `fonte` | `noaa_crw` | so uma fonte |
     | `de` / `ate` | `2026-01-01` | recorte de periodo, inclusivo |
     | `qualidade` | `ok` | filtra pelo flag |
+    | `formato` | `csv` | baixa o recorte inteiro, sem paginacao |
 
     ⚠️ **`valor` pode vir nulo, e isso e informacao.** Significa que a
     validacao fisica reprovou o valor; `observacao` diz por que. Quem consome
     **nao deve** tratar nulo como zero — foi exatamente o defeito do pipeline
     legado, que gravava pH 0 e salinidade 0.
+
+    🚨 **`formato=csv` existe para o site ser citavel.** Ate 31/07/2026 o
+    unico download oferecido pelo projeto era o `url_download` do catalogo, que
+    aponta para o **provedor** — ou seja, um banco de dados publico sem
+    nenhuma forma de baixar o que ele mesmo guarda. O CSV sai com as colunas de
+    proveniencia junto, e nao so com data e valor: sem `fonte` e
+    `quality_flag`, o arquivo baixado perde exatamente o que distingue esta
+    serie de uma planilha qualquer.
     """
 
     serializer_class = MedicaoAmbientalSerializer
@@ -301,6 +311,14 @@ class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
 
         return queryset
 
+    # A ordem das colunas do CSV e contrato: quem escreve um script contra
+    # este arquivo depende dela. As quatro ultimas sao a proveniencia, e vem
+    # junto de proposito — ver a nota em `formato=csv` acima.
+    COLUNAS_CSV = (
+        'local', 'data', 'variavel', 'valor', 'unidade',
+        'fonte', 'dataset_id', 'quality_flag', 'observacao',
+    )
+
     def list(self, request, *args, **kwargs):
         """Recusa data invalida em vez de devolver a serie inteira.
 
@@ -311,6 +329,8 @@ class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
         from django.core.exceptions import ValidationError
 
         try:
+            if request.query_params.get('formato') == 'csv':
+                return self._csv(self.get_queryset())
             return super().list(request, *args, **kwargs)
         except (ValidationError, ValueError) as erro:
             return Response(
@@ -318,6 +338,62 @@ class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
                            'Use o formato AAAA-MM-DD.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    def _csv(self, queryset):
+        """O recorte inteiro, em streaming.
+
+        ⚠️ **Sem paginacao, de proposito.** Um download paginado obrigaria
+        quem baixa a costurar 575 arquivos para ter a serie, e a primeira
+        pagina passaria por "os dados" com facilidade demais.
+
+        `StreamingHttpResponse` porque o recorte sem filtro sao 57 mil linhas:
+        montar a lista inteira em memoria antes de responder e desnecessario
+        quando o cliente ja consegue consumir enquanto o servidor escreve.
+
+        🚨 **Valor nulo sai como celula vazia, nunca como 0.** Zero e leitura
+        valida de varias destas variaveis, e escreve-lo no lugar de "reprovado
+        na validacao" e o defeito do pipeline legado, agora em formato de
+        arquivo que o leitor abre no Excel sem nenhum aviso por perto.
+        """
+        import csv
+
+        from django.http import StreamingHttpResponse
+
+        class _Eco:
+            def write(self, valor):
+                return valor
+
+        escritor = csv.writer(_Eco())
+        campos = ('local_recife__slug', 'data', 'variavel', 'valor', 'unidade',
+                  'fonte', 'dataset_id', 'quality_flag', 'observacao')
+
+        def linhas():
+            yield escritor.writerow(self.COLUNAS_CSV)
+            for linha in queryset.values_list(*campos).iterator(chunk_size=2000):
+                yield escritor.writerow(
+                    ['' if valor is None else valor for valor in linha]
+                )
+
+        resposta = StreamingHttpResponse(linhas(), content_type='text/csv')
+        resposta['Content-Disposition'] = (
+            f'attachment; filename="{self._nome_do_arquivo()}"'
+        )
+        return resposta
+
+    def _nome_do_arquivo(self):
+        """Nome que descreve o recorte, e nao so o endpoint.
+
+        Tres arquivos chamados `medicoes.csv` na pasta de downloads sao tres
+        arquivos indistinguiveis. O nome carrega os filtros que os separam.
+        """
+        parametros = self.request.query_params
+        partes = ['medicoes']
+        for chave in ('local', 'fonte', 'de', 'ate'):
+            valor = parametros.get(chave)
+            if valor:
+                partes.append(slugify(valor))
+        partes += [slugify(v) for v in parametros.getlist('variavel')]
+        return '-'.join(partes) + '.csv'
 
 
 class ModeloIndisponivel(Exception):

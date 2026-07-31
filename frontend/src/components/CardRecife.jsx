@@ -12,13 +12,23 @@ import {
 import ImagemRecife from './ImagemRecife';
 
 /**
- * O selo passou a ser **binario**, e isso e consequencia do modelo.
+ * O selo mostra o **degrau da escala**, com o nome que o servidor deu.
  *
- * Antes eram quatro niveis herdados do `StatusPredicao` legado
- * (SEM_RISCO / OBSERVACAO / ALERTA_1 / ALERTA_2). O modelo atual nao produz
- * nivel: ele produz uma probabilidade e um **limiar declarado**, e disso sai
- * uma decisao de duas pontas. Inventar quatro faixas por cima de um corte
- * unico seria dar ao publico uma granularidade que a conta nao tem.
+ * 🚨 **Ele foi binario ate 31/07/2026, e o comentario que justificava isso
+ * envelheceu sem que ninguem notasse.** Estava escrito aqui que *"o modelo
+ * atual nao produz nivel: ele produz uma probabilidade e um limiar declarado"*
+ * — verdade quando foi escrito, falsa desde 30/07, quando a escala de quatro
+ * degraus entrou. O argumento continuava convincente e tinha deixado de ser
+ * verdadeiro, que e a forma mais cara de comentario errado.
+ *
+ * A regra que fica: **o rotulo e a cor vem de `nivel`**, nunca reconstruidos
+ * aqui. Um degrau que o servidor invente e este cartao nao conheca cai no
+ * visual neutro em vez de quebrar.
+ *
+ * ⚠️ O cartao **nao** repete a acao esperada. Ele e resumo numa lista de tres;
+ * a instrucao inteira fica no painel do recife, a um clique. O que ele carrega
+ * e a distincao que muda a leitura da lista: degrau que **exige acao** vem
+ * preenchido, os outros vem so contornados.
  */
 function BadgeAlerta({ alerta }) {
   if (!alerta) {
@@ -29,15 +39,16 @@ function BadgeAlerta({ alerta }) {
     );
   }
 
-  const classes = alerta.emAlerta
-    ? 'border-orange-200 bg-orange-50 text-orange-700'
-    : 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  const classes = alerta.exigeAcao
+    ? `${alerta.cor} border-transparent text-white`
+    : `${alerta.corBorda} ${alerta.corFundo} ${alerta.corTexto}`;
 
   return (
     <span
       className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${classes}`}
+      title={alerta.acao || undefined}
     >
-      {alerta.emAlerta ? 'Alerta termico' : 'Sem alerta'}
+      {alerta.rotulo}
     </span>
   );
 }

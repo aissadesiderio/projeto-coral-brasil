@@ -173,12 +173,20 @@ Arquivo oficial:
 - `backend/aquaculture/neo4j_schema.py`
 
 Comandos oficiais:
-- `python backend/manage.py neo4j_init`
-- `python backend/manage.py neo4j_seed`
+- `python backend/manage.py neo4j_init` — cria as constraints
+- `python backend/manage.py neo4j_projetar` — reconstroi o grafo a partir do
+  PostgreSQL e confere item a item
 
-Compatibilidade legada:
-- `backend/db/setup_graph.py` nao define schema proprio.
-- Esse arquivo apenas delega para `neo4j_init` + `neo4j_seed`.
+🚨 **`neo4j_seed` e `db/setup_graph.py` nao existem mais** (removidos em
+28/07/2026), e este bloco mandava rodar o primeiro ate 31/07/2026. Documentacao
+que instrui a executar um comando removido e pior que documentacao ausente:
+quem segue recebe um erro e nao sabe se errou ou se o projeto esta quebrado. Ha
+teste que falha se um bloco de codigo de qualquer documento citar um comando
+inexistente.
+
+⚠️ O `neo4j_schema.py` **so declara nomes e constraints**. A camada de escrita
+que existia nele — quatro consultas `UPSERT_*` e oito funcoes, chamadas apenas
+pelos proprios testes — saiu em 30/07/2026 junto com o `StatusPredicao`.
 
 ## Schema canonico adotado
 
@@ -521,18 +529,22 @@ por tempo: um TTL continuaria servindo o modelo antigo por N minutos depois de
 
 ## O que ainda nao esta materializado
 
-- **`Predicao` nao entra ainda.** O `StatusPredicao` tem 3 registros do caminho
-  legado, e o modelo novo ([RESULTADOS.md](RESULTADOS.md) §22) ainda nao grava
-  saida em lugar nenhum. Projetar `StatusPredicao` seria repetir o erro que
-  este comando veio corrigir. **Primeiro decidir onde a predicao do modelo
-  atual e persistida**, depois projetar.
+- **`Predicao` nao entra ainda.** O modelo atual
+  ([RESULTADOS.md](RESULTADOS.md) §22) calcula na requisicao e **nao grava
+  saida em lugar nenhum**: o alerta que o site mostra evapora quando a resposta
+  e enviada. **Primeiro decidir onde a predicao e persistida**, depois projetar.
+  Ate 30/07/2026 havia aqui um `StatusPredicao` com 3 registros de
+  demonstracao, e projeta-lo teria sido repetir o erro que `neo4j_projetar` veio
+  corrigir; o modelo foi removido, e a pendencia continua igual.
 - **`(:Predicao)-[:DERIVADA_DE]->(:MedicaoAmbiental)`** depende do item acima —
   e e justamente a travessia de proveniencia completa que o documento cita como
   ganho principal do grafo. Metade dela ja existe.
 - **Relacao direta entre `Predicao` e `Especie`**, quando houver modelo
   realmente especie-especifico.
-- **A projecao nao roda sozinha.** E artefato derivado como o `.docx` e o
-  `.joblib`: **quem publicar precisa rodar o comando**. Nao ha passo de deploy.
+
+✅ **A projecao ja tem passo de deploy** desde 28/07/2026: ela continua sendo
+artefato derivado, como o `.docx` e o `.joblib`, mas `manage.py preparar_deploy`
+reconstroi os tres em ordem e para no primeiro erro.
 
 ### Ja materializado
 
@@ -545,7 +557,7 @@ por tempo: um TTL continuaria servindo o modelo antigo por N minutos depois de
 ## Regras operacionais
 
 - sem `neo4j_init`, nao existe garantia de constraints validas;
-- sem `neo4j_seed`, o grafo nao reflete o estado atual do Django;
+- sem `neo4j_projetar`, o grafo nao reflete o estado atual do PostgreSQL;
 - toda alteracao estrutural no grafo deve partir de `backend/aquaculture/neo4j_schema.py` antes de tocar comandos, servico ou documentacao;
 - **nenhuma rotina escreve no Neo4j sem passar pelo PostgreSQL antes.** Um dado que exista so no grafo e um dado sem proveniencia e sem backup — se aparecer um, e defeito, nao funcionalidade.
 

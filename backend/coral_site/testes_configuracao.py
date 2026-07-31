@@ -294,6 +294,76 @@ class UsuarioDoNeo4jNoComposeTests(SimpleTestCase):
         self.assertGreaterEqual(len(padrao.group(1)), 8)
 
 
+class DocumentacaoNaoMandaRodarComandoInexistenteTests(SimpleTestCase):
+    """🚨 Um bloco de codigo num documento e uma instrucao para executar.
+
+    O `README_neo4j.md` passou dias mandando rodar `manage.py neo4j_seed`,
+    removido em 28/07/2026, e o `arquitetura.md` o listava como "comando
+    oficial" — os dois descobertos so em 31/07, na varredura manual.
+
+    ⚠️ **Isto e pior que documentacao ausente.** Quem segue um comando que nao
+    existe recebe `Unknown command` e nao tem como saber se digitou errado, se
+    esqueceu de ativar o venv, ou se o projeto esta quebrado. Documento em
+    branco pelo menos manda a pessoa perguntar.
+
+    A regra e deliberadamente estreita: **so blocos de codigo**. Prosa pode e
+    deve citar comandos removidos — as tabelas de "o que saiu, e por que"
+    existem justamente para isso, e sao o oposto do defeito.
+    """
+
+    BLOCO = re.compile(r'```(?:bash|powershell|sh|console)?\n(.*?)```', re.DOTALL)
+    COMANDO = re.compile(r'manage\.py\s+([a-z_][a-z0-9_]*)')
+    IGNORADAS = ('node_modules', 'venv', '.git', 'exportado', 'build')
+
+    def documentos(self):
+        for caminho in sorted(RAIZ.rglob('*.md')):
+            if not any(p in caminho.parts for p in self.IGNORADAS):
+                yield caminho
+
+    def comandos_em_blocos(self, texto):
+        for bloco in self.BLOCO.findall(texto):
+            yield from self.COMANDO.findall(bloco)
+
+    def test_todo_comando_citado_em_bloco_de_codigo_existe(self):
+        from django.core.management import get_commands
+
+        disponiveis = set(get_commands())
+        self.assertIn('migrate', disponiveis, 'sanidade: o registro carregou')
+
+        inexistentes = []
+        for documento in self.documentos():
+            texto = documento.read_text(encoding='utf-8')
+            for nome in self.comandos_em_blocos(texto):
+                if nome not in disponiveis:
+                    inexistentes.append(
+                        f'{documento.relative_to(RAIZ).as_posix()}: '
+                        f'manage.py {nome}'
+                    )
+
+        self.assertEqual(
+            inexistentes, [],
+            'Documento manda rodar comando que nao existe. Corrija o bloco, '
+            'ou mova a mencao para fora do bloco de codigo se ela for '
+            'historica:\n  ' + '\n  '.join(inexistentes),
+        )
+
+    def test_o_proprio_guarda_pegaria_um_comando_removido(self):
+        """Sem isto, um erro no regex viraria um teste que nunca falha."""
+        from django.core.management import get_commands
+
+        texto = '```bash\npython backend/manage.py neo4j_seed\n```'
+        encontrados = list(self.comandos_em_blocos(texto))
+
+        self.assertEqual(encontrados, ['neo4j_seed'])
+        self.assertNotIn('neo4j_seed', get_commands())
+
+    def test_mencao_em_prosa_nao_e_flagrada(self):
+        """A tabela de "o que foi removido" e o oposto do defeito."""
+        texto = 'O `manage.py neo4j_seed` foi removido em 28/07/2026.'
+
+        self.assertEqual(list(self.comandos_em_blocos(texto)), [])
+
+
 def _pasta_temporaria():
     import tempfile
 

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CalendarClock,
   CircleHelp,
+  Eye,
   Info,
   ShieldCheck,
   TrendingDown,
@@ -15,6 +16,7 @@ import {
   descreverAtraso,
   descreverEntrada,
   formatarDataBr,
+  formatarPercentual,
   formatarProbabilidade,
 } from '../utils/painelRisco';
 
@@ -39,7 +41,86 @@ import {
  * `BAA >= 3` em t+7, que e a regua termica da NOAA — e ela **perde 78 dos 88**
  * branqueamentos brasileiros observados (docs/RESULTADOS.md secao 11).
  * Chamar de "previsao de branqueamento" prometeria o que nao se entrega.
+ *
+ * **4. 🚨 O degrau vem com a acao esperada, e nao so com a cor.** A escala tem
+ * quatro degraus desde 30/07/2026, cada um com precisao medida e uma frase
+ * dizendo o que fazer (docs/RESULTADOS.md secao 22.9.7). Ate 31/07 o painel
+ * recebia esse campo e **descartava**: mostrava o rotulo, escolhia a cor e
+ * jogava fora a instrucao. Um selo colorido sem instrucao devolve ao leitor a
+ * decisao que o projeto tomou por ele — que e exatamente o que ter quatro
+ * degraus em vez de um liga-desliga existe para evitar.
  */
+
+/**
+ * O icone de cada degrau.
+ *
+ * ⚠️ Sai de `exige_acao`, e **nao** de `emAlerta`. Os dois discordam num caso
+ * que importa: "Observacao" nao exige acao mas tambem nao e "sem aviso", e com
+ * o binario antigo ela recebia o mesmo escudo verde de um recife tranquilo —
+ * apagando na tela o degrau que o servidor tinha acabado de calcular.
+ */
+function iconeDoNivel(alerta) {
+  if (alerta.exigeAcao) {
+    return AlertTriangle;
+  }
+  return alerta.slug === 'observacao' ? Eye : ShieldCheck;
+}
+
+/**
+ * A escala inteira, com o degrau de hoje marcado.
+ *
+ * ⚠️ Existe para dar **regua** ao degrau atual. "Observacao" sozinho nao diz se
+ * e o primeiro ou o ultimo aviso da escala; ao lado dos outros tres, diz. Sem
+ * isso, quem le um degrau intermediario nao tem como saber se o projeto ainda
+ * tem algo pior a dizer.
+ *
+ * 🚨 **A escala vem do servidor**, no bloco `modelo`, e nao e reconstruida
+ * aqui — repetir os cortes no frontend criaria uma segunda escala livre para
+ * divergir da primeira em silencio. Se o servidor nao mandar, o bloco some.
+ */
+function EscalaDeAviso({ escala, atual }) {
+  if (!Array.isArray(escala) || escala.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <h4 className="mb-2 mt-5 text-sm font-semibold text-ocean-dark">
+        A escala de aviso
+      </h4>
+      <ul className="space-y-1.5">
+        {escala.map((nivel) => {
+          const eOAtual = nivel.slug === atual;
+          return (
+            <li
+              key={nivel.slug}
+              className={`flex flex-wrap items-baseline gap-x-2 rounded-xl border px-3 py-2 text-xs leading-relaxed ${
+                eOAtual
+                  ? 'border-ocean-dark/40 bg-ocean-light/10 text-slate-700'
+                  : 'border-sand-dark/20 bg-white text-slate-500'
+              }`}
+            >
+              <span className={eOAtual ? 'font-bold text-ocean-dark' : 'font-semibold'}>
+                {nivel.rotulo}
+              </span>
+              {nivel.corte > 0 && (
+                <span className="text-[11px]">
+                  a partir de {formatarPercentual(nivel.corte)}
+                </span>
+              )}
+              {eOAtual && (
+                <span className="rounded-full bg-ocean-dark px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  hoje
+                </span>
+              )}
+              <span className="w-full text-[11px]">{nivel.acao}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
 
 const Aviso = ({ icone: Icone, titulo, children, tom = 'ambar' }) => {
   const cores = {
@@ -174,7 +255,7 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
           className={`${alerta.cor} flex flex-col justify-center p-6 text-center text-white sm:p-8 lg:w-[34%]`}
         >
           <div className="mx-auto mb-4 w-fit rounded-full bg-white/20 p-4">
-            {alerta.emAlerta ? <AlertTriangle size={42} /> : <ShieldCheck size={42} />}
+            {React.createElement(iconeDoNivel(alerta), { size: 42 })}
           </div>
 
           <h2 className="text-xl font-bold leading-tight sm:text-2xl">
@@ -196,11 +277,36 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
             </p>
           )}
 
-          {alerta.limiarTexto && (
-            <p className="mt-4 text-[11px] text-white/80">
-              Aviso emitido a partir de {alerta.limiarTexto}
-            </p>
+          {/* 🚨 A instrucao, e nao so a cor. E o que faz quatro degraus
+              valerem mais que um liga-desliga: "Observacao" e "Alerta alto"
+              pedem coisas diferentes de quem le, e a diferenca esta escrita
+              aqui em vez de ficar por conta da intuicao sobre a cor. */}
+          {alerta.acao && (
+            <div className="mt-5 rounded-xl bg-black/20 p-3 text-left">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                O que fazer
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-white/95">
+                {alerta.acao}
+              </p>
+            </div>
           )}
+
+          {/* ⚠️ Dois textos porque ha dois contratos. Com `nivel`, o corte que
+              interessa e o **deste degrau**; sem ele — resposta de uma versao
+              anterior da API — resta o limiar unico. Trocar um pelo outro sem
+              reserva apagaria a frase inteira contra um servidor antigo. */}
+          {alerta.slug
+            ? alerta.corteTexto && alerta.slug !== 'sem_aviso' && (
+                <p className="mt-3 text-[11px] text-white/80">
+                  Este degrau comeca em {alerta.corteTexto}
+                </p>
+              )
+            : alerta.limiarTexto && (
+                <p className="mt-4 text-[11px] text-white/80">
+                  Aviso emitido a partir de {alerta.limiarTexto}
+                </p>
+              )}
         </div>
 
         <div className="min-w-0 p-5 sm:p-8 lg:w-[66%]">
@@ -225,6 +331,8 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
               <CartaoEntrada key={entrada.coluna} entrada={entrada} />
             ))}
           </div>
+
+          <EscalaDeAviso escala={modelo.escala} atual={alerta.slug} />
 
           <div className="mt-5 flex gap-2 rounded-2xl border border-sand-dark/20 bg-sand-light/30 p-3 text-xs leading-relaxed text-slate-600">
             <Info size={16} className="mt-0.5 shrink-0 text-ocean-dark" />

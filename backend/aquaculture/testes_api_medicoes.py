@@ -207,3 +207,115 @@ class MedicaoAmbientalApiTests(TestCase):
         resposta = self.buscar()
 
         self.assertEqual(resposta.status_code, 503)
+
+
+@override_settings(OFFLINE_MODE=False)
+class DownloadCsvTests(MedicaoAmbientalApiTests):
+    """`?formato=csv` — o download que faz o site ser citavel.
+
+    Herda o mesmo cenario da suite acima de proposito: o CSV precisa responder
+    aos **mesmos filtros** que o JSON, e testa-lo sobre outros dados esconderia
+    justamente a divergencia que importa.
+    """
+
+    def baixar(self, consulta=''):
+        resposta = self.buscar(f'?formato=csv{consulta}')
+        corpo = b''.join(resposta.streaming_content).decode('utf-8')
+        return resposta, [linha for linha in corpo.splitlines() if linha]
+
+    def celulas(self, consulta=''):
+        import csv
+
+        _, linhas = self.baixar(consulta)
+        return list(csv.reader(linhas))
+
+    def test_sai_como_csv_para_download(self):
+        resposta, linhas = self.baixar()
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta['Content-Type'], 'text/csv')
+        self.assertIn('attachment', resposta['Content-Disposition'])
+        self.assertEqual(len(linhas), 6)   # cabecalho + as 5 medicoes
+
+    def test_a_proveniencia_vem_junto(self):
+        """Sem `fonte` e `quality_flag` o arquivo baixado vira planilha qualquer."""
+        cabecalho = self.celulas()[0]
+
+        self.assertEqual(
+            cabecalho,
+            ['local', 'data', 'variavel', 'valor', 'unidade',
+             'fonte', 'dataset_id', 'quality_flag', 'observacao'],
+        )
+
+    def test_valor_nulo_sai_vazio_e_nunca_como_zero(self):
+        """🚨 Zero e leitura valida; "reprovado na validacao" nao e zero.
+
+        Este e o defeito do pipeline legado (pH 0, salinidade 0) reaparecendo
+        em formato de arquivo — e num CSV o leitor abre no Excel sem nenhum
+        aviso por perto.
+        """
+        linhas = self.celulas('&qualidade=invalido')
+        cabecalho, registro = linhas[0], linhas[1]
+        campos = dict(zip(cabecalho, registro))
+
+        self.assertEqual(campos['valor'], '')
+        self.assertNotEqual(campos['valor'], '0')
+        self.assertEqual(campos['quality_flag'], 'invalido')
+        self.assertIn('fora da faixa fisica', campos['observacao'])
+
+    def test_o_zero_de_verdade_continua_sendo_zero(self):
+        """O contraponto do teste acima: nem toda celula vazia e nulo."""
+        linhas = self.celulas('&variavel=dhw')
+        campos = dict(zip(linhas[0], linhas[1]))
+
+        self.assertEqual(float(campos['valor']), 0.0)
+
+    def test_responde_aos_mesmos_filtros_que_o_json(self):
+        for consulta, esperado in (
+            ('&local=teste-picao', 2),
+            ('&variavel=sst', 2),
+            ('&fonte=copernicus', 2),
+            ('&de=2026-07-24', 3),
+            ('&local=teste-abrolhos&variavel=sst', 1),
+        ):
+            with self.subTest(consulta=consulta):
+                _, linhas = self.baixar(consulta)
+
+                self.assertEqual(len(linhas) - 1, esperado)
+
+    def test_o_download_nao_e_paginado(self):
+        """⚠️ Paginar o download obrigaria a costurar o arquivo de volta.
+
+        E a primeira pagina passaria por "os dados" com facilidade demais.
+        """
+        _, linhas = self.baixar('&page_size=2')
+
+        self.assertEqual(len(linhas) - 1, 5)
+
+    def test_o_nome_do_arquivo_descreve_o_recorte(self):
+        """Tres `medicoes.csv` na pasta de downloads sao indistinguiveis."""
+        resposta, _ = self.baixar('&local=teste-picao&variavel=sst')
+
+        self.assertIn(
+            'filename="medicoes-teste-picao-sst.csv"',
+            resposta['Content-Disposition'],
+        )
+
+    def test_sem_filtro_o_nome_e_generico(self):
+        resposta, _ = self.baixar()
+
+        self.assertIn('filename="medicoes.csv"', resposta['Content-Disposition'])
+
+    def test_data_invalida_falha_alto_tambem_no_csv(self):
+        """🚨 O caminho do CSV nao pode escapar da validacao do JSON.
+
+        Aqui o estrago seria maior: um arquivo baixado sobrevive a sessao, e
+        ninguem confere depois se o recorte pedido foi o recorte aplicado.
+        """
+        resposta = self.buscar('?formato=csv&de=ontem')
+
+        self.assertEqual(resposta.status_code, 400)
+
+    @override_settings(OFFLINE_MODE=True)
+    def test_o_csv_tambem_respeita_o_modo_offline(self):
+        self.assertEqual(self.buscar('?formato=csv').status_code, 503)

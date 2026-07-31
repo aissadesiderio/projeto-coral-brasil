@@ -139,10 +139,10 @@ diante"*.
 | `/api/locais/abrolhos-ba/datasets/` | os conjuntos de dados do recife | — |
 | `/api/especies/` | as espécies catalogadas | 9 |
 | `/api/datasets/` | o catálogo de fontes | 9 |
-| `/api/monitoramento/` | ⚠️ o **modelo antigo** | 3 |
 | `/api/grafo/localizacoes/` | os recifes, vindos do Neo4j | 3 |
-| **`/api/medicoes/`** | ✅ **a série ambiental** | **57.420** |
-| **`/api/painel-risco/`** | 🆕 **o risco calculado** | 3 |
+| **`/api/medicoes/`** | ✅ **a série ambiental** | **57.426** |
+| **`/api/medicoes/?formato=csv`** | 🆕 **a mesma série, para baixar** | o recorte inteiro |
+| **`/api/painel-risco/`** | **o risco calculado** | 3 |
 
 Repare no contraste: tudo tem unidades ou dezenas de registros. **Só o
 `/api/medicoes/` tem dezenas de milhares.**
@@ -151,14 +151,25 @@ E repare numa diferença maior, que não aparece na coluna dos números: **todos
 menos o último entregam algo que já estava guardado.** O `painel-risco` é o
 único que *faz uma conta* na hora em que alguém pergunta. Ver a seção 13.
 
+⚠️ **Havia um `/api/monitoramento/` nesta lista**, servindo 3 registros do
+modelo antigo. Ele saiu em 28/07/2026 — mas os mesmos números continuaram
+escapando por um campo de `/api/locais/<slug>/` até **30/07**, quando o modelo
+legado foi removido de vez. A lição ficou registrada em
+[FONTES.md](FONTES.md) §6.21: *aposentar o endpoint não aposenta o dado.*
+
 ### Por que o `/api/medicoes/` precisou existir
 
-Passamos dias ingerindo 57.420 medições — temperatura, DHW, salinidade,
+Passamos dias ingerindo 57.426 medições — temperatura, DHW, salinidade,
 oxigênio — e elas ficaram no banco **sem nada para entregá-las à tela**. Se o
 site quisesse desenhar um gráfico de temperatura, não tinha onde pedir.
 
 O que existia era o `/api/monitoramento/`, servindo **3 registros** do modelo
 antigo. O mesmo padrão que o grafo tinha: dado novo no banco, ninguém lendo.
+
+🚨 **E o endpoint sozinho não resolveu.** Ele nasceu em 27/07/2026 e passou
+**quatro dias sendo servido para ninguém**: nenhuma tela do site o chamava.
+Criar a porta não é o mesmo que alguém atravessá-la — o gráfico da série só
+entrou na página do recife em 31/07/2026, junto com o botão de baixar o CSV.
 
 ### Três decisões nesse endpoint novo
 

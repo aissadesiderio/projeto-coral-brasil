@@ -1713,6 +1713,35 @@ jeito só porque `class_weight='balanced'` empurrava a probabilidade para cima
 continua escapando, como escapa em todos os limiares. Isso é problema do
 modelo, e permanece aberto.
 
+#### ✅ A escala chegou à interface — 31/07/2026
+
+🚨 **Durante um dia a escala existiu só no servidor.** A API entregava, para
+cada recife, o degrau **com a ação esperada junto** — e o painel mostrava o
+rótulo, escolhia a cor e **descartava a instrução**. O cartão da lista continuou
+binário, com um comentário no código explicando que *"o modelo atual não produz
+nível"*: verdade quando foi escrito, falsa desde a véspera.
+
+Isso esvaziava a decisão desta seção. Um selo colorido sem instrução devolve ao
+leitor a escolha que os números aqui tomaram por ele — e aí três degraus não
+valem mais que um corte único, porque a diferença entre eles some na tela.
+
+O que passou a aparecer:
+
+| Onde | O quê |
+|---|---|
+| painel do recife | o degrau, a **ação por extenso**, e a **escala inteira** com o de hoje marcado |
+| cartão da lista | o nome do degrau; **preenchido** quando exige ação, contornado quando não |
+
+⚠️ **O ícone passou a seguir `exige_acao`.** Ele saía de `alerta` — binário — e
+os dois discordam justamente onde importa: *Observação* não exige ação, mas
+também não é *Sem aviso*, e recebia o mesmo escudo verde de um recife
+tranquilo.
+
+📌 **A escala inteira aparece para dar régua ao degrau atual.** *"Observação"*
+sozinho não informa se é o primeiro ou o último aviso da escala. E ela vem do
+servidor, não reconstruída no frontend: repetir os cortes lá criaria uma segunda
+escala, livre para divergir desta em silêncio.
+
 ### 22.9.6 O exemplo mínimo que torna o erro visível
 
 O engano da §22.9.3 é fácil de repetir, então vale deixá-lo em cinco linhas.

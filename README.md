@@ -565,7 +565,8 @@ cd backend
 python manage.py test
 ```
 
-São 527 testes, ~90 s, terminando em `OK (skipped=1)`.
+Termina em `OK (skipped=1)`, em ~100 s. Eram **658 testes** em 31/07/2026 — o
+número cresce a cada mudança; o que importa é o `OK`.
 
 ```bash
 cd frontend
@@ -709,6 +710,56 @@ isotônica é função escada e devolve `0,000` e `1,000` exatos por construçã
 12,2% das amostras de treino caem em `p = 0` exato. Isso significa *"nenhum
 alerta neste degrau"*, não *"impossível"*. A API sinaliza com `no_extremo:
 true`. Ver [docs/RESULTADOS.md](docs/RESULTADOS.md) §22.8.
+
+#### Servir a série: `/api/medicoes/`
+
+As 57.426 medições, com a proveniência de **cada valor** — `fonte`,
+`dataset_id`, `quality_flag` e `observacao`.
+
+```bash
+curl "http://localhost:8000/api/medicoes/?local=abrolhos-ba&variavel=dhw&de=2026-01-01"
+```
+
+| Parâmetro | Exemplo | O que faz |
+|---|---|---|
+| `local` | `abrolhos-ba` | só um recife |
+| `variavel` | `sst` | pode repetir: `?variavel=sst&variavel=dhw` |
+| `fonte` | `noaa_crw` | só uma fonte |
+| `de` / `ate` | `2026-01-01` | recorte inclusivo |
+| `qualidade` | `ok` | filtra pelo flag |
+| **`formato`** | **`csv`** | **baixa o recorte inteiro, sem paginação** |
+
+🚨 **`valor` pode vir nulo, e isso é informação** — significa que a validação
+física reprovou a medida, e `observacao` diz por quê. Tratar nulo como zero foi
+exatamente o defeito do pipeline legado, que gravava pH 0 e salinidade 0. No
+CSV o nulo sai como **célula vazia**, nunca `0`.
+
+**O download existe para o site ser citável.** Até 31/07/2026 o único download
+oferecido era o `url_download` do catálogo, que aponta para o **provedor** — um
+banco de dados público sem forma de baixar o que ele mesmo guarda:
+
+```bash
+curl -OJ "http://localhost:8000/api/medicoes/?local=picaozinho-pb&formato=csv"
+```
+
+O nome do arquivo carrega os filtros (`medicoes-picaozinho-pb.csv`): três
+`medicoes.csv` na pasta de downloads são três arquivos indistinguíveis.
+
+#### A série na tela
+
+A página de cada recife desenha SST e DHW dos últimos 365 dias, abaixo da
+previsão. ⚠️ **São duas coisas diferentes na mesma página**, e a tela diz isso
+por extenso: o painel de cima fala do **futuro** e sai do modelo; o gráfico de
+baixo fala do **passado** e sai do satélite.
+
+Dois detalhes que são decisão, e não estilo:
+
+- **Um painel por variável.** DHW e temperatura no mesmo eixo produzem um
+  gráfico correto e ilegível — o DHW varia numa escala 30× maior. Foi medido
+  nas figuras do TCC, e só apareceu ao abrir o PNG.
+- **A linha quebra onde o valor é nulo.** Ligar os dois lados da lacuna
+  desenharia uma reta atravessando dias sem medida, indistinguível de dado
+  real.
 
 ### Entrega 2 — prever branqueamento observado (GCBD)
 

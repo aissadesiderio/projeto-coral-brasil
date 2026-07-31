@@ -14,7 +14,7 @@ linguagem.
 ## Índice
 
 1. [O que estamos tentando fazer](#1-o-que-estamos-tentando-fazer)
-2. [A régua: a previsão burra](#2-a-régua-a-previsão-burra)
+2. [As réguas: a previsão burra, e o aviso que a NOAA já publica](#2-a-régua-a-previsão-burra)
 3. [Como testar sem colar](#3-como-testar-sem-colar)
 4. [Por que "acertou 92%" não quer dizer nada](#4-por-que-acertou-92-não-quer-dizer-nada)
 5. [Por que contamos eventos, e não dias](#5-por-que-contamos-eventos-e-não-dias)
@@ -68,6 +68,43 @@ Ele só se justifica se passar de 84%. Essa é a régua, e ela é alta.
 
 Mas já sabemos **onde a previsão burra falha**: ela não vê o evento chegar nem
 acabar. Ela só sabe repetir o presente. É aí que um modelo pode ganhar.
+
+### 🚨 A segunda régua, que faltava — e é mais alta
+
+Por muito tempo essa foi a **única** régua do projeto. E ela tem um problema
+como adversária: é uma **cópia** do dado de ontem. Ganhar de uma cópia não é o
+mesmo que ganhar de algo que já existe.
+
+E já existe. **A própria NOAA publica um aviso todo dia**, com uma regra
+simples: se a água está quente agora *e* o calor acumulado passou de certo
+ponto, é alerta. Qualquer pessoa pode ler esse aviso de graça, sem este projeto
+existir.
+
+Então a pergunta certa nunca foi *"o modelo bate a previsão burra?"*. Era:
+
+> **O modelo bate o aviso que a NOAA já publica?**
+
+Medimos em 30/07/2026. A resposta tem duas metades, e as duas importam:
+
+| | O modelo pega… | E erra o alarme… |
+|---|---|---|
+| **modelo** | **17 dos 19 episódios** | **11 vezes** |
+| previsão burra | 15 dos 19 | 4 vezes |
+| **regra da NOAA** | 15 dos 19 | 6 vezes |
+
+**O modelo pega dois episódios a mais. E cobra por isso.** Ele dispara o alarme
+cinco a sete vezes mais do que as duas réguas.
+
+Isso não é derrota nem vitória — é o preço, e ele estava escondido enquanto a
+única comparação era com a cópia. A frase honesta não é *"o nosso modelo é
+melhor que o da NOAA"*. É:
+
+> **O nosso modelo é mais sensível.** Ele avisa mais cedo e avisa mais vezes,
+> inclusive quando não precisava.
+
+É exatamente para isso que existe a escala de quatro degraus (§13): quem quiser
+só os avisos que quase sempre se confirmam olha o *Alerta alto*; quem preferir
+não perder nada olha a *Observação*.
 
 ---
 
@@ -1074,47 +1111,83 @@ só a contagem de eventos.
 
 Era exatamente esse o buraco na minha primeira conclusão.
 
-### A decisão: 10%
+### A decisão de 27/07: 10% — e por que ela foi revista
 
-Com as três dimensões na mesa:
+Com as três dimensões na mesa, escolhemos **10%**, declarando o critério
+priorizar antecedência: este site existe para que alguém possa reagir, e um
+aviso que chega tarde vale quase o mesmo que aviso nenhum.
 
-| | 20% (o herdado) | **10% (o decidido)** |
-|---|---|---|
-| Eventos detectados | 16 de 19 | **17 de 19** |
-| Avisados já no 1º dia | 16 de 20 | **18 de 20** |
-| Atraso médio | 1,5 dia | **0,95 dia** |
-| Dias de alarme falso por ano, em cada recife | 10 | **16** |
+🚨 **Depois descobrimos que a justificativa escrita estava errada.**
 
-**O critério declarado foi priorizar antecedência.** O raciocínio: este site
-existe para que alguém possa reagir. Para quem reage, um aviso que chega tarde
-vale quase o mesmo que aviso nenhum — enquanto um alarme falso custa
-incômodo, não estrago.
+Registramos que 10% *"comprava o episódio de nove dias em Picãozinho, de
+fevereiro/março de 2022"*. **Não comprava.** Conferindo episódio por episódio,
+em vez de ler só a contagem total:
 
-O que 10% comprou concretamente: o episódio de **nove dias** em Picãozinho, em
-fevereiro/março de 2022 — o mesmo ano que já era o pior do modelo.
+```
+5%  -> pega 18 de 19   perde: Picãozinho, abril/2026 (3 dias)
+10% -> pega 17 de 19   perde: Picãozinho, abril/2026 (3 dias)
+                              Picãozinho, fev/2022  (9 dias)  <- também perde!
+20% -> pega 16 de 19   perde: os dois acima
+                              Porto de Galinhas, mai/2020 (1 dia)
+```
 
-O que custou: o site mostrará alerta em cerca de **16 dias por ano em cada
-recife** sem que o estresse térmico se confirme. Em Abrolhos, algo como um
-alerta falso a cada três semanas.
+O que 10% recuperava em relação a 20% era o episódio de **um dia** em Porto de
+Galinhas. O de nove dias escapa nos dois.
+
+⚠️ **O dado nunca esteve errado — a leitura esteve.** O programa já guardava
+*quais* episódios cada corte perdia. A tabela do documento foi montada à mão a
+partir do número total, e duas linhas trocaram de lugar. É a terceira vez que
+este projeto comete o mesmo erro: **dado certo, leitura confortável**.
+
+### A decisão de 30/07: quatro degraus em vez de um número
+
+Ao revisar o critério, ficou claro que a pergunta *"a partir de quantos por
+cento o site avisa?"* forçava uma escolha que não precisava ser feita.
+
+Um corte único obriga a decidir entre **cobrir tudo** (avisar cedo, errar
+muito) e **ser levado a sério** (avisar pouco, quase sempre acertar). Com mais
+de um degrau, os dois objetivos deixam de competir:
+
+| Degrau | A partir de | Dos avisos, quantos se confirmam | O que fazer |
+|---|---|---|---|
+| **Alerta alto** | 50% | **83%** | acionar com prioridade |
+| **Alerta** | 20% | **72%** | acionar |
+| **Observação** | 5% | 50% | acompanhar, sem mobilizar |
+| Sem aviso | — | — | nada |
+
+O degrau de **Observação** é o que alcança o teto do modelo: 18 dos 19
+episódios. Metade dos seus avisos não se confirma, e ele existe justamente para
+que **nada que o modelo alcança passe despercebido** — quem age só quando o
+custo se justifica olha os degraus de cima.
+
+📌 **Cada degrau carrega a ação esperada junto**, e não só a cor. Um selo
+colorido sem instrução transfere para o leitor a decisão que o projeto deveria
+ter tomado.
+
+🚨 **E isso quase ficou só no papel.** Por um dia a escala existiu no servidor e
+não na tela: o site recebia a instrução de cada degrau e a **descartava**,
+mostrando só o nome e a cor. Corrigido em 31/07/2026 — a página de cada recife
+agora mostra o degrau de hoje, o que fazer, e a escala inteira ao lado, para
+quem lê um degrau do meio saber se ainda há algo pior a ser dito.
 
 ### O que essa decisão não resolve, e a gente não vai fingir que resolve
 
-1. **O episódio de abril de 2026 continua escapando.** Nenhum corte o pega.
-2. **16 dias de alarme falso por ano é um número para acompanhar.** Se o
-   público começar a ignorar o aviso, a decisão se revisita — e agora existe
-   um comando que refaz a tabela inteira.
+1. **O episódio de abril de 2026 continua escapando.** Nenhum corte o pega — o
+   teto é do modelo, não da escolha.
+2. **O de fevereiro de 2022 também**, em qualquer degrau acima de 5%. E 2022 já
+   era o pior ano do modelo, o que liga os dois assuntos.
 3. ⚠️ **Os cortes foram comparados usando os mesmos dados que os avaliaram.**
-   Isso serve para escolher entre eles. **Não** é promessa de que o ano que vem
-   terá exatamente 16 dias de alarme falso.
+   Isso serve para escolher entre eles. **Não** é promessa de quantos alarmes
+   falsos o ano que vem terá.
 
 ### E, principalmente: agora é uma decisão
 
-O 20% anterior não era pior por ser 20%. Era pior por **ninguém saber por que
+O 20% original não era pior por ser 20%. Era pior por **ninguém saber por que
 era 20%**.
 
-Hoje o número está num lugar único, com o motivo escrito ao lado, viajando na
-resposta da API para quem consome poder discordar — e com um comando que
-reconstrói a tabela quando alguém quiser rediscutir.
+Hoje a escala inteira está num lugar único, com o corte medido e a ação escrita
+ao lado, viajando na resposta da API para quem consome poder discordar — e com
+um comando que reconstrói a tabela quando alguém quiser rediscutir.
 
 ---
 
@@ -1133,6 +1206,7 @@ reconstrói a tabela quando alguém quiser rediscutir.
 
 | Data | Alteração |
 |---|---|
+| 31/07/2026 | 🚨 **§13 corrigida — a justificativa escrita do limiar estava errada, e §2 ganhou a segunda régua.** O documento afirmava que o corte de 10% *"comprava o episódio de nove dias de Picãozinho, em 2022"*. **Ele também perde esse episódio.** O que 10% recuperava em relação a 20% era um episódio de **um dia** em Porto de Galinhas. O dado nunca esteve errado — o programa já guardava quais episódios cada corte perdia; a tabela do documento foi montada à mão a partir do total, e duas linhas trocaram de lugar. Terceira vez que este projeto comete o erro de *dado certo, leitura confortável*. Registrada também a decisão que substituiu o corte único: **quatro degraus**, cada um com o percentual de acerto medido e a ação esperada — com um número só era preciso escolher entre cobrir tudo e ser levado a sério. E §2 deixou de ter uma régua só: faltava a **regra que a NOAA já publica diariamente**, que é um piso mais alto que a previsão burra. Contra ela, o modelo pega dois episódios a mais e dispara o alarme cinco a sete vezes mais — a frase honesta é que ele é *mais sensível*, não *melhor*. |
 | 27/07/2026 | **§13 criada — a decisão do limiar de alerta, explicada por inteiro.** Fecha o assunto que a §12 abriu: a probabilidade ficou honesta, mas faltava decidir a partir de quantos por cento o site acende a luz. Registrado que **essa pergunta não tem resposta técnica** — é troca entre incômodo e evento perdido, e portanto escolha de produto. Contado também que o 20% em uso **nunca havia sido escolhido**: era o número que reproduzia um acidente anterior, quando o modelo inflava as probabilidades. Dois achados: 🚨 **um episódio (Picãozinho, abril/2026) escapa em todos os 19 cortes testados**, então ali o teto é do modelo e não da escolha; e **eu havia concluído errado** que apertar o corte entre 15% e 40% era de graça — faltava medir *quando* o aviso chega, e ao medir os avisados no 1º dia caem de 16/20 para 11/20. Incluído um exemplo trabalhado de cinco dias mostrando três cortes que "pegam o evento" e avisam no dia 1, 3 e 4 — a diferença que a contagem de episódios não enxerga. Decisão: **10%**, com o critério declarado (priorizar antecedência) e o custo declarado (16 dias de alarme falso por ano em cada recife). |
 | 27/07/2026 | **§12 criada — o número que o site ia mostrar estava mentindo.** Contada a promessa que uma porcentagem faz e por que ela não estava sendo cumprida: o modelo dizia 16,5% onde a realidade era 8,4%, e nos dias em que dizia "8,4%" **nunca** houve alerta. Explicado que não era bug e sim efeito colateral de uma decisão correta — mandar o modelo tratar as duas classes como igualmente comuns conserta *quando avisar* e estraga *quanto dizer*. Registrado por que o Brier de 0,043 enganava (a **incerteza sozinha é o dobro dele** — o problema é fácil de acertar por omissão), o conserto que levou o erro de 8,1 pontos a 0,4, e que **calibrar não custou detecção**, só mudou o corte de 50% para 20%. Fecha com o defeito encontrado no próprio medidor: predição constante dava "calibração perfeita", quando é o pior caso possível. |
 | 27/07/2026 | **§11 criada — a última tentativa, poluição da água, também não deu.** Contada a hipótese do rio e por que ela caiu de um jeito verificável: se o silicato marcasse água de rio, teria que subir quando a salinidade desce, e **os dois sobem juntos**. Registrado, com o motivo, por que **não** estou chamando de descoberta a única medida que passou no teste estatístico — passou colado e foram nove medidas testadas, e seria repetir o erro do vento no mesmo dia. E que esta é a ressalva de resolução na sua forma pior: 28 km é o tamanho errado para uma mancha de rio de 2 km, com 84 das 498 buscas precisando ir a 33 km de distância. Fecha com o placar das quatro famílias testadas e as três explicações que os dados não separam — incluindo a de que **166 mergulhos é pouco**, que não se resolve com satélite. |

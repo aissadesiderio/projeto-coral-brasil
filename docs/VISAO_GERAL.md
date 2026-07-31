@@ -343,7 +343,7 @@ o nome certo e o conteúdo errado — e responde sem erro nenhum. Por isso
 Cada etapa tem uma responsabilidade só, e isso é deliberado: o conector **não**
 decide nomes nem unidades, a normalização **não** fala com a rede, a validação
 **não** grava. É o que permite testar a lógica difícil sem depender de
-internet — 298 testes rodam offline.
+internet — a suíte inteira roda offline (658 testes em 31/07/2026).
 
 ### 7.1 A viagem de um número, concretamente
 
@@ -658,8 +658,8 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **57.420 medições** | 2020–2026, três locais, oito variáveis |
 | **PostgreSQL** | fonte única, subindo por Docker |
 | **Conjunto supervisionado** | features em `t`, alvo em `t+N`, com guardas contra vazamento |
-| **Linha de base** | persistência medida: F1 0,840 em 7 dias |
-| **Modelo treinado e comparado** | primeira rodada em [RESULTADOS.md](RESULTADOS.md): detecta 18 de 19 episódios contra 15 da persistência |
+| **Duas linhas de base** | persistência (F1 0,738) e a **regra publicada da NOAA** (F1 0,779, o piso mais alto) — [RESULTADOS.md](RESULTADOS.md) §24 |
+| **Modelo treinado e comparado** | no ponto de operação do site: detecta **17 de 19 episódios** contra 15 das duas linhas de base, cobrando 11 alarmes falsos contra 6 |
 | **Importância das variáveis** | medida: DHW e SST respondem por >95% da capacidade preditiva |
 | **GCBD, passo 1** | branqueamento **observado** como alvo, sem ingerir nada: a régua da NOAA pega 10 dos 88 eventos brasileiros ([RESULTADOS.md](RESULTADOS.md) §11) |
 | **GCBD, passo 2** | 30.212 valores de salinidade e O₂ nos 90 dias antes de cada visita: **não acrescentam sinal** (§15–§19) |
@@ -669,25 +669,35 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Modelo persistido** | `manage.py treinar_final` grava `.joblib` + metadados legíveis; o carregamento recusa artefato de outra origem ou versão (§7.4) |
 | **Calibração medida e corrigida** | o modelo prometia **o dobro** do que acontecia; recalibração isotônica levou o ECE de 0,081 a **0,0039** ([RESULTADOS.md](RESULTADOS.md) §22) |
 | **API da série ambiental** | `/api/medicoes/`, com proveniência por valor, filtros combináveis e paginação com teto |
-| **Predição servida** | `/api/painel-risco/` — o primeiro endpoint que **faz conta**: carrega o artefato, monta a janela de hoje e devolve probabilidade calibrada com data-base e limiar |
-| **441 testes** | rodam offline |
+| **Predição servida** | `/api/painel-risco/` — o primeiro endpoint que **faz conta**: carrega o artefato, monta a janela de hoje e devolve probabilidade calibrada, com data-base, limiar e o degrau da escala |
+| **Escala de aviso com quatro degraus** | *Sem aviso*, *Observação*, *Alerta*, *Alerta alto* — cada um com o corte medido e a **ação esperada**, servida pela API **e exibida na tela** ([RESULTADOS.md](RESULTADOS.md) §22.9.7) |
+| **A série na tela, e baixável** | a página de cada recife desenha SST e DHW de 365 dias, e `?formato=csv` entrega o recorte com a proveniência junto ([FONTES.md](FONTES.md) §7.5) |
+| **Site consumindo o backend real** | painel e série saem da API; a camada legada do frontend caiu em 28/07 e o modelo `StatusPredicao` em 30/07 |
+| **Passo de deploy** | `manage.py preparar_deploy` reconstrói os três derivados em ordem e para no primeiro erro |
+| **CI** | verde desde 30/07/2026, backend e frontend |
+| **658 testes de backend + 113 de frontend** | rodam offline *(medido em 31/07/2026)* |
 
 ### Falta
 
 | | |
 |---|---|
-| **O site consumir o `painel-risco`** | O backend responde; a tela ainda mostra o caminho legado. 🚨 E ela **não pode exibir "0%" nem "100%"** — a isotônica devolve extremos exatos por construção ([RESULTADOS.md](RESULTADOS.md) §22.8) |
-| **Nome honesto do produto na interface** | O modelo prevê **estresse térmico**, não branqueamento observado — a régua da NOAA perde 78 dos 88 branqueamentos brasileiros (§11) |
-| **Passo de deploy que reconstrua os derivados** | São **três** agora, todos não versionados: o `.docx`, o `.joblib` e o grafo do Neo4j. Quem publicar precisa rodar os três comandos, e esse passo não existe |
-| **Aprovar o limiar de alerta** | 0,20 está em `settings.PAINEL_LIMIAR` porque é o ponto equivalente ao antigo 0,50 — não porque alguém escolheu a troca entre alarme falso e evento perdido |
+| **Publicar** | hospedagem, domínio e o `atualizar` num agendador. É o único item que bloqueia literalmente *"ter um site"* |
+| **Gravar o que foi previsto** | o alerta é calculado na requisição e evapora. Sem isso não há como responder *"o que o site dizia no dia 12/03?"*, nem medir desempenho em produção |
+| **Proveniência das espécies** | 🚨 **metade do objetivo está num rigor incomparável com a outra.** Cada medição ambiental grava fonte, dataset e flag de qualidade; as espécies vieram de uma lista digitada à mão numa migração, e `status_conservacao` é texto livre sem id de táxon nem ano da avaliação |
+| **Só três recifes** | para *"banco de dados de corais do Brasil"* é pouco. Catálogo e série podem crescer já; a **previsão** só depois de um retreino medido |
+| **Contrato da API documentado** | sem OpenAPI, e sem URL própria por espécie — não dá para linkar nem indexar uma espécie, o que para um acervo é requisito |
+| **Investigar 2022** | único ano em que o modelo perde. Duas pistas agora: menor dependência do DHW, e a **regra da NOAA erra o mesmo ano** (§24.4) |
 | **Variáveis canônicas aprovadas** | item de go-live ainda aberto |
 | **Apagar os 9 CSVs ainda catalogados** | ⚠️ **Decisão pendente, não faxina.** Os 7 arquivos defeituosos (179,9 MB) foram apagados em 28/07/2026; sobram 80 MB que a página "Banco de Dados" inventaria. Apagá-los **esvazia a página** — ver [FONTES.md](FONTES.md) §6.21 |
-| **Os 7 arquivos órfãos** | 1,8 MB que não estão catalogados **nem** declarados defeituosos. Não documentados, e por isso não apagados |
-| **DOIs dos produtos CMEMS** | bloqueia submissão, não o site |
-| **Agendamento** | nada roda sozinho ainda |
-| **CI** | não existe |
+| **DOIs dos produtos CMEMS** | ⛔ bloqueia submissão, não o site |
 | **Dado *in situ* de salinidade e O₂** | resolveria a ressalva de §18, mas não existe para os sítios do GCBD |
 | ⛔ ~~ERA5 — vento real~~ | **Cancelado em 26/07/2026.** O vento medido piora o modelo ([RESULTADOS.md](RESULTADOS.md) §20). A infraestrutura medida fica registrada em [ERA5.md](ERA5.md) |
+
+⚠️ **Esta seção estava desatualizada até 31/07/2026** e listava como pendentes
+quatro itens já entregues — o site consumir o `painel-risco`, o nome honesto do
+produto na interface, o passo de deploy e o CI. Uma lista de pendências que
+inclui trabalho feito é pior que nenhuma: ela é lida como o estado do projeto, e
+esconde o que de fato falta.
 
 ---
 

@@ -788,9 +788,14 @@ vazias.
 | http://localhost:8000/admin/ | **painel administrativo** | Login; entre com o usuário do passo 10 |
 | http://localhost:8000/api/status/ | saúde do backend | `{"offline_mode": false, ...}` |
 | http://localhost:8000/api/painel-risco/ | **a previsão** | modelo + um item por recife |
+| http://localhost:8000/api/medicoes/ | **a série medida** | as 57.426 medições, paginadas, com a proveniência de cada valor |
 | http://localhost:8000/api/locais/ | os recifes | lista com nome, estado, cidade |
 | http://localhost:8000/api/datasets/ | catálogo de dados | 9 datasets com cobertura |
 | http://localhost:7474 | Neo4j Browser | interface do grafo (usuário `neo4j`) |
+
+⚠️ **Previsão e medição são duas coisas.** `painel-risco` fala do **futuro** e
+sai do modelo; `medicoes` fala do **passado** e sai do satélite. A página de
+cada recife mostra as duas, uma abaixo da outra, e diz por extenso qual é qual.
 
 ### Lendo a resposta do painel de risco
 
@@ -807,17 +812,64 @@ série até 24/07/2026):
   "disponivel": true,
   "data_base": "2026-07-24",
   "data_alvo": "2026-07-31",
-  "dias_de_atraso": 5,
+  "dias_de_atraso": 7,
+  "limitado_por": ["dhw", "sst"],
   "probabilidade": 0.0029,
-  "limiar": 0.1,
+  "limiar": 0.2,
   "alerta": false,
+  "nivel": {
+    "slug": "sem_aviso",
+    "rotulo": "Sem aviso",
+    "corte": 0.0,
+    "acao": "Nada a fazer.",
+    "exige_acao": false
+  },
   "no_extremo": false
 }
 ```
 
 Em português: *"com base na série até 24/07, a chance de estresse térmico em
-31/07 é de 0,3%; abaixo do limiar de 10%, então não há alerta; o dado mais
-recente tem 5 dias de atraso."*
+31/07 é de 0,3%; o degrau da escala é **Sem aviso**, e a ação esperada é
+nenhuma; o dado mais recente tem 7 dias de atraso, e quem segura essa data são
+o DHW e a SST."*
+
+📌 **`nivel` é o campo que a tela deve exibir, e não `alerta`.** Desde
+30/07/2026 o aviso tem **quatro degraus** em vez de um liga-desliga, e cada um
+traz a **ação esperada** junto. `alerta` continua na resposta por
+compatibilidade e corresponde a "chegou no degrau `Alerta` ou acima".
+
+📌 **`limitado_por`** diz quais variáveis seguram a `data_base` — explicado
+logo abaixo, em *"`dias_de_atraso` e `limitado_por`"*.
+
+### O painel na tela: o degrau, a ação e a escala
+
+Desde 31/07/2026 o painel de cada recife mostra três coisas, e não uma:
+
+| O quê | Exemplo |
+|---|---|
+| **O degrau de hoje** | *Sem aviso* — com a cor e o ícone daquele degrau |
+| **O que fazer** | *"Nada a fazer."* |
+| **A escala inteira**, com o degrau de hoje marcado | os quatro, com o corte e a ação de cada um |
+
+🚨 **A ação é o motivo de a escala existir.** Até 31/07 o painel recebia esse
+campo do servidor e **descartava**: mostrava o rótulo, escolhia a cor e jogava
+fora a instrução. Um selo colorido sem instrução devolve ao leitor a decisão que
+o projeto já tinha tomado por ele — e aí quatro degraus não valem mais que um
+liga-desliga.
+
+⚠️ **A escala inteira aparece para dar régua ao degrau de hoje.** *"Observação"*
+sozinho não diz se é o primeiro ou o último aviso da escala; ao lado dos outros
+três, diz. Quem lê um degrau intermediário precisa saber se o projeto ainda tem
+algo pior a dizer.
+
+📌 **O ícone segue `exige_acao`, não o antigo liga-desliga.** *Observação* não
+exige ação, mas também não é *Sem aviso* — com o binário anterior ela recebia o
+mesmo escudo verde de um recife tranquilo, apagando na tela o degrau que o
+servidor tinha acabado de calcular.
+
+Na **lista de recifes**, o selo de cada cartão traz o nome do degrau, e a
+distinção que muda a leitura da lista: degrau que exige ação vem **preenchido**;
+os outros, só contornados. A instrução inteira fica no painel, a um clique.
 
 ⚠️ **Dois recifes podem sair com a probabilidade idêntica** — nesse mesmo dia,
 os três deram `0,0029` apesar de entradas bem diferentes. Isso não é bug: a
@@ -869,6 +921,52 @@ semanas quer dizer outra coisa: aquele conector parou, e é hora de rodar
 data-base caía na ponta da fonte mais adiantada e a janela nunca fechava. Se
 você vir capturas de tela antigas com "Dados insuficientes" nos três recifes,
 é isso.
+
+### A série medida, logo abaixo da previsão
+
+Na página de cada recife, abaixo do painel, há dois gráficos: **temperatura da
+superfície** e **calor acumulado (DHW)**, dos últimos 365 dias.
+
+⚠️ **Eles não são a previsão.** A previsão está acima e fala do futuro; estes
+gráficos são o que o satélite **mediu**, e falam do passado. A própria tela diz
+isso por extenso, porque é a confusão mais fácil de cometer olhando a página.
+
+O que esperar de cada um:
+
+| Gráfico | O que você vê num ano normal |
+|---|---|
+| Temperatura | uma onda: sobe no verão, desce no inverno |
+| DHW | quase sempre rente ao zero, subindo só quando há episódio de calor |
+
+📌 **A linha vermelha tracejada no gráfico do DHW é o corte 4** — o "Alerta
+Nível 1" da NOAA. Ela está lá porque `3,8` sozinho não diz nada, e *"3,8, quase
+no 4"* diz tudo. Em 31/07/2026, Abrolhos passou o ano inteiro rente ao zero, e
+Picãozinho teve um episódio no começo de 2026 que **subiu até quase encostar**
+nessa linha.
+
+⚠️ **Buraco na linha é dia sem medida válida, e não zero.** Quando a validação
+física reprova um valor, o gráfico **interrompe** a linha ali em vez de
+desenhar um ponto no chão — e conta quantos dias foram, logo abaixo. Ligar os
+dois lados do buraco desenharia dado que não existe.
+
+### Baixar a série
+
+O botão **"Baixar a série completa (CSV)"**, abaixo dos gráficos, entrega a
+série inteira daquele recife — não só o ano desenhado. O mesmo arquivo sai
+direto pelo endereço:
+
+```
+http://localhost:8000/api/medicoes/?local=abrolhos-ba&formato=csv
+```
+
+O CSV traz, além de data e valor, as quatro colunas de **proveniência**:
+`fonte`, `dataset_id`, `quality_flag` e `observacao`.
+
+🚨 **Elas não são enfeite.** Um CSV sem elas é uma planilha qualquer: quem
+receber o arquivo de segunda mão não tem como saber de onde veio o número nem
+se ele passou na validação. E **valor reprovado sai como célula vazia, nunca
+`0`** — num arquivo que a pessoa abre no Excel, não há nenhum aviso por perto
+para corrigir a leitura.
 
 ---
 
@@ -949,8 +1047,10 @@ cd backend
 python manage.py test
 ```
 
-✅ São **527 testes**, em cerca de 90 segundos, terminando em `OK (skipped=1)`.
-Depois, `cd ..` para voltar à raiz.
+✅ Terminando em `OK (skipped=1)`, em cerca de 100 segundos. Na medição de
+31/07/2026 eram **658 testes** — o número cresce a cada mudança, então o que
+importa é o `OK` no fim, não bater com este número. Depois, `cd ..` para voltar
+à raiz.
 
 ### Dados
 
@@ -967,7 +1067,7 @@ Depois, `cd ..` para voltar à raiz.
 
 | Comando | O que faz |
 |---|---|
-| `treinar_modelo` | **mede** se o modelo presta (leave-year-out). Não grava |
+| `treinar_modelo` | **mede** se o modelo presta (leave-year-out), contra **duas** linhas de base. Não grava |
 | `treinar_final` | **grava** o modelo que o painel usa. Não mede |
 | `treinar_final --listar` | mostra a ficha do modelo gravado |
 | `calibrar` | confere se a probabilidade exibida é honesta |
@@ -979,6 +1079,21 @@ gravar, o outro grava sem medir. Trocá-los é a confusão mais cara do projeto:
 publicar o resultado do primeiro seria publicar um modelo que não existe em
 disco; confiar num número do segundo seria confiar em memória, não em previsão.
 
+📌 **O `treinar_modelo` compara com duas linhas de base**, e o veredito julga
+contra a mais forte das duas:
+
+| Linha de base | O que é |
+|---|---|
+| persistência | *"daqui a 7 dias vai estar como está hoje"* |
+| **regra da NOAA** | `HotSpot ≥ 1` e `DHW ≥ 4`, **publicada diariamente** pela própria NOAA |
+
+A segunda é a que importa: ganhar de uma cópia do dado de ontem não é o mesmo
+que ganhar do produto que já está no ar de graça. Medido em 30/07/2026, o
+modelo pega **17 dos 19 episódios** contra 15 das duas linhas de base, e cobra
+por isso **11 alarmes falsos contra 6**. Ver
+[RESULTADOS.md](RESULTADOS.md) §24 antes de citar qualquer um desses números
+sozinho.
+
 ### Grafo, documentação e publicação
 
 | Comando | O que faz |
@@ -987,8 +1102,20 @@ disco; confiar num número do segundo seria confiar em memória, não em previs�
 | `neo4j_projetar` | reconstrói o grafo do zero a partir do PostgreSQL, e confere |
 | `neo4j_projetar --conferir` | só confere, sem escrever |
 | `exportar_docs` | gera uma cópia `.docx` de cada documento em `docs/exportado/` |
+| `sync_admin_code` | regenera a cópia local dos recifes e espécies que o site usa quando a API não responde |
 | `preparar_deploy` | **antes de publicar**: reconstrói modelo, grafo e docs, e confere |
 | `atualizar` | a rotina diária: ingere, reprojeta, relata o envelhecimento |
+
+📌 **Sobre o `sync_admin_code`:** ele grava dois arquivos de código
+(`generated_admin_sync.py` e `recifeData.js`) com o conteúdo atual do banco,
+para o site ter o que mostrar se o backend cair. Rode-o depois de mexer em
+recifes ou espécies pelo painel administrativo.
+
+⚠️ **Esses arquivos são cópia, e cópia envelhece em silêncio.** Por isso eles
+guardam só identidade e conteúdo — nome, estado, descrição, espécies. Até
+30/07/2026 carregavam também **números de risco**, que é o pior conteúdo
+possível para um arquivo assim: ele sobrevive a qualquer limpeza do banco e
+reaparece justamente quando a API cai, que é quando ninguém tem como conferir.
 
 Sobre o `preparar_deploy`: ele existe porque **nada do que é derivado viaja no
 `git push`**. Sem ele, um clone novo seguido de publicação sobe um site sem
@@ -1003,7 +1130,7 @@ ter funcionado.
 |---|---|
 | `npm install` | instala as bibliotecas (só na primeira vez) |
 | `npm start` | liga o site em desenvolvimento, na porta 3000 |
-| `npm test` | roda os 71 testes do frontend |
+| `npm test` | roda os testes do frontend (113 em 31/07/2026) |
 | `npm run build` | gera a versão otimizada para publicar |
 
 ---
@@ -1297,8 +1424,24 @@ para `ingerir` e `atualizar`.
 **Ingestão** — o processo de buscar dados nas fontes externas e gravar no banco
 com a proveniência de cada valor.
 
-**Limiar** — o número a partir do qual a probabilidade vira alerta. Aqui é
-**0,10**, escolhido em 27/07/2026 priorizando antecedência do aviso.
+**Escala de aviso** — os quatro degraus em que a probabilidade cai: *Sem
+aviso*, *Observação* (0,05), *Alerta* (0,20) e *Alerta alto* (0,50). Cada um
+vem com a **ação esperada** junto. Substituiu o corte único em 30/07/2026: com
+um número só era preciso escolher entre cobrir tudo e ser levado a sério, e com
+quatro degraus os dois objetivos deixam de competir.
+
+**Limiar** — dentro da escala, o degrau a partir do qual há alerta de fato.
+Hoje é **0,20**. Ele continua no payload por compatibilidade, mas quem desenha
+a tela deve usar `nivel`.
+
+**Linha de base** — o resultado mínimo que o modelo precisa superar para se
+justificar. Aqui são duas: a **persistência** (*"vai estar como está hoje"*) e
+a **regra publicada da NOAA**.
+
+**Medição × previsão** — medição é o que o satélite registrou (passado, vem do
+`/api/medicoes/`); previsão é o que o modelo calcula a partir dela (futuro, vem
+do `/api/painel-risco/`). A página de cada recife mostra as duas e diz qual é
+qual.
 
 **Migração** — mudança na estrutura do banco, aplicada por `migrate`.
 
@@ -1306,7 +1449,8 @@ com a proveniência de cada valor.
 guardado.
 
 **Proveniência** — de onde cada valor veio: qual fonte, qual dataset, qual dia.
-O projeto grava isso valor a valor.
+O projeto grava isso valor a valor — e o CSV baixado leva essas colunas junto,
+senão o arquivo vira planilha qualquer.
 
 **venv** — ambiente virtual do Python; precisa ser ativado em cada terminal.
 
@@ -1326,6 +1470,12 @@ O projeto grava isso valor a valor.
 
 ---
 
-*Manual escrito em 29/07/2026. Os números citados (57.426 medições, série até
-27/07/2026, modelo treinado em 28/07/2026) descrevem o estado desta máquina
-naquele dia e envelhecem — os comandos, não.*
+*Manual escrito em 29/07/2026, revisado em 31/07/2026. Os números citados
+(57.426 medições, série até 24/07/2026, modelo treinado em 28/07/2026, 655
+testes de backend e 113 de frontend) descrevem o estado desta máquina naquele
+dia e envelhecem — os comandos, não.*
+
+*A revisão de 31/07 acertou o que três mudanças tinham deixado para trás: o
+limiar do painel (de 0,10 para 0,20, com a escala de quatro degraus no lugar
+do corte único), a resposta de exemplo do painel, a segunda linha de base do
+`treinar_modelo` e a série medida com download, que passou a aparecer no site.*
