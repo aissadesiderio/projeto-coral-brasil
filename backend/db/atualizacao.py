@@ -53,6 +53,15 @@ class Estado:
     modelo: str = ''
     modelo_treinado_em: object = None
     dias_desde_o_treino: int = 0
+    # 🚨 A procedencia das especies entra aqui, e nao num comando separado que
+    # alguem precisa lembrar de rodar. Com 9 especies isso e uma tarde de
+    # trabalho; se as ocorrencias passarem a vir do OBIS/GBIF pela bbox do
+    # recife, o catalogo cresce para centenas, **cada uma chegando sem
+    # procedencia nenhuma**. O que nao escala e a memoria de quem opera; um
+    # numero numa linha, todo dia, escala.
+    especies: int = 0
+    especies_sem_procedencia: int = 0
+    especies_com_conferencia_vencida: int = 0
 
     @property
     def ingestao_parada(self):
@@ -63,8 +72,16 @@ class Estado:
         return self.dias_desde_o_treino >= DIAS_ATE_MODELO_VELHO
 
     @property
+    def especies_a_conferir(self):
+        return self.especies_sem_procedencia + self.especies_com_conferencia_vencida
+
+    @property
     def saudavel(self):
-        return not self.ingestao_parada and not self.modelo_velho
+        return (
+            not self.ingestao_parada
+            and not self.modelo_velho
+            and not self.especies_a_conferir
+        )
 
 
 def _dias(inicio, fim):
@@ -109,7 +126,42 @@ def medir(hoje=None, nome_modelo=None):
         modelo=nome,
         modelo_treinado_em=treinado_em,
         dias_desde_o_treino=_dias(treinado_em, hoje),
+        **_procedencia_das_especies(hoje),
     )
+
+
+def _procedencia_das_especies(hoje):
+    """Quantas especies ninguem consegue citar, e quantas venceram.
+
+    ⚠️ **Contadas no Python, e nao em SQL**, de proposito. As duas condicoes
+    saem de propriedades do modelo (`iucn_tem_procedencia`,
+    `iucn_conferencia_vencida`), e reescreve-las como filtro seria criar uma
+    segunda definicao de "tem procedencia" livre para divergir da primeira em
+    silencio — o mesmo defeito que o limiar duplicado no frontend teria sido.
+
+    Sao dezenas de linhas hoje e nao ha razao para otimizar; se um dia forem
+    milhares, a saida e anotar no banco, nao duplicar a regra.
+    """
+    from datetime import timedelta
+
+    from aquaculture.models import Especie
+
+    especies = list(Especie.objects.all())
+    vencidas = 0
+    for especie in especies:
+        if not especie.iucn_consultado_em:
+            continue
+        limite = timedelta(days=Especie.DIAS_ATE_CONFERENCIA_VENCER)
+        if hoje - especie.iucn_consultado_em >= limite:
+            vencidas += 1
+
+    return {
+        'especies': len(especies),
+        'especies_sem_procedencia': sum(
+            1 for e in especies if not e.iucn_tem_procedencia
+        ),
+        'especies_com_conferencia_vencida': vencidas,
+    }
 
 
 def recados(estado):
@@ -145,6 +197,25 @@ def recados(estado):
             f'dados ate {estado.modelo_treinado_em}. Isto nao e erro — o '
             f'retreino e deliberado de proposito. Mas vale medir antes de '
             f'decidir: "manage.py treinar_modelo" avalia, "treinar_final" grava.'
+        )
+
+    if estado.especies_sem_procedencia:
+        saida.append(
+            f'{estado.especies_sem_procedencia} de {estado.especies} especies '
+            f'sem procedencia de conservacao — o site nao exibe categoria '
+            f'nelas, porque nao consegue data-la. '
+            f'Ver "manage.py conferir_especies".'
+        )
+
+    if estado.especies_com_conferencia_vencida:
+        from aquaculture.models import Especie
+
+        saida.append(
+            f'{estado.especies_com_conferencia_vencida} especie(s) com '
+            f'conferencia vencida (mais de '
+            f'{Especie.DIAS_ATE_CONFERENCIA_VENCER} dias). A IUCN publica duas '
+            f'versoes por ano; a categoria pode ter mudado sem ninguem olhar. '
+            f'Ver "manage.py conferir_especies --vencidas".'
         )
 
     return saida

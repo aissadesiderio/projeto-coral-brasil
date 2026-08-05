@@ -6,6 +6,63 @@ import {
   resolverRotuloLinkImagem,
 } from '../utils/formatters';
 
+/**
+ * A categoria de conservacao — exibida **so quando pode ser datada**.
+ *
+ * 🚨 **Ate 31/07/2026 esta linha era `status_conservacao || 'Nao avaliado'`.**
+ * Dois defeitos num `||`:
+ *
+ * 1. **Categoria sem ano se apresentava como fato.** Uma categoria da IUCN tem
+ *    prazo de validade invisivel: `Dendrogyra cylindrus`, que esta neste
+ *    acervo, foi *Vulneravel* de 2008 a 2022 e hoje e *Criticamente Ameacada*.
+ *    Sem o ano, a tela nao distingue "e CR" de "era VU quando alguem digitou".
+ * 2. **Campo vazio virava "Nao avaliado"**, que e uma **categoria real** da
+ *    Lista Vermelha (NE). Ou seja: *"nao sabemos"* e *"a IUCN avaliou e o
+ *    resultado foi NE"* saiam identicos na tela, e o leitor nao tinha como
+ *    saber qual dos dois estava lendo.
+ *
+ * A regra agora: **sem `iucn_tem_procedencia`, nao se exibe categoria.** E o
+ * mesmo principio que o resto do projeto ja segue — valor reprovado vira nulo
+ * com motivo, nunca zero. Aqui, afirmacao sem data vira a frase que diz que
+ * ela falta.
+ */
+function Conservacao({ especie }) {
+  if (especie.iucn_tem_procedencia !== true) {
+    return (
+      <p className="text-slate-500">
+        Categoria de conservacao <strong>sem procedencia registrada</strong> —
+        falta o ano da avaliacao e a versao da Lista Vermelha. O projeto nao
+        exibe categoria que nao consegue datar.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <p>
+        <strong>{especie.iucn_categoria_rotulo}</strong> ({especie.iucn_categoria})
+      </p>
+      <p className="mt-1 text-xs text-slate-500">
+        Avaliada em {especie.iucn_avaliado_em}
+        {especie.iucn_versao && ` — Lista Vermelha ${especie.iucn_versao}`}
+        {especie.fonte_iucn_url && (
+          <>
+            {' · '}
+            <a
+              href={especie.fonte_iucn_url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-ocean-dark underline"
+            >
+              ficha na IUCN
+            </a>
+          </>
+        )}
+      </p>
+    </>
+  );
+}
+
 export default function ModalEspecie({ especie, onClose }) {
   if (!especie) {
     return null;
@@ -68,7 +125,7 @@ export default function ModalEspecie({ especie, onClose }) {
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-ocean-light">
                 Conservacao
               </p>
-              <p>{especie.status_conservacao || 'Nao avaliado'}</p>
+              <Conservacao especie={especie} />
             </div>
 
             <div>

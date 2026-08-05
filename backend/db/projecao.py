@@ -180,7 +180,9 @@ def projetar_especies(conexao=Neo4jConnection):
             'id': identificador,
             'nome_cientifico': e.nome_cientifico,
             'nome_comum': e.nome_comum,
-            'status_conservacao': getattr(e, 'status_conservacao', ''),
+            'iucn_categoria': getattr(e, 'iucn_categoria', ''),
+            'iucn_avaliado_em': getattr(e, 'iucn_avaliado_em', None),
+            'aphia_id': getattr(e, 'aphia_id', None),
             'django_pk': e.pk,
             'origem_registro': ORIGEM,
         })

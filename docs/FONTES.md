@@ -201,11 +201,11 @@ O gradiente latitudinal está fisicamente correto nos dois sentidos: Abrolhos, m
 **Profundidade:** o pipeline pede de 0 a 1 m, e a toolbox emite um `WARNING` a cada abertura dizendo que a seleção excede as coordenadas do dataset (`[0.494, 5727.9]`). É esperado e não é erro: o primeiro nível dos produtos globais fica em ~0,494 m, e o intervalo pedido seleciona esse nível e só ele. Pedir exatamente 0,494 deixaria o código preso a uma constante que muda entre produtos (o BGC usa 0,506 m).
 
 **Citação obrigatória:**
-> E.U. Copernicus Marine Service Information (CMEMS). Produto [ID DO PRODUTO], DOI [DOI DO PRODUTO]. Dados acessados em [DATA]. https://marine.copernicus.eu
+> E.U. Copernicus Marine Service Information (CMEMS). *Global Ocean Physics Reanalysis*, `GLOBAL_MULTIYEAR_PHY_001_030`. DOI: 10.48670/moi-00021. Dados acessados em 25/07/2026. https://marine.copernicus.eu
 >
 > Produtos biogeoquímicos com crédito adicional: NECCTON Project (EU), https://neccton.eu/
 
-⚠️ Cada produto CMEMS tem um DOI próprio, obtido na página do produto no Copernicus Marine Data Store. **Ainda não coletados — pendência para o TCC.**
+✅ **Os quatro DOIs foram coletados em 31/07/2026** — a tabela completa, e por que cada variável precisa de **duas** citações (a série emenda reanálise e análise), está em §7.2.
 
 ---
 
@@ -292,9 +292,85 @@ Nenhuma das três veio de uma fonte oficial citável. Antes do go-live devem ser
 
 `profundidade_media_m` foi preenchida apenas para Abrolhos (10,0 m, também do seed original). `area_km2` ficou nula em todos — deliberadamente, para não inventar número sem fonte.
 
-### 2.4 Status de conservação
+### 2.4 Status de conservação — 🚨 esquema corrigido em 31/07/2026, dados ainda pendentes
 
-Os valores do campo `status_conservacao` ("Vulnerável", "Criticamente ameaçado", "Pouco preocupante", "Não avaliado") seguem a nomenclatura da **IUCN Red List** — https://www.iucnredlist.org — mas **não há registro de qual avaliação, de que ano, foi consultada** para cada espécie. Pendência: registrar o link da ficha IUCN por espécie no campo `fonte_url`, hoje vazio para todas.
+Os valores do antigo campo `status_conservacao` ("Vulnerável", "Criticamente ameaçado", "Pouco preocupante", "Não avaliado") seguiam a nomenclatura da **IUCN Red List** — https://www.iucnredlist.org — mas **sem registro de qual avaliação, de que ano**. `fonte_url` estava vazio nas **nove** espécies.
+
+⚠️ **Era o campo mais grave do banco para estar sem procedência**, por um motivo específico: é o único que uma pessoa vai **citar**. Todo o resto do acervo ou é descritivo (nome comum, descrição) ou já carrega proveniência por valor.
+
+**O que uma categoria sem ano esconde**, com o exemplo do próprio acervo:
+
+| Espécie | Categoria | Quando |
+|---|---|---|
+| `Dendrogyra cylindrus` | **Vulnerável (VU)** | de 2008 a 2022 |
+| `Dendrogyra cylindrus` | **Criticamente Ameaçada (CR)** | desde 2022 |
+
+As duas afirmações estão certas — em anos diferentes. Sem o ano, a tela não distingue *"é CR"* de *"era VU quando alguém digitou isto"*, e a segunda leitura envelhece sozinha.
+
+**Correção aplicada (migração `0022`).** O texto livre virou os códigos oficiais da Lista Vermelha, com os campos que faltavam:
+
+| Campo | Para quê |
+|---|---|
+| `iucn_categoria` | o código oficial (`VU`, `CR`…), não a tradução |
+| `iucn_avaliado_em` | **o ano da avaliação publicada** |
+| `iucn_versao` | a versão da Lista Vermelha (ex.: `2024-1`) |
+| `iucn_taxon_id`, `fonte_iucn_url` | onde conferir |
+
+🚨 **Consequência imediata e deliberada: o site parou de exibir categoria de conservação nas nove espécies**, porque nenhuma tem ano registrado. Não é regressão — é parar de afirmar o que não se consegue datar. A tela mostra *"categoria sem procedência registrada"* até alguém preencher.
+
+⚠️ **A decisão mais delicada da migração: "Não avaliado" virou categoria vazia, e não `NE`.** As duas leituras — *"a IUCN avaliou e devolveu NE"* e *"quem digitou não consultou"* — são indistinguíveis no dado, e `NE` é uma **categoria real**. Pior: afirmá-la seria **provavelmente falso** para pelo menos duas das cinco espécies que tinham esse valor, já que `Holacanthus ciliaris` e `Ocyurus chrysurus` têm avaliação publicada. Inventar afirmação errada é pior que registrar lacuna. Há teste travando isso.
+
+📌 **Pendência que fica: preencher os anos.** São 9 espécies. O GBIF devolve a categoria **sem o ano**, e por isso não substitui a consulta — reproduziria o defeito com aparência de fonte.
+
+🚨 **O pedido de acesso à API da IUCN foi RECUSADO em 31/07/2026**, com e-mail institucional (`@id.uff.br`) e sem motivo declarado — o texto da recusa é o modelo padrão, com um parágrafo enlatado sobre uso comercial e o IBAT. Há canal de contestação (`conservation.informatics@iucn.org`).
+
+### 2.4.1 Isto não escala como tarefa, e por isso virou relatório
+
+⚠️ **A conferência manual serve para 9 espécies e quebra para 300.** E o caminho já planejado leva a 300: se as ocorrências passarem a vir do OBIS/GBIF pela `bbox()` do recife, o catálogo cresce sozinho, **cada espécie chegando sem procedência nenhuma**.
+
+O que não escala não é conferir — é **lembrar de conferir**. Duas consequências no desenho:
+
+**1. `iucn_origem` registra por qual via o dado veio** (`api`, `ficha`, `terceiro`). Sem isso o acervo vira mistura indistinguível, e não há como auditar o que pode ser citado como IUCN.
+
+📌 A opção `terceiro` existe para ser honesta sobre um caminho que pode vir a ser usado: **Wikidata e GBIF publicam a categoria sem token, e são fonte legítima se declarada** — *"categoria segundo o Wikidata, referenciando a Lista Vermelha 2022-2, consultado em tal data"* é verdadeiro e datável. O que não pode é apresentá-la como se viesse da IUCN.
+
+**2. O vencimento entra no relatório diário.** `db/atualizacao.py` já reporta o que envelheceu — série parada, modelo velho — e fica **calado quando está tudo bem**. As espécies entram lá:
+
+```
+(!) 9 de 9 especies sem procedencia de conservacao — o site nao exibe
+    categoria nelas, porque nao consegue data-la. Ver "manage.py
+    conferir_especies".
+```
+
+Com 300 espécies isso continua sendo uma linha por dia, em vez de uma tarefa que alguém precisa recordar.
+
+⚠️ **São duas faltas diferentes, contadas em separado:**
+
+| | O que significa |
+|---|---|
+| **sem procedência** | falta a categoria ou falta o ano — o site não exibe nada |
+| **conferência vencida** | há categoria e ano, mas ninguém confere há mais de 2 anos |
+
+A segunda é a que pegaria o defeito real. `Mussismilia braziliensis` não mudou no banco: **a IUCN publicou outra avaliação**, e o registro local continuou apontando para a antiga. Sem uma data de última conferência, isso é invisível por definição.
+
+### 2.4.2 🚨 E um dos quatro valores estava simplesmente errado
+
+Conferido em 31/07/2026, ao coletar a procedência:
+
+| Espécie | No banco | Na IUCN | |
+|---|---|---|---|
+| **`Mussismilia braziliensis`** | **VU** | **CR** *(2022-2, táxon 133586)* | ❌ **errada** |
+| `Sparisoma axillare` | NT | DD? | ❓ a confirmar |
+| `Dendrogyra cylindrus` | CR | CR | ✅ |
+| `Montastraea cavernosa` | LC | LC | ✅ |
+
+É o coral-cérebro brasileiro, **endêmico**, a espécie que abre a página de Abrolhos — exibida dois degraus abaixo do que a IUCN registra.
+
+Isso muda a natureza do problema: não era só *falta de lastro*, era **dado errado** — e do tipo que a ausência de ano esconde perfeitamente. Alguém digitou uma categoria que já foi verdadeira, a IUCN reavaliou, e nada no sistema tinha como perceber.
+
+⚠️ **Consequência para a decisão de esconder tudo.** A alternativa "menos destrutiva" — manter as categorias exibíveis enquanto a procedência não chega — deixaria essa afirmação errada no ar, agora com aparência de dado revisado.
+
+⚠️ **Esta conferência foi feita em Wikidata e busca**, não na ficha da IUCN, que recusa acesso automatizado (403). É forte mas é cópia, e **nada foi gravado no banco com essa procedência** — seria repetir o defeito com outra fonte.
 
 ---
 
@@ -388,11 +464,11 @@ Define a MMM (Maximum Monthly Mean) por pixel, o HotSpot, a acumulação de DHW 
 **Citação obrigatória — são duas:**
 > Hersbach, H. et al. (2020). *The ERA5 global reanalysis.* Quarterly Journal of the Royal Meteorological Society, 146(730). doi:10.1002/qj.3803
 
-> Hersbach, H. et al. (2023). *ERA5 hourly data on single levels from 1940 to present.* Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
+> Hersbach, H. et al. (2023). *ERA5 hourly data on single levels from 1940 to present.* Copernicus Climate Change Service (C3S) Climate Data Store (CDS). DOI: 10.24381/cds.adbb2d47
 
 Mais a frase exigida pela licença: *"Contains modified Copernicus Climate Change Service information [ano]"*.
 
-🚨 **O DOI do dataset ainda não foi conferido na página oficial** — mesma pendência dos produtos CMEMS (§6.15), **bloqueante para submissão**.
+✅ **DOI conferido na página oficial do CDS em 31/07/2026** (§6.15). ⚠️ O conector foi cancelado, mas **a citação continua obrigatória**: os dados baixados sustentam o resultado de [RESULTADOS.md](RESULTADOS.md) §20.
 
 **Para quê:** o vento é a **única variável não térmica que dá sinal** no projeto — 2ª mais importante no passo 2 da entrega 2, coeficiente −0,72, *d* de Cohen −0,461 ([RESULTADOS.md](RESULTADOS.md) §17). E o vento atual do projeto é uma **constante inventada** (§6.7). É a maior assimetria aberta: a variável que funciona é a que não temos.
 
@@ -896,8 +972,32 @@ não descoberto.
 29 testes: 21 em `aquaculture/testes_cobertura.py` e 8 em
 `frontend/src/components/DatasetCard.test.jsx`.
 
-### 6.15 DOIs dos produtos CMEMS não coletados
-Cada produto Copernicus tem DOI próprio, exigido para citação formal. Nenhum foi registrado.
+### 6.15 ✅ RESOLVIDO em 31/07/2026 — DOIs dos produtos CMEMS e do ERA5
+
+Cada produto Copernicus tem DOI próprio, exigido para citação formal, e nenhum
+estava registrado. Era o único item marcado como **bloqueante para submissão**.
+
+| Fonte | Produto | DOI |
+|---|---|---|
+| CMEMS | `GLOBAL_MULTIYEAR_PHY_001_030` | 10.48670/moi-00021 |
+| CMEMS | `GLOBAL_ANALYSISFORECAST_PHY_001_024` | 10.48670/moi-00016 |
+| CMEMS | `GLOBAL_MULTIYEAR_BGC_001_029` | 10.48670/moi-00019 |
+| CMEMS | `GLOBAL_ANALYSISFORECAST_BGC_001_028` | 10.48670/moi-00015 |
+| C3S | ERA5 hourly data on single levels from 1940 to present | 10.24381/cds.adbb2d47 |
+
+Detalhe, modelo de citação e a ressalva sobre a série emendada em §7.2; o ERA5
+em [ERA5.md](ERA5.md).
+
+⚠️ **Dois achados ao coletar**, e os dois mudam a lista de referências:
+
+1. **São quatro produtos CMEMS, não dois.** Salinidade e oxigênio parecem duas
+   fontes, mas cada série **emenda reanálise e análise** — a reanálise termina
+   meses atrás e a análise cobre até ontem. Citar só a reanálise omitiria a
+   fonte exatamente dos dias que o painel usa.
+2. **O ERA5 continua precisando de citação mesmo com o conector cancelado.** Ele
+   não está no pipeline, mas os dados baixados dele **sustentam um resultado
+   publicável** — a derrubada do efeito do vento ([RESULTADOS.md](RESULTADOS.md)
+   §20). Fonte descartada como insumo não é fonte descartada como evidência.
 
 ### 6.17 ✅ TRATADO em 26/07/2026 — três defeitos no GCBD, detectados ao usá-lo
 
@@ -1039,7 +1139,7 @@ no projeto, ao ponto do código, e às afirmações que dependem dela.
 | **CMEMS — janelas do GCBD** | `salinidade`, `oxigenio` nos **90 dias antes de cada uma das 166 visitas** (1994–2010), em cache não versionado | [`ml/gcbd_ambiental.py`](../backend/ml/gcbd_ambiental.py), `manage.py ingerir_gcbd` | O experimento da entrega 2, passo 2. Ver §6.18 para as decisões de extração, e [GCBD.md](GCBD.md) |
 | **GCBD** | O **alvo observado** da entrega 2 — 166 visitas brasileiras, 88 positivas — e as 8 térmicas do dia que as acompanham | [`ml/gcbd.py`](../backend/ml/gcbd.py), `manage.py treinar_gcbd` | Todo o [RESULTADOS.md](RESULTADOS.md) §11–§14, e em especial a afirmação central: **a regra `DHW ≥ 4` da NOAA perde 78 dos 88 branqueamentos observados no Brasil**. Também [GCBD.md](GCBD.md) e o desenho da entrega 2 em [VARIAVEIS.md](VARIAVEIS.md) §4.4 |
 | **iNaturalist** | Fotografias de espécies | seed do banco | Nenhuma afirmação científica — uso ilustrativo |
-| **IUCN Red List** | `status_conservacao` por espécie | seed do banco | Nenhuma afirmação do modelo |
+| **IUCN Red List** | `iucn_categoria` + ano, versão e ficha por espécie | seed do banco (§2.4) | Nenhuma afirmação do modelo. ⚠️ **Os anos ainda não foram coletados**, e por isso o site não exibe categoria nenhuma hoje |
 | **Met Office / GHRSST** | ⛔ nada no caminho novo | `dados/sst.csv` (legado) | Nenhuma — a série mais longa do projeto **não é usada** (§6.4) |
 
 ### 7.2 Citação exata de cada uma
@@ -1060,19 +1160,44 @@ consulta reproduzível (§1.1).
 
 > "Generated using E.U. Copernicus Marine Service Information"
 
-mais o DOI de cada produto usado. Produtos efetivamente usados neste projeto:
+mais o DOI de cada **produto** usado. ✅ **Coletados em 31/07/2026:**
 
-| Dataset | Variável | Tipo |
-|---|---|---|
-| `cmems_mod_glo_phy_my_0.083deg_P1D-m` | salinidade | reanálise |
-| `cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m` | salinidade | análise |
-| `cmems_mod_glo_bgc_my_0.25deg_P1D-m` | oxigênio | reanálise |
-| `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m` | oxigênio | análise |
+| Dataset usado | Variável | Produto | DOI |
+|---|---|---|---|
+| `cmems_mod_glo_phy_my_0.083deg_P1D-m` | salinidade *(reanálise)* | `GLOBAL_MULTIYEAR_PHY_001_030` — Global Ocean Physics Reanalysis | **10.48670/moi-00021** |
+| `cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m` | salinidade *(análise)* | `GLOBAL_ANALYSISFORECAST_PHY_001_024` — Global Ocean Physics Analysis and Forecast | **10.48670/moi-00016** |
+| `cmems_mod_glo_bgc_my_0.25deg_P1D-m` | oxigênio *(reanálise)* | `GLOBAL_MULTIYEAR_BGC_001_029` — Global Ocean Biogeochemistry Hindcast | **10.48670/moi-00019** |
+| `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m` | oxigênio *(análise)* | `GLOBAL_ANALYSISFORECAST_BGC_001_028` — Global Ocean Biogeochemistry Analysis and Forecast | **10.48670/moi-00015** |
 
-Produtos biogeoquímicos levam crédito adicional ao **NECCTON Project (EU)**.
+⚠️ **O DOI é do produto, não do dataset.** Cada produto reúne vários datasets
+(diário, mensal, recortes de variável); o que se cita é o produto. Como este
+projeto **emenda reanálise e análise na mesma série** — a reanálise termina
+alguns meses atrás e a análise cobre até ontem (§1.3) —, cada variável precisa
+de **duas** citações, e não uma. Um trabalho que cite só a reanálise estará
+omitindo a fonte dos meses mais recentes, que são justamente os que o painel
+usa.
 
-🚨 **Os DOIs individuais desses quatro produtos ainda não foram coletados** —
-pendência registrada em §6.15, e **bloqueante para submissão**.
+📌 **O mapeamento dataset → produto foi conferido por duas vias independentes**,
+e não deduzido do nome do dataset: a página de cada produto no Copernicus Marine
+Data Store, e o catálogo consultado pela própria `copernicusmarine.describe()`
+com o `dataset_id` como chave. As duas concordam nos quatro. Deduzir pelo nome
+teria funcionado aqui, mas é o mesmo tipo de passo plausível-e-não-verificado
+que já produziu três erros neste projeto.
+
+Modelo de citação, com os campos preenchidos:
+
+> E.U. Copernicus Marine Service Information (CMEMS). *Global Ocean Physics
+> Reanalysis*, `GLOBAL_MULTIYEAR_PHY_001_030`. DOI: 10.48670/moi-00021. Dados
+> acessados em 25/07/2026. https://marine.copernicus.eu
+
+Produtos biogeoquímicos (`*_BGC_*`) levam crédito adicional ao **NECCTON
+Project (EU)**, https://neccton.eu/.
+
+⚠️ **O `cmems_mod_glo_bgc-optics_anfc_0.25deg_P1D-m` está declarado no conector
+mas não tem medição no banco** — o KD490 saiu do baseline por só existir de
+2023-11 em diante ([VARIAVEIS.md](VARIAVEIS.md) §3.5). Não entra na citação
+enquanto não for usado; citar fonte de que não se usou dado é inflar a lista de
+referências.
 
 **GCBD** — são **duas citações distintas**, para artefatos distintos:
 
@@ -1092,7 +1217,11 @@ citar de quem é a regra deixaria o leitor sem como verificar o que foi testado.
 **iNaturalist** — crédito ao autor de cada fotografia, com a licença
 específica daquela observação e link. Licença varia por foto.
 
-**IUCN Red List** — citar a versão consultada.
+**IUCN Red List** — citar **a versão e o ano da avaliação daquela espécie**, e não só "IUCN Red List". Uma categoria migra: `Dendrogyra cylindrus` foi VU de 2008 a 2022 e hoje é CR, e uma citação sem ano não diz qual das duas foi lida.
+
+> IUCN {ano}. *{Nome científico}*. The IUCN Red List of Threatened Species {versão}. https://www.iucnredlist.org/species/{taxon}/{assessment}
+
+⚠️ Os campos `iucn_avaliado_em` e `iucn_versao` existem no banco desde 31/07/2026 exatamente para que essa citação seja montável — e estão **vazios** nas nove espécies até a coleta (§2.4).
 
 ### 7.3 Referências científicas com problema de rastreabilidade
 
@@ -1190,6 +1319,9 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 31/07/2026 | 🚨 **§2.4.2 — um dos quatro valores estava ERRADO, não só sem lastro.** `Mussismilia braziliensis` estava gravada como **VU** e a IUCN a registra como **CR** desde 2022-2. É o coral-cérebro brasileiro, endêmico, a espécie que abre a página de Abrolhos. Não era falta de procedência: era **dado errado**, do tipo que a ausência de ano esconde perfeitamente — alguém digitou uma categoria que já foi verdadeira, a IUCN reavaliou, e nada tinha como perceber. Isso decide a favor de esconder tudo até haver ano: a alternativa "menos destrutiva" deixaria a afirmação errada no ar com aparência de dado revisado. ⚠️ Conferido em Wikidata e busca, **não** na ficha da IUCN (403 para acesso automatizado), e por isso **nada foi gravado** com essa procedência. §2.4.1 registra o que muda no desenho para isso escalar: `iucn_origem` (por qual via o dado veio, incluindo `terceiro` — Wikidata é fonte legítima **se declarada**), e o vencimento virando **recado diário** em `db/atualizacao.py` em vez de tarefa que alguém lembra. 🚨 **O pedido de API à IUCN foi recusado**, com e-mail institucional e sem motivo declarado. |
+| 31/07/2026 | 🚨 **§2.4 — a metade sem procedência do projeto começou a ser corrigida.** Cada valor de `MedicaoAmbiental` grava fonte, dataset e flag de qualidade; as espécies vieram de lista digitada à mão, e a conservação era **texto livre** — sem id de táxon, sem ano e sem ficha, com `fonte_url` vazio nas **nove**. Era o campo mais grave para estar sem procedência, porque é **o único do banco que alguém vai citar**. Migração `0022`: o texto virou código oficial da Lista Vermelha, com `iucn_avaliado_em`, `iucn_versao`, `iucn_taxon_id` e `fonte_iucn_url`, mais `aphia_id` e `gbif_key` para o táxon. **Consequência deliberada: o site parou de exibir categoria nas nove**, porque nenhuma tem ano — a tela diz "sem procedência registrada" em vez de afirmar. ⚠️ Decisão travada por teste: **"Não avaliado" virou vazio, e não `NE`** — as duas leituras são indistinguíveis, `NE` é categoria real, e afirmá-la seria provavelmente falso para `Holacanthus ciliaris` e `Ocyurus chrysurus`, que têm avaliação publicada. O exemplo que motiva tudo está no acervo: `Dendrogyra cylindrus` foi VU de 2008 a 2022 e hoje é CR. |
+| 31/07/2026 | ✅ **§6.15 resolvida — os cinco DOIs coletados.** Era o único item marcado como bloqueante para submissão. Quatro produtos CMEMS (10.48670/moi-00021, -00016, -00019, -00015) e o ERA5 (10.24381/cds.adbb2d47), todos conferidos na página oficial. **Dois achados que mudam a lista de referências:** são **quatro** produtos CMEMS e não dois, porque cada série emenda reanálise e análise — citar só a reanálise omitiria a fonte justamente dos dias que o painel usa; e o **ERA5 continua precisando de citação apesar de o conector ter sido cancelado**, porque os dados baixados sustentam o resultado de RESULTADOS §20. Fonte descartada como insumo não é fonte descartada como evidência. 📌 O mapeamento dataset → produto foi conferido por **duas vias independentes** (página do produto e `copernicusmarine.describe()`) em vez de deduzido do nome do dataset. |
 | 31/07/2026 | **§7.5 criada — o projeto passou a publicar a própria série.** Até aqui todo `url_download` do catálogo apontava para o **provedor**: um banco de dados público sem nenhuma forma de baixar o que ele mesmo guarda, e sem forma de citar o recorte que este projeto montou. `/api/medicoes/?formato=csv` devolve o recorte inteiro com as quatro colunas de proveniência junto — sem `fonte` e `quality_flag`, o arquivo baixado perde exatamente o que distingue esta série de uma planilha qualquer. Valor nulo sai como célula vazia, nunca `0`. |
 | 30/07/2026 | 🚨 **`StatusPredicao` removido (§6.21).** Aposentar o `/api/monitoramento/` em 28/07 **não** aposentou o dado: os mesmos 4 registros de demonstração continuaram saindo por `monitoramento_recente`, e `possui_painel_risco` era derivado deles com queda para o registro global — dizendo `true` para todo recife cadastrado, inclusive os que o painel responde com 404. Migração `0021`; o campo passou a sair dos metadados do artefato, e os dois endpoints concordam ao vivo. Caíram junto a camada de escrita legada do `neo4j_schema.py` (chamada só por testes) e a cascata morta do `utils/recifes.js`. |
 | 30/07/2026 | **§6.16 quantificada.** O parágrafo sobre o efeito colateral da agregação (a média espacial quebra a relação entre BAA e HotSpot/DHW) estava certo e era qualitativo. Medido nos 7.173 dias: concordância **0,964** entre a regra publicada da NOAA e o `baa` do banco, com o desvio **inteiramente de um lado** — 0 casos em que a regra dispara sem o BAA, 261 em que o BAA dispara sem a regra. É consequência direta de agregar BAA por máximo e HotSpot/DHW por média, e não pede correção: são perguntas diferentes. **Consequência prática:** o corte publicado `DHW ≥ 4` não é transferível para média de bbox — pega 10 dos 19 episódios contra 15 do corte remedido de 1,0. Ver [RESULTADOS.md](RESULTADOS.md) §24 e [VARIAVEIS.md](VARIAVEIS.md) §4.6. |

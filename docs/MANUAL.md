@@ -1048,7 +1048,7 @@ python manage.py test
 ```
 
 ✅ Terminando em `OK (skipped=1)`, em cerca de 100 segundos. Na medição de
-31/07/2026 eram **658 testes** — o número cresce a cada mudança, então o que
+31/07/2026 eram **679 testes** — o número cresce a cada mudança, então o que
 importa é o `OK` no fim, não bater com este número. Depois, `cd ..` para voltar
 à raiz.
 
@@ -1062,6 +1062,7 @@ importa é o `OK` no fim, não bater com este número. Depois, `cd ..` para volt
 | `ingerir --completo --desde=2020-01-01` | rebaixa o período inteiro |
 | `ingerir_gcbd` | baixa a janela ambiental da base de branqueamento observado |
 | `inventariar_datasets` | reconstrói o catálogo público a partir dos arquivos em disco |
+| `conferir_especies` | lista as espécies cuja categoria de conservação ninguém consegue citar, com o link para conferir |
 
 ### Modelo
 
@@ -1130,7 +1131,7 @@ ter funcionado.
 |---|---|
 | `npm install` | instala as bibliotecas (só na primeira vez) |
 | `npm start` | liga o site em desenvolvimento, na porta 3000 |
-| `npm test` | roda os testes do frontend (113 em 31/07/2026) |
+| `npm test` | roda os testes do frontend (117 em 31/07/2026) |
 | `npm run build` | gera a versão otimizada para publicar |
 
 ---
@@ -1471,8 +1472,8 @@ senão o arquivo vira planilha qualquer.
 ---
 
 *Manual escrito em 29/07/2026, revisado em 31/07/2026. Os números citados
-(57.426 medições, série até 24/07/2026, modelo treinado em 28/07/2026, 655
-testes de backend e 113 de frontend) descrevem o estado desta máquina naquele
+(57.426 medições, série até 24/07/2026, modelo treinado em 28/07/2026, 679
+testes de backend e 117 de frontend) descrevem o estado desta máquina naquele
 dia e envelhecem — os comandos, não.*
 
 *A revisão de 31/07 acertou o que três mudanças tinham deixado para trás: o

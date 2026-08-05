@@ -227,6 +227,25 @@ class ExecucaoIngestao(models.Model):
 
 
 class Especie(models.Model):
+    """Uma especie do acervo, com a proveniencia que o lado ambiental ja tinha.
+
+    🚨 **Ate 31/07/2026 esta era a metade sem procedencia do projeto.** Cada
+    valor de `MedicaoAmbiental` grava `fonte`, `dataset_id` e `quality_flag`;
+    as especies vieram de uma lista digitada a mao na migracao 0011, e a
+    categoria de conservacao era **texto livre** — sem id de taxon, sem ano da
+    avaliacao e sem link da ficha. Nas 9 especies, `fonte_url` estava vazio em
+    **todas**.
+
+    Isso importava mais que as outras lacunas por um motivo especifico: a
+    categoria de conservacao e **o unico campo do banco que alguem vai citar**.
+
+    ⚠️ **Categoria da IUCN sem ano tem prazo de validade invisivel.** O exemplo
+    esta no proprio acervo: `Dendrogyra cylindrus` foi **Vulneravel de 2008 ate
+    2022**, quando passou a **Criticamente Ameacada**. As duas afirmacoes sao
+    corretas — em anos diferentes. Sem o ano, a tela nao distingue "e CR" de
+    "era VU quando alguem digitou isto".
+    """
+
     TIPO_FAUNA_CHOICES = [
         ('CORAL', 'Coral'),
         ('PEIXE', 'Peixe'),
@@ -235,15 +254,110 @@ class Especie(models.Model):
         ('OUTRO', 'Outro'),
     ]
 
+    # Os codigos oficiais da Lista Vermelha. Guardar o codigo, e nao o rotulo
+    # em portugues, e o que torna o campo comparavel com a fonte: a IUCN
+    # publica `VU`, nao "Vulneravel", e traducao livre nao volta para o
+    # original sem ambiguidade.
+    IUCN_CATEGORIAS = [
+        ('EX', 'Extinta'),
+        ('EW', 'Extinta na natureza'),
+        ('CR', 'Criticamente ameacada'),
+        ('EN', 'Em perigo'),
+        ('VU', 'Vulneravel'),
+        ('NT', 'Quase ameacada'),
+        ('LC', 'Pouco preocupante'),
+        ('DD', 'Dados insuficientes'),
+        ('NE', 'Nao avaliada'),
+    ]
+
     nome_cientifico = models.CharField(max_length=200, unique=True)
     nome_comum = models.CharField(max_length=200, blank=True)
     tipo = models.CharField(max_length=20, choices=TIPO_FAUNA_CHOICES, default='CORAL')
     descricao = models.TextField(blank=True, verbose_name='Descricao Ecologica')
-    status_conservacao = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text='Ex: Vulneravel, Ameacada, Pouco Preocupante (IUCN)',
+
+    # --- identificadores taxonomicos ---------------------------------------
+    #
+    # ⚠️ `nome_cientifico` como chave unica e fragil: sinonimo e reclassificacao
+    # a quebram, e o proprio genero `Mussismilia` esta sob revisao. Estes ids
+    # sao estaveis e sao a porta de entrada para GBIF e OBIS.
+    aphia_id = models.PositiveIntegerField(
+        null=True, blank=True, unique=True,
+        verbose_name='AphiaID (WoRMS)',
+        help_text='Identificador do World Register of Marine Species.',
     )
+    gbif_key = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='usageKey (GBIF)',
+    )
+    # 🚨 Resolucao automatica de nome erra em sinonimo e homonimo. Guardar o
+    # status que o WoRMS devolve, e o nome aceito quando diferir, e o que
+    # impede uma troca silenciosa de especie por outra.
+    status_taxonomico = models.CharField(
+        max_length=40, blank=True,
+        help_text='O que o WoRMS respondeu: accepted, unaccepted, etc.',
+    )
+    nome_aceito = models.CharField(
+        max_length=200, blank=True,
+        help_text='Preenchido so quando difere de nome_cientifico.',
+    )
+    taxonomia_conferida_em = models.DateField(null=True, blank=True)
+
+    # --- conservacao, com proveniencia -------------------------------------
+    #
+    # 🚨 **Como o dado foi obtido faz parte do dado.** Sem isto o acervo vira
+    # uma mistura indistinguivel de registros da API, de conferencia manual e
+    # de terceiros — e nao ha como auditar quais podem ser citados como IUCN.
+    #
+    # ⚠️ `terceiro` existe para ser honesto sobre um caminho que pode vir a ser
+    # usado: Wikidata e GBIF publicam a categoria sem precisar de token. E uma
+    # fonte legitima **se declarada** — o que nao pode e apresenta-la como se
+    # viesse da IUCN. Um registro `terceiro` cita o terceiro.
+    IUCN_ORIGENS = [
+        ('api', 'API da IUCN'),
+        ('ficha', 'Ficha da IUCN, conferida a mao'),
+        ('terceiro', 'Terceiro (Wikidata, GBIF) — cita-se o terceiro'),
+    ]
+
+    iucn_origem = models.CharField(
+        max_length=10, blank=True, choices=IUCN_ORIGENS,
+        verbose_name='Como foi obtida',
+    )
+    iucn_categoria = models.CharField(
+        max_length=2, blank=True, choices=IUCN_CATEGORIAS,
+        verbose_name='Categoria IUCN',
+    )
+    iucn_taxon_id = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='ID do taxon na IUCN',
+    )
+    iucn_avaliado_em = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        verbose_name='Ano da avaliacao',
+        help_text='O ano da avaliacao publicada, nao o ano da consulta.',
+    )
+    iucn_versao = models.CharField(
+        max_length=20, blank=True,
+        verbose_name='Versao em que a avaliacao foi publicada',
+        help_text=(
+            'A versao da Lista Vermelha em que ESTA avaliacao saiu (ex: '
+            '2022-2), e nao a versao que voce esta consultando hoje.'
+        ),
+    )
+    # 🚨 Este e o campo que teria pego o erro do `Mussismilia braziliensis`.
+    #
+    # `iucn_avaliado_em` + `iucn_versao` identificam **qual avaliacao** foi
+    # lida. Nenhum dos dois diz **ha quanto tempo ninguem confere** — e e
+    # exatamente ai que a categoria envelhece: a avaliacao continua a mesma, a
+    # IUCN publica uma nova, e o registro local segue apontando para a antiga
+    # sem nada indicando que parou no tempo.
+    iucn_consultado_em = models.DateField(
+        null=True, blank=True,
+        verbose_name='Ultima conferencia',
+        help_text='Quando alguem abriu a ficha e confirmou que continua valendo.',
+    )
+    fonte_iucn_url = models.URLField(
+        max_length=500, blank=True, verbose_name='Ficha na IUCN',
+    )
+
     foto = models.ImageField(upload_to='especies/', blank=True, null=True)
     credito_imagem = models.CharField(
         max_length=200,
@@ -261,6 +375,46 @@ class Especie(models.Model):
         verbose_name='Link da Fonte/Mais informacoes',
     )
     locais = models.ManyToManyField(LocalRecife, related_name='especies', blank=True)
+
+    # A partir de quantos dias uma conferencia deixa de valer.
+    #
+    # ⚠️ Nao ha nada de sagrado em 730. O raciocinio: a IUCN publica duas
+    # versoes por ano, entao dois anos sao ~4 janelas em que a categoria pode
+    # ter mudado sem ninguem olhar. Foi o que aconteceu com o `Mussismilia
+    # braziliensis`. Ajuste com motivo, e nao por gosto.
+    DIAS_ATE_CONFERENCIA_VENCER = 730
+
+    @property
+    def iucn_conferencia_vencida(self):
+        """Faz tempo demais desde que alguem abriu a ficha?
+
+        🚨 Isto e o que faltava no desenho original, e e o que pega o defeito
+        real: a categoria nao envelhece porque a avaliacao muda de conteudo —
+        envelhece porque a IUCN publica **outra**, e o registro local continua
+        apontando para a antiga sem nada indicando que parou no tempo.
+
+        Sem conferencia registrada nao ha vencimento a declarar: esse caso e
+        "sem procedencia", que e outra coisa e ja tem quem o conte.
+        """
+        from datetime import date
+
+        if not self.iucn_consultado_em:
+            return False
+        return (date.today() - self.iucn_consultado_em).days >= self.DIAS_ATE_CONFERENCIA_VENCER
+
+    @property
+    def iucn_tem_procedencia(self):
+        """A categoria pode ser exibida como afirmacao?
+
+        🚨 **O ano e o que decide.** Categoria sem ano nao e uma versao pior da
+        informacao: e uma afirmacao que ninguem consegue verificar nem datar, e
+        que envelhece sem aviso. Quem desenha a tela usa esta propriedade para
+        escolher entre exibir a categoria e dizer que ela nao tem procedencia.
+
+        A URL da ficha nao entra na condicao de proposito. Ela e util para o
+        leitor conferir, mas o que torna a afirmacao datavel e o ano.
+        """
+        return bool(self.iucn_categoria and self.iucn_avaliado_em)
 
     def __str__(self):
         nome_principal = self.nome_comum or self.nome_cientifico

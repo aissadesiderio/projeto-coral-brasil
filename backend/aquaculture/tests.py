@@ -411,7 +411,7 @@ class Neo4jServiceReadTests(TestCase):
                     'nome_comum': 'Coral-cerebro brasileiro',
                     'tipo': 'CORAL',
                     'descricao': 'Especie formadora de recife.',
-                    'status_conservacao': 'Vulneravel',
+                    'iucn_categoria': 'VU',
                     'credito_imagem': 'Equipe local',
                     'fonte_imagem_url': 'https://exemplo.org/imagem',
                     'fonte_url': 'https://exemplo.org/especie',

@@ -200,7 +200,7 @@ pelos proprios testes — saiu em 30/07/2026 junto com o `StatusPredicao`.
 `Especie`
 - id canonico: `slugify(nome_cientifico)`
 - origem atual: `Especie`
-- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `status_conservacao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`, `origem_registro`, `django_pk`
+- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `iucn_categoria`, `iucn_avaliado_em`, `aphia_id`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`
 
 `MedicaoAmbiental`
 - id canonico: `slug:data:variavel:fonte` — 🚨 o antigo era `slug:data`, herdado de quando uma linha era um dia inteiro; ele colidiria oito vezes por dia e o `MERGE` sobrescreveria em silencio. Ver `db/projecao.py`

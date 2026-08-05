@@ -156,11 +156,11 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         'mostrar_foto',
         'nome_comum',
         'tipo',
-        'status_conservacao',
+        'conservacao_com_procedencia',
         'credito_imagem',
         'tem_fonte_imagem',
     )
-    list_filter = ('tipo', 'status_conservacao', 'locais')
+    list_filter = ('tipo', 'iucn_categoria', 'locais')
     search_fields = ('nome_cientifico', 'nome_comum', 'credito_imagem')
     filter_horizontal = ('locais',)
     readonly_fields = ('mostrar_foto_grande', 'link_imagem', 'link_fonte_imagem', 'link_fonte_info')
@@ -170,7 +170,38 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         (
             'Identificacao',
             {
-                'fields': ('nome_cientifico', 'nome_comum', 'tipo', 'status_conservacao'),
+                'fields': ('nome_cientifico', 'nome_comum', 'tipo'),
+            },
+        ),
+        (
+            'Taxonomia',
+            {
+                'fields': (
+                    'aphia_id', 'gbif_key', 'status_taxonomico', 'nome_aceito',
+                    'taxonomia_conferida_em',
+                ),
+                'description': (
+                    'Identificadores estaveis. Preenchidos por '
+                    '"manage.py resolver_taxonomia" — sinonimo e '
+                    'reclassificacao quebram o nome cientifico como chave.'
+                ),
+            },
+        ),
+        (
+            'Conservacao (IUCN)',
+            {
+                'fields': (
+                    'iucn_origem', 'iucn_categoria', 'iucn_avaliado_em',
+                    'iucn_versao', 'iucn_consultado_em', 'iucn_taxon_id',
+                    'fonte_iucn_url',
+                ),
+                'description': (
+                    'O ANO DA AVALIACAO nao e opcional: sem ele o site nao '
+                    'exibe a categoria, e mostra "sem procedencia registrada". '
+                    'Dendrogyra cylindrus foi Vulneravel de 2008 a 2022 e hoje '
+                    'e Criticamente Ameacada — a categoria sozinha nao diz de '
+                    'quando e a afirmacao.'
+                ),
             },
         ),
         (
@@ -199,6 +230,22 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
             },
         ),
     )
+
+    @admin.display(description='Conservacao', ordering='iucn_categoria')
+    def conservacao_com_procedencia(self, obj):
+        """A categoria so aparece com o ano. Sem ele, o admin diz o que falta.
+
+        O admin e onde alguem preenche isso, entao e onde a falta precisa
+        aparecer — nao so na tela publica.
+        """
+        if not obj.iucn_categoria:
+            return '—'
+        if not obj.iucn_avaliado_em:
+            return format_html(
+                '<span style="color:#b45309">{} (sem ano)</span>',
+                obj.get_iucn_categoria_display(),
+            )
+        return f'{obj.get_iucn_categoria_display()} ({obj.iucn_avaliado_em})'
 
     def mostrar_foto(self, obj):
         if obj.foto:

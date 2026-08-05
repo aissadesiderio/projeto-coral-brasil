@@ -58,11 +58,19 @@ fazer — e foi a Etapa 6 que a testou.
 | O que está sendo citado | Citação |
 |---|---|
 | O **artigo** que descreve a reanálise | Hersbach, H. et al. (2020). *The ERA5 global reanalysis.* Quarterly Journal of the Royal Meteorological Society, 146(730). doi:`10.1002/qj.3803` |
-| Os **dados** baixados | Hersbach, H. et al. (2023). *ERA5 hourly data on single levels from 1940 to present.* Copernicus Climate Change Service (C3S) Climate Data Store (CDS). |
+| Os **dados** baixados | Hersbach, H. et al. (2023). *ERA5 hourly data on single levels from 1940 to present.* Copernicus Climate Change Service (C3S) Climate Data Store (CDS). DOI: `10.24381/cds.adbb2d47` |
 
-⚠️ **O DOI do dataset ainda não foi conferido na página oficial.** Fica na mesma
-pendência dos DOIs dos produtos CMEMS ([FONTES.md](FONTES.md) §6.15) —
-**bloqueante para submissão**, e não vale copiar de memória.
+✅ **DOI conferido na página oficial do dataset em 31/07/2026**
+(`https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels`).
+Fecha a pendência de [FONTES.md](FONTES.md) §6.15.
+
+🚨 **O conector foi cancelado; a citação não.** Nenhum dado do ERA5 entra no
+pipeline, e é fácil concluir daí que ele saiu da lista de fontes. Não saiu: os
+dados baixados dele sustentam **um resultado publicável** — a derrubada do
+efeito do vento ([RESULTADOS.md](RESULTADOS.md) §20), que corrigiu uma
+afirmação anterior do próprio projeto. Fonte descartada como *insumo* não é
+fonte descartada como *evidência*, e omiti-la deixaria o leitor sem como
+verificar contra o que o `Windspeed` do GCBD foi confrontado.
 
 Mais a frase de atribuição exigida pela licença:
 

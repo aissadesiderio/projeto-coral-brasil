@@ -538,8 +538,10 @@ medição, e o que foi feito com ele.
 é o mapa de citação. Ela liga cada fonte ao que ela produz no projeto, ao
 arquivo do código, e **às afirmações documentadas que dependem dela** — para
 que, ao escrever um parágrafo, dê para saber o que precisa ser citado nele.
-Registra também duas pendências bloqueantes para submissão: os DOIs dos
-produtos CMEMS e uma referência não identificada no código legado.
+Os DOIs de todas as fontes estão lá desde 31/07/2026 — ⚠️ com a ressalva de que
+salinidade e oxigênio precisam de **duas** citações cada, porque a série emenda
+reanálise e análise. Resta uma pendência de rastreabilidade: uma referência não
+identificada no código legado (§7.3).
 
 ---
 
@@ -672,10 +674,11 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Predição servida** | `/api/painel-risco/` — o primeiro endpoint que **faz conta**: carrega o artefato, monta a janela de hoje e devolve probabilidade calibrada, com data-base, limiar e o degrau da escala |
 | **Escala de aviso com quatro degraus** | *Sem aviso*, *Observação*, *Alerta*, *Alerta alto* — cada um com o corte medido e a **ação esperada**, servida pela API **e exibida na tela** ([RESULTADOS.md](RESULTADOS.md) §22.9.7) |
 | **A série na tela, e baixável** | a página de cada recife desenha SST e DHW de 365 dias, e `?formato=csv` entrega o recorte com a proveniência junto ([FONTES.md](FONTES.md) §7.5) |
+| **Citação completa das fontes** | os cinco DOIs — quatro produtos CMEMS e o ERA5 — conferidos na página oficial de cada um ([FONTES.md](FONTES.md) §6.15) |
 | **Site consumindo o backend real** | painel e série saem da API; a camada legada do frontend caiu em 28/07 e o modelo `StatusPredicao` em 30/07 |
 | **Passo de deploy** | `manage.py preparar_deploy` reconstrói os três derivados em ordem e para no primeiro erro |
 | **CI** | verde desde 30/07/2026, backend e frontend |
-| **658 testes de backend + 113 de frontend** | rodam offline *(medido em 31/07/2026)* |
+| **679 testes de backend + 117 de frontend** | rodam offline *(medido em 31/07/2026)* |
 
 ### Falta
 
@@ -683,13 +686,13 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 |---|---|
 | **Publicar** | hospedagem, domínio e o `atualizar` num agendador. É o único item que bloqueia literalmente *"ter um site"* |
 | **Gravar o que foi previsto** | o alerta é calculado na requisição e evapora. Sem isso não há como responder *"o que o site dizia no dia 12/03?"*, nem medir desempenho em produção |
-| **Proveniência das espécies** | 🚨 **metade do objetivo está num rigor incomparável com a outra.** Cada medição ambiental grava fonte, dataset e flag de qualidade; as espécies vieram de uma lista digitada à mão numa migração, e `status_conservacao` é texto livre sem id de táxon nem ano da avaliação |
+| **Proveniência das espécies** | ⏳ **esquema pronto em 31/07, dados pendentes.** Os campos existem (`iucn_avaliado_em`, `iucn_versao`, `aphia_id`, `gbif_key`) e a tela deixou de afirmar categoria sem ano — mas os **anos ainda não foram coletados** nas 9 espécies, e a ocorrência espécie↔local continua sendo um vínculo sem quem viu, quando e por qual método ([FONTES.md](FONTES.md) §2.4) |
 | **Só três recifes** | para *"banco de dados de corais do Brasil"* é pouco. Catálogo e série podem crescer já; a **previsão** só depois de um retreino medido |
 | **Contrato da API documentado** | sem OpenAPI, e sem URL própria por espécie — não dá para linkar nem indexar uma espécie, o que para um acervo é requisito |
 | **Investigar 2022** | único ano em que o modelo perde. Duas pistas agora: menor dependência do DHW, e a **regra da NOAA erra o mesmo ano** (§24.4) |
 | **Variáveis canônicas aprovadas** | item de go-live ainda aberto |
 | **Apagar os 9 CSVs ainda catalogados** | ⚠️ **Decisão pendente, não faxina.** Os 7 arquivos defeituosos (179,9 MB) foram apagados em 28/07/2026; sobram 80 MB que a página "Banco de Dados" inventaria. Apagá-los **esvazia a página** — ver [FONTES.md](FONTES.md) §6.21 |
-| **DOIs dos produtos CMEMS** | ⛔ bloqueia submissão, não o site |
+| **A referência não identificada do código legado** | ⛔ bloqueia submissão, não o site. Seis afirmações com marcadores `[cite: N]` apontando para um documento que ninguém localizou ([FONTES.md](FONTES.md) §7.3) |
 | **Dado *in situ* de salinidade e O₂** | resolveria a ressalva de §18, mas não existe para os sítios do GCBD |
 | ⛔ ~~ERA5 — vento real~~ | **Cancelado em 26/07/2026.** O vento medido piora o modelo ([RESULTADOS.md](RESULTADOS.md) §20). A infraestrutura medida fica registrada em [ERA5.md](ERA5.md) |
 

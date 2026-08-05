@@ -37,7 +37,14 @@ def _serialize_especie(especie) -> dict:
         'nome_cientifico': especie.nome_cientifico,
         'tipo': especie.tipo,
         'descricao': especie.descricao,
-        'status_conservacao': especie.status_conservacao,
+        # ⚠️ So o que tem procedencia entra na copia versionada. Uma categoria
+        # sem ano dentro de um .js e a pior combinacao possivel: ela sobrevive
+        # a limpeza do banco e reaparece quando a API cai.
+        'iucn_categoria': especie.iucn_categoria if especie.iucn_tem_procedencia else '',
+        'iucn_avaliado_em': especie.iucn_avaliado_em,
+        'iucn_versao': especie.iucn_versao,
+        'fonte_iucn_url': especie.fonte_iucn_url,
+        'iucn_tem_procedencia': especie.iucn_tem_procedencia,
         'foto_url': _arquivo_url(especie.foto),
         'credito_imagem': _credito_imagem(especie),
         'fonte_imagem_url': _fonte_imagem_url(especie),

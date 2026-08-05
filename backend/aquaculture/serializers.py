@@ -9,8 +9,21 @@ from .models import (
 
 
 class EspecieSerializer(serializers.ModelSerializer):
+    """A especie, com a proveniencia da categoria de conservacao junto.
+
+    🚨 `iucn_tem_procedencia` viaja no payload de proposito, e nao e derivavel
+    com seguranca por quem consome: ele diz que a categoria **pode ser exibida
+    como afirmacao**. Deixar cada cliente inventar essa regra e como deixar cada
+    um inventar o limiar do alerta — dois lugares decidindo a mesma coisa, com
+    liberdade para divergirem em silencio.
+    """
+
     foto_url = serializers.SerializerMethodField()
     locais = serializers.SlugRelatedField(many=True, read_only=True, slug_field='slug')
+    iucn_tem_procedencia = serializers.BooleanField(read_only=True)
+    iucn_categoria_rotulo = serializers.CharField(
+        source='get_iucn_categoria_display', read_only=True,
+    )
 
     class Meta:
         model = Especie
@@ -20,7 +33,19 @@ class EspecieSerializer(serializers.ModelSerializer):
             'nome_comum',
             'tipo',
             'descricao',
-            'status_conservacao',
+            'iucn_origem',
+            'iucn_categoria',
+            'iucn_categoria_rotulo',
+            'iucn_avaliado_em',
+            'iucn_versao',
+            'iucn_consultado_em',
+            'iucn_taxon_id',
+            'fonte_iucn_url',
+            'iucn_tem_procedencia',
+            'aphia_id',
+            'gbif_key',
+            'status_taxonomico',
+            'nome_aceito',
             'foto',
             'foto_url',
             'credito_imagem',
