@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from pprint import pformat
 
-from .models import LocalRecife, StatusPredicao
+from .models import LocalRecife
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -37,7 +37,14 @@ def _serialize_especie(especie) -> dict:
         'nome_cientifico': especie.nome_cientifico,
         'tipo': especie.tipo,
         'descricao': especie.descricao,
-        'status_conservacao': especie.status_conservacao,
+        # ⚠️ So o que tem procedencia entra na copia versionada. Uma categoria
+        # sem ano dentro de um .js e a pior combinacao possivel: ela sobrevive
+        # a limpeza do banco e reaparece quando a API cai.
+        'iucn_categoria': especie.iucn_categoria if especie.iucn_tem_procedencia else '',
+        'iucn_avaliado_em': especie.iucn_avaliado_em,
+        'iucn_versao': especie.iucn_versao,
+        'fonte_iucn_url': especie.fonte_iucn_url,
+        'iucn_tem_procedencia': especie.iucn_tem_procedencia,
         'foto_url': _arquivo_url(especie.foto),
         'credito_imagem': _credito_imagem(especie),
         'fonte_imagem_url': _fonte_imagem_url(especie),
@@ -45,31 +52,8 @@ def _serialize_especie(especie) -> dict:
     }
 
 
-def _serialize_monitoramento(monitoramento) -> dict | None:
-    if not monitoramento:
-        return None
-
-    return {
-        'data': monitoramento.data.isoformat(),
-        'sst_atual': monitoramento.sst_atual,
-        'limite_termico': monitoramento.limite_termico,
-        'anomalia': monitoramento.anomalia,
-        'dhw_calculado': monitoramento.dhw_calculado,
-        'irradiancia': monitoramento.irradiancia,
-        'turbidez': monitoramento.turbidez,
-        'salinidade': monitoramento.salinidade,
-        'ph': monitoramento.ph,
-        'oxigenio': monitoramento.oxigenio,
-        'nitrato': monitoramento.nitrato,
-        'clorofila': monitoramento.clorofila,
-        'risco_integrado': monitoramento.risco_integrado,
-        'nivel_alerta': monitoramento.nivel_alerta,
-    }
-
-
 def build_sync_payload() -> dict:
-    locais = LocalRecife.objects.prefetch_related('especies', 'monitoramentos').order_by('nome')
-    monitoramento_global = StatusPredicao.objects.filter(local_recife__isnull=True).order_by('-data').first()
+    locais = LocalRecife.objects.prefetch_related('especies').order_by('nome')
 
     recifes = []
     detalhes = {}
@@ -79,8 +63,6 @@ def build_sync_payload() -> dict:
             _serialize_especie(especie)
             for especie in local.especies.order_by('nome_comum', 'nome_cientifico')
         ]
-        monitoramento = local.monitoramentos.order_by('-data').first() or monitoramento_global
-
         recifes.append(
             {
                 'slug': local.slug,
@@ -93,14 +75,10 @@ def build_sync_payload() -> dict:
                     local.ultima_atualizacao.isoformat() if local.ultima_atualizacao else None
                 ),
                 'informacoes_disponiveis': len(especies),
-                'possui_painel_risco': bool(monitoramento),
             }
         )
 
-        detalhes[local.slug] = {
-            'especies': especies,
-            'monitoramento_recente': _serialize_monitoramento(monitoramento),
-        }
+        detalhes[local.slug] = {'especies': especies}
 
     return {
         'recifes': recifes,

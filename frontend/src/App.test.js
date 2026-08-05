@@ -66,6 +66,28 @@ beforeEach(() => {
       });
     }
 
+    if (url === '/api/locais/abrolhos-ba/datasets/') {
+      return criarRespostaJson([
+        {
+          id: 'dataset_relacionado_abrolhos',
+          titulo: 'Dataset relacionado via API',
+          resumo: 'Catalogo associado ao detalhe do recife.',
+          fonte: 'Projeto Coral Brasil',
+          tipo_dado: 'Relatorio',
+          localizacao: 'Parque Nacional Marinho de Abrolhos',
+          local_slug: 'abrolhos-ba',
+          estado: 'Bahia',
+          cidade: 'Caravelas',
+          formato: 'PDF',
+          recorte_temporal: 'publicacao',
+          data_publicacao: '2026-04-18',
+          periodo_rotulo: 'Abr/2026',
+          tamanho_mb: 12,
+          url_download: '/dados/relatorio.pdf',
+        },
+      ]);
+    }
+
     if (url === '/api/datasets/') {
       return criarRespostaJson([]);
     }
@@ -113,5 +135,7 @@ test('abre o detalhe diretamente pela rota e usa o slug da URL', async () => {
   expect(
     await screen.findByRole('heading', { name: /Parque Nacional Marinho de Abrolhos/i }),
   ).toBeInTheDocument();
+  expect(await screen.findByText(/Dataset relacionado via API/i)).toBeInTheDocument();
   expect(global.fetch).toHaveBeenCalledWith('/api/grafo/localizacoes/abrolhos-ba/');
+  expect(global.fetch).toHaveBeenCalledWith('/api/locais/abrolhos-ba/datasets/');
 });

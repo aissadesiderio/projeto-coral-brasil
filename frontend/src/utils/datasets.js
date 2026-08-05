@@ -67,6 +67,35 @@ export function normalizarDatasetCatalogo(item) {
     tamanhoMb,
     tamanho: item.tamanho || formatarTamanhoDataset(tamanhoMb),
     downloadUrl: downloadUrl || null,
+    cobertura: normalizarCobertura(item.cobertura),
+  };
+}
+
+/**
+ * A cobertura real, derivada do banco pelo servidor.
+ *
+ * 🚨 Existe por um defeito medido em 27/07/2026: a pagina anunciava **nove**
+ * datasets e a API servia **tres**. Os outros seis apareciam com titulo,
+ * formato e periodo sem uma unica medicao no banco.
+ *
+ * ⚠️ `null` significa **"o servidor nao informou"**, e nao "sem dado". Um
+ * catalogo antigo (ou o fallback local de `data/datasets.js`) cai aqui, e a
+ * tela precisa poder dizer "nao verificado" em vez de afirmar ausencia.
+ */
+export function normalizarCobertura(cobertura) {
+  if (!cobertura || typeof cobertura !== 'object') {
+    return null;
+  }
+
+  return {
+    espelhado: cobertura.espelhado === true,
+    motivo: cobertura.motivo || null,
+    nMedicoes: Number(cobertura.n_medicoes) || 0,
+    variaveis: Array.isArray(cobertura.variaveis) ? cobertura.variaveis : [],
+    locais: Array.isArray(cobertura.locais) ? cobertura.locais : [],
+    dataInicio: cobertura.data_inicio || null,
+    dataFim: cobertura.data_fim || null,
+    consulta: cobertura.consulta || null,
   };
 }
 

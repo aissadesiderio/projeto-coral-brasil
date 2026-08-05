@@ -1,16 +1,81 @@
+# --- Segredos e configuracao local ---
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.local
 
-dados/dhw_5km_e218_f17f_46a9.csv
+# --- Python ---
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- Django ---
+staticfiles/
+db.sqlite3
+*.sqlite3
+
+# --- Node / frontend ---
+node_modules/
+frontend/node_modules/
+frontend/build/
+
+# --- Midia enviada pelo usuario ---
+# Fotos ja versionadas em backend/media/especies/ continuam rastreadas;
+# esta regra evita que novos uploads entrem no repositorio.
+media/
+
+# --- Dados brutos ---
+# Os CSVs sao regenerados pelo pipeline de ingestao e documentados em
+# docs/FONTES.md. Sao ~260 MB, nao devem ser versionados.
+# ATENCAO: os arquivos ja rastreados continuam no indice ate rodar:
+#   git rm --cached backend/dados/*.csv
+backend/dados/*.csv
+dados/*.csv
+
+# Modelos treinados. Artefato DERIVADO: reconstruivel com
+#   python backend/manage.py treinar_final
+# Nao versionar. Um .joblib no repositorio envelhece em silencio — em duas
+# semanas o arquivo diz uma coisa e o codigo diz outra, e ninguem sabe qual
+# vale. Mesma decisao do .docx da documentacao e da projecao do Neo4j.
+# Ver backend/ml/persistencia.py.
+dados/modelos/
 calcular_dhw.py
 aquaculture/management/calcular_dhw.py
 
-venv/
-staticfiles/
-db.sqlite3
-__pycache__/
-*.pyc
-.env
-media/
-node_modules/
-frontend/build/
-frontend/node_modules/
+# --- Saidas geradas ---
+relatorios_gerados/*.png
+relatorios_gerados/*.csv
+
+# Figuras de interpretacao do modelo, reconstruiveis com
+#   python backend/manage.py graficos
+# ⚠️ A pasta inteira, e nao `relatorios_gerados/graficos/*.png`: o `*` do
+# gitignore nao atravessa barra, entao um padrao com extensao deixaria os
+# .pdf e os .txt de legenda entrarem no commit. Figura versionada envelhece
+# em silencio - mesma decisao do .joblib, do .docx e da projecao do Neo4j.
+relatorios_gerados/graficos/
+
+# --- Editores e SO ---
+.vs/
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
 .DS_Store
+
+# Dump de migracao SQLite -> PostgreSQL. Gerado por dumpdata, nao versionar:
+# tem 20 MB e e reconstruivel com "manage.py dumpdata".
+backend/dados_sqlite.json
+
+# Documentacao exportada para .docx. Artefato derivado do Markdown,
+# regeravel com "manage.py exportar_docs". Nao versionar: copia versionada
+# envelhece e ninguem sabe qual das duas vale.
+docs/exportado/

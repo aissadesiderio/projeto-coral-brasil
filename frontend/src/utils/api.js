@@ -18,3 +18,7 @@ export async function buscarJson(url) {
 export async function buscarCatalogoDatasets() {
   return buscarJson('/api/datasets/');
 }
+
+export async function buscarDatasetsRelacionadosPorLocal(localSlug) {
+  return buscarJson(`/api/locais/${localSlug}/datasets/`);
+}

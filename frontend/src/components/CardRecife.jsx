@@ -1,35 +1,75 @@
 import { ExternalLink, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import {
-  obterMetaRisco,
-  obterNivelAlertaLocal,
-  obterMonitoramentoLocal,
-  obterQuantidadeEspeciesLocal,
-  obterValorRiscoAtualLocal,
-} from '../utils/recifes';
-import { formatarData, formatarQuantidadeEspecies } from '../utils/formatters';
+import { obterQuantidadeEspeciesLocal } from '../utils/recifes';
+import { formatarQuantidadeEspecies } from '../utils/formatters';
 import { obterRotaLocalizacao } from '../utils/navigation';
+import {
+  classificarAlerta,
+  formatarDataBr,
+  formatarProbabilidade,
+} from '../utils/painelRisco';
 import ImagemRecife from './ImagemRecife';
 
-function BadgeRisco({ nivelAlerta }) {
-  const meta = obterMetaRisco(nivelAlerta);
+/**
+ * O selo mostra o **degrau da escala**, com o nome que o servidor deu.
+ *
+ * 🚨 **Ele foi binario ate 31/07/2026, e o comentario que justificava isso
+ * envelheceu sem que ninguem notasse.** Estava escrito aqui que *"o modelo
+ * atual nao produz nivel: ele produz uma probabilidade e um limiar declarado"*
+ * — verdade quando foi escrito, falsa desde 30/07, quando a escala de quatro
+ * degraus entrou. O argumento continuava convincente e tinha deixado de ser
+ * verdadeiro, que e a forma mais cara de comentario errado.
+ *
+ * A regra que fica: **o rotulo e a cor vem de `nivel`**, nunca reconstruidos
+ * aqui. Um degrau que o servidor invente e este cartao nao conheca cai no
+ * visual neutro em vez de quebrar.
+ *
+ * ⚠️ O cartao **nao** repete a acao esperada. Ele e resumo numa lista de tres;
+ * a instrucao inteira fica no painel do recife, a um clique. O que ele carrega
+ * e a distincao que muda a leitura da lista: degrau que **exige acao** vem
+ * preenchido, os outros vem so contornados.
+ */
+function BadgeAlerta({ alerta }) {
+  if (!alerta) {
+    return (
+      <span className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+        Sem previsao
+      </span>
+    );
+  }
+
+  const classes = alerta.exigeAcao
+    ? `${alerta.cor} border-transparent text-white`
+    : `${alerta.corBorda} ${alerta.corFundo} ${alerta.corTexto}`;
 
   return (
     <span
-      className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${meta.bordaClasse} ${meta.fundoClasse} ${meta.textoClasse}`}
+      className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${classes}`}
+      title={alerta.acao || undefined}
     >
-      {meta.textoCurto}
+      {alerta.rotulo}
     </span>
   );
 }
 
-export default function CardRecife({ local }) {
+/**
+ * `predicao` vem de `/api/painel-risco/`, e nao do objeto do local.
+ *
+ * ⚠️ Ate 27/07/2026 este cartao lia `risco_atual` do caminho legado — os 3
+ * registros do `StatusPredicao`. Com o painel de detalhe ja no modelo novo,
+ * manter aquele numero aqui daria **dois valores diferentes para o mesmo
+ * recife**, cada um de um modelo, sem nada indicando qual vale.
+ *
+ * 🚨 A formatacao passa pelos mesmos helpers do painel de detalhe, e nao por
+ * um `toFixed` local: e o que garante que a regra de nunca exibir "0%" nem
+ * "100%" valha tambem aqui. Ver docs/RESULTADOS.md secao 22.8.
+ */
+export default function CardRecife({ local, predicao = null }) {
   const quantidadeEspecies = obterQuantidadeEspeciesLocal(local);
-  const nivelAlerta = obterNivelAlertaLocal(local);
-  const riscoAtual = obterValorRiscoAtualLocal(local);
-  const metaRisco = obterMetaRisco(nivelAlerta);
-  const ultimaAtualizacao = local.ultima_atualizacao || obterMonitoramentoLocal(local)?.data || null;
+  const alerta = classificarAlerta(predicao);
+  const probabilidade = formatarProbabilidade(predicao);
+  const dataBase = predicao?.disponivel ? formatarDataBr(predicao.data_base) : null;
 
   return (
     <Link
@@ -57,16 +97,20 @@ export default function CardRecife({ local }) {
         <div className="mt-5 space-y-1.5 text-sm leading-6 text-slate-700">
           <p>{formatarQuantidadeEspecies(quantidadeEspecies)}</p>
           <p>
-            Risco atual:{' '}
-            <span className={`font-semibold ${metaRisco.textoClasse}`}>
-              {riscoAtual !== null ? `${riscoAtual.toFixed(1)}%` : 'Nao informado'}
+            Estresse termico em 7 dias:{' '}
+            <span className={`font-semibold ${alerta ? alerta.corTexto : 'text-slate-500'}`}>
+              {probabilidade ? probabilidade.texto : 'Nao calculado'}
             </span>
           </p>
-          <p>Ultima atualizacao: {formatarData(ultimaAtualizacao)}</p>
+          <p>
+            {dataBase
+              ? `Calculado sobre dados ate ${dataBase}`
+              : 'Sem previsao disponivel para esta localizacao'}
+          </p>
         </div>
 
         <div className="mt-5 inline-flex items-center gap-3">
-          <BadgeRisco nivelAlerta={nivelAlerta} />
+          <BadgeAlerta alerta={alerta} />
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#2b6978]">
             Abrir
             <ExternalLink

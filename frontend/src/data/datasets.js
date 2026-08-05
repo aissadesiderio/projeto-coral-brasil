@@ -186,6 +186,10 @@ export const HOME_DESTAQUES = [
   },
 ];
 
-export function obterDatasetsRelacionados(localSlug) {
+export function obterDatasetsRelacionadosFallback(localSlug) {
   return DADOS_GERAIS.filter((item) => item.localSlug === localSlug);
+}
+
+export function obterDatasetsRelacionados(localSlug) {
+  return obterDatasetsRelacionadosFallback(localSlug);
 }

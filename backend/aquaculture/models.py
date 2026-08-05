@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -12,10 +13,79 @@ class LocalRecife(models.Model):
     ultima_atualizacao = models.DateField(blank=True, null=True)
     ativo = models.BooleanField(default=True)
 
+    # Geolocalizacao: define de onde os conectores de ingestao extraem dados.
+    # Sem coordenadas, o local nao entra no pipeline (ver `tem_coordenadas`).
+    latitude = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-90.0), MaxValueValidator(90.0)],
+        help_text='Graus decimais, negativo no hemisferio sul. Ex: -17.972',
+    )
+    longitude = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-180.0), MaxValueValidator(180.0)],
+        help_text='Graus decimais, negativo a oeste de Greenwich. Ex: -38.688',
+    )
+    profundidade_media_m = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0)],
+        help_text='Profundidade media do recife em metros',
+    )
+    area_km2 = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0)],
+        help_text='Area aproximada da zona recifal em km2',
+    )
+    fonte_coordenadas = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text='De onde vieram as coordenadas (rastreabilidade). Ex: ICMBio, Allen Coral Atlas',
+    )
+
     class Meta:
         ordering = ['nome']
         verbose_name = 'Local de recife'
         verbose_name_plural = 'Locais de recife'
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(latitude__isnull=True)
+                    | models.Q(latitude__gte=-90.0, latitude__lte=90.0)
+                ),
+                name='aquaculture_localrecife_latitude_valida',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(longitude__isnull=True)
+                    | models.Q(longitude__gte=-180.0, longitude__lte=180.0)
+                ),
+                name='aquaculture_localrecife_longitude_valida',
+            ),
+        ]
+
+    @property
+    def tem_coordenadas(self):
+        """Indica se o local pode ser usado pelos conectores de ingestao."""
+        return self.latitude is not None and self.longitude is not None
+
+    def bbox(self, margem_graus=0.25):
+        """Caixa delimitadora para consultas a NOAA/Copernicus.
+
+        Retorna (lon_min, lat_min, lon_max, lat_max) ou None sem coordenadas.
+        A margem padrao de 0.25 grau (~28 km) cobre a celula de 5 km do CRW e
+        a de 0.25 grau dos produtos biogeoquimicos do Copernicus.
+        """
+        if not self.tem_coordenadas:
+            return None
+        return (
+            self.longitude - margem_graus,
+            self.latitude - margem_graus,
+            self.longitude + margem_graus,
+            self.latitude + margem_graus,
+        )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -26,7 +96,156 @@ class LocalRecife(models.Model):
         return f'{self.nome} ({self.estado})'
 
 
+class MedicaoAmbiental(models.Model):
+    """Uma medicao de uma variavel canonica, num local, numa data, de uma fonte.
+
+    Formato longo (uma linha por variavel) e nao largo, por tres razoes:
+
+    1. **Proveniencia por valor.** O contrato canonico exige registrar fonte,
+       dataset e flag de qualidade de cada medicao - impossivel numa tabela
+       larga onde a linha inteira compartilha uma unica origem.
+    2. **Coberturas diferentes.** As variaveis comecam em anos diferentes
+       (Kd490 em 2023, oxigenio em 1993). Em formato largo isso vira uma
+       matriz cheia de buracos.
+    3. **Mesma variavel de fontes distintas.** SST vem do CRW e do Copernicus;
+       as duas convivem e a escolha e feita na leitura, pelo quality_flag.
+
+    Ver backend/docs/contrato_canonico_variaveis.md e docs/VARIAVEIS.md.
+    """
+
+    VARIAVEL_CHOICES = [
+        ('sst', 'Temperatura da superficie do mar (°C)'),
+        ('dhw', 'Degree Heating Week (°C·semana)'),
+        ('baa', 'Bleaching Alert Area (0-5)'),
+        ('baa_area_alerta', 'Fracao da area em Alerta Nivel 1+ (0-1)'),
+        ('hotspot', 'Coral Bleaching HotSpot (°C)'),
+        ('sst_anomalia', 'Anomalia de SST (°C)'),
+        ('salinidade', 'Salinidade (PSU)'),
+        ('oxigenio', 'Oxigenio dissolvido (mmol/m³)'),
+        ('kd490', 'Atenuacao da luz (m⁻¹)'),
+        ('clorofila', 'Clorofila-a (mg/m³)'),
+        ('par', 'Radiacao fotossinteticamente ativa (µmol/m²/s)'),
+    ]
+
+    QUALIDADE_CHOICES = [
+        ('ok', 'Aprovada'),
+        ('degradado', 'Aprovada com ressalva'),
+        ('invalido', 'Reprovada na validacao fisica'),
+    ]
+
+    local_recife = models.ForeignKey(
+        LocalRecife,
+        related_name='medicoes',
+        on_delete=models.CASCADE,
+    )
+    data = models.DateField(help_text='Data da medicao (UTC)')
+    variavel = models.CharField(max_length=20, choices=VARIAVEL_CHOICES)
+    valor = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Nulo quando reprovado na validacao - jamais preencher com 0',
+    )
+    unidade = models.CharField(max_length=40)
+
+    # Proveniencia - exigida pelo contrato canonico.
+    fonte = models.CharField(max_length=60, help_text='Slug do conector. Ex: noaa_crw')
+    dataset_id = models.CharField(max_length=160, blank=True)
+    quality_flag = models.CharField(
+        max_length=12,
+        choices=QUALIDADE_CHOICES,
+        default='ok',
+    )
+    observacao = models.TextField(
+        blank=True,
+        help_text='Motivo do flag quando nao for "ok"',
+    )
+    data_coleta = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-data', 'variavel']
+        verbose_name = 'Medicao ambiental'
+        verbose_name_plural = 'Medicoes ambientais'
+        constraints = [
+            # Permite a mesma variavel vinda de fontes diferentes no mesmo dia;
+            # a escolha entre elas e feita na leitura, pelo quality_flag.
+            models.UniqueConstraint(
+                fields=['local_recife', 'data', 'variavel', 'fonte'],
+                name='aquaculture_unique_medicao_local_data_variavel_fonte',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['local_recife', 'data']),
+            models.Index(fields=['variavel', 'data']),
+        ]
+
+    def __str__(self):
+        return f'{self.local_recife.slug} {self.data} {self.variavel}={self.valor}'
+
+
+class ExecucaoIngestao(models.Model):
+    """Registro de cada execucao de ingestao - o "com logs e tratamento de
+    falha" exigido pelo checklist de go-live.
+
+    Uma fonte fora do ar nao derruba as outras: cada par (fonte, local) gera
+    seu proprio registro, com status independente.
+    """
+
+    STATUS_CHOICES = [
+        ('sucesso', 'Sucesso'),
+        ('parcial', 'Parcial'),
+        ('falha', 'Falha'),
+    ]
+
+    fonte = models.CharField(max_length=60)
+    local_recife = models.ForeignKey(
+        LocalRecife,
+        related_name='execucoes_ingestao',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+    inicio_periodo = models.DateField(null=True, blank=True)
+    fim_periodo = models.DateField(null=True, blank=True)
+    iniciado_em = models.DateTimeField(auto_now_add=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    registros_gravados = models.PositiveIntegerField(default=0)
+    registros_rejeitados = models.PositiveIntegerField(default=0)
+    mensagem_erro = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-iniciado_em']
+        verbose_name = 'Execucao de ingestao'
+        verbose_name_plural = 'Execucoes de ingestao'
+        indexes = [
+            models.Index(fields=['fonte', '-iniciado_em']),
+        ]
+
+    def __str__(self):
+        local = self.local_recife.slug if self.local_recife else 'global'
+        return f'{self.fonte}/{local} {self.iniciado_em:%Y-%m-%d %H:%M} -> {self.status}'
+
+
 class Especie(models.Model):
+    """Uma especie do acervo, com a proveniencia que o lado ambiental ja tinha.
+
+    🚨 **Ate 31/07/2026 esta era a metade sem procedencia do projeto.** Cada
+    valor de `MedicaoAmbiental` grava `fonte`, `dataset_id` e `quality_flag`;
+    as especies vieram de uma lista digitada a mao na migracao 0011, e a
+    categoria de conservacao era **texto livre** — sem id de taxon, sem ano da
+    avaliacao e sem link da ficha. Nas 9 especies, `fonte_url` estava vazio em
+    **todas**.
+
+    Isso importava mais que as outras lacunas por um motivo especifico: a
+    categoria de conservacao e **o unico campo do banco que alguem vai citar**.
+
+    ⚠️ **Categoria da IUCN sem ano tem prazo de validade invisivel.** O exemplo
+    esta no proprio acervo: `Dendrogyra cylindrus` foi **Vulneravel de 2008 ate
+    2022**, quando passou a **Criticamente Ameacada**. As duas afirmacoes sao
+    corretas — em anos diferentes. Sem o ano, a tela nao distingue "e CR" de
+    "era VU quando alguem digitou isto".
+    """
+
     TIPO_FAUNA_CHOICES = [
         ('CORAL', 'Coral'),
         ('PEIXE', 'Peixe'),
@@ -35,15 +254,110 @@ class Especie(models.Model):
         ('OUTRO', 'Outro'),
     ]
 
+    # Os codigos oficiais da Lista Vermelha. Guardar o codigo, e nao o rotulo
+    # em portugues, e o que torna o campo comparavel com a fonte: a IUCN
+    # publica `VU`, nao "Vulneravel", e traducao livre nao volta para o
+    # original sem ambiguidade.
+    IUCN_CATEGORIAS = [
+        ('EX', 'Extinta'),
+        ('EW', 'Extinta na natureza'),
+        ('CR', 'Criticamente ameacada'),
+        ('EN', 'Em perigo'),
+        ('VU', 'Vulneravel'),
+        ('NT', 'Quase ameacada'),
+        ('LC', 'Pouco preocupante'),
+        ('DD', 'Dados insuficientes'),
+        ('NE', 'Nao avaliada'),
+    ]
+
     nome_cientifico = models.CharField(max_length=200, unique=True)
     nome_comum = models.CharField(max_length=200, blank=True)
     tipo = models.CharField(max_length=20, choices=TIPO_FAUNA_CHOICES, default='CORAL')
     descricao = models.TextField(blank=True, verbose_name='Descricao Ecologica')
-    status_conservacao = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text='Ex: Vulneravel, Ameacada, Pouco Preocupante (IUCN)',
+
+    # --- identificadores taxonomicos ---------------------------------------
+    #
+    # ⚠️ `nome_cientifico` como chave unica e fragil: sinonimo e reclassificacao
+    # a quebram, e o proprio genero `Mussismilia` esta sob revisao. Estes ids
+    # sao estaveis e sao a porta de entrada para GBIF e OBIS.
+    aphia_id = models.PositiveIntegerField(
+        null=True, blank=True, unique=True,
+        verbose_name='AphiaID (WoRMS)',
+        help_text='Identificador do World Register of Marine Species.',
     )
+    gbif_key = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='usageKey (GBIF)',
+    )
+    # 🚨 Resolucao automatica de nome erra em sinonimo e homonimo. Guardar o
+    # status que o WoRMS devolve, e o nome aceito quando diferir, e o que
+    # impede uma troca silenciosa de especie por outra.
+    status_taxonomico = models.CharField(
+        max_length=40, blank=True,
+        help_text='O que o WoRMS respondeu: accepted, unaccepted, etc.',
+    )
+    nome_aceito = models.CharField(
+        max_length=200, blank=True,
+        help_text='Preenchido so quando difere de nome_cientifico.',
+    )
+    taxonomia_conferida_em = models.DateField(null=True, blank=True)
+
+    # --- conservacao, com proveniencia -------------------------------------
+    #
+    # 🚨 **Como o dado foi obtido faz parte do dado.** Sem isto o acervo vira
+    # uma mistura indistinguivel de registros da API, de conferencia manual e
+    # de terceiros — e nao ha como auditar quais podem ser citados como IUCN.
+    #
+    # ⚠️ `terceiro` existe para ser honesto sobre um caminho que pode vir a ser
+    # usado: Wikidata e GBIF publicam a categoria sem precisar de token. E uma
+    # fonte legitima **se declarada** — o que nao pode e apresenta-la como se
+    # viesse da IUCN. Um registro `terceiro` cita o terceiro.
+    IUCN_ORIGENS = [
+        ('api', 'API da IUCN'),
+        ('ficha', 'Ficha da IUCN, conferida a mao'),
+        ('terceiro', 'Terceiro (Wikidata, GBIF) — cita-se o terceiro'),
+    ]
+
+    iucn_origem = models.CharField(
+        max_length=10, blank=True, choices=IUCN_ORIGENS,
+        verbose_name='Como foi obtida',
+    )
+    iucn_categoria = models.CharField(
+        max_length=2, blank=True, choices=IUCN_CATEGORIAS,
+        verbose_name='Categoria IUCN',
+    )
+    iucn_taxon_id = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='ID do taxon na IUCN',
+    )
+    iucn_avaliado_em = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        verbose_name='Ano da avaliacao',
+        help_text='O ano da avaliacao publicada, nao o ano da consulta.',
+    )
+    iucn_versao = models.CharField(
+        max_length=20, blank=True,
+        verbose_name='Versao em que a avaliacao foi publicada',
+        help_text=(
+            'A versao da Lista Vermelha em que ESTA avaliacao saiu (ex: '
+            '2022-2), e nao a versao que voce esta consultando hoje.'
+        ),
+    )
+    # 🚨 Este e o campo que teria pego o erro do `Mussismilia braziliensis`.
+    #
+    # `iucn_avaliado_em` + `iucn_versao` identificam **qual avaliacao** foi
+    # lida. Nenhum dos dois diz **ha quanto tempo ninguem confere** — e e
+    # exatamente ai que a categoria envelhece: a avaliacao continua a mesma, a
+    # IUCN publica uma nova, e o registro local segue apontando para a antiga
+    # sem nada indicando que parou no tempo.
+    iucn_consultado_em = models.DateField(
+        null=True, blank=True,
+        verbose_name='Ultima conferencia',
+        help_text='Quando alguem abriu a ficha e confirmou que continua valendo.',
+    )
+    fonte_iucn_url = models.URLField(
+        max_length=500, blank=True, verbose_name='Ficha na IUCN',
+    )
+
     foto = models.ImageField(upload_to='especies/', blank=True, null=True)
     credito_imagem = models.CharField(
         max_length=200,
@@ -62,81 +376,49 @@ class Especie(models.Model):
     )
     locais = models.ManyToManyField(LocalRecife, related_name='especies', blank=True)
 
+    # A partir de quantos dias uma conferencia deixa de valer.
+    #
+    # ⚠️ Nao ha nada de sagrado em 730. O raciocinio: a IUCN publica duas
+    # versoes por ano, entao dois anos sao ~4 janelas em que a categoria pode
+    # ter mudado sem ninguem olhar. Foi o que aconteceu com o `Mussismilia
+    # braziliensis`. Ajuste com motivo, e nao por gosto.
+    DIAS_ATE_CONFERENCIA_VENCER = 730
+
+    @property
+    def iucn_conferencia_vencida(self):
+        """Faz tempo demais desde que alguem abriu a ficha?
+
+        🚨 Isto e o que faltava no desenho original, e e o que pega o defeito
+        real: a categoria nao envelhece porque a avaliacao muda de conteudo —
+        envelhece porque a IUCN publica **outra**, e o registro local continua
+        apontando para a antiga sem nada indicando que parou no tempo.
+
+        Sem conferencia registrada nao ha vencimento a declarar: esse caso e
+        "sem procedencia", que e outra coisa e ja tem quem o conte.
+        """
+        from datetime import date
+
+        if not self.iucn_consultado_em:
+            return False
+        return (date.today() - self.iucn_consultado_em).days >= self.DIAS_ATE_CONFERENCIA_VENCER
+
+    @property
+    def iucn_tem_procedencia(self):
+        """A categoria pode ser exibida como afirmacao?
+
+        🚨 **O ano e o que decide.** Categoria sem ano nao e uma versao pior da
+        informacao: e uma afirmacao que ninguem consegue verificar nem datar, e
+        que envelhece sem aviso. Quem desenha a tela usa esta propriedade para
+        escolher entre exibir a categoria e dizer que ela nao tem procedencia.
+
+        A URL da ficha nao entra na condicao de proposito. Ela e util para o
+        leitor conferir, mas o que torna a afirmacao datavel e o ano.
+        """
+        return bool(self.iucn_categoria and self.iucn_avaliado_em)
+
     def __str__(self):
         nome_principal = self.nome_comum or self.nome_cientifico
         return f'{nome_principal} ({self.nome_cientifico})'
-
-
-class StatusPredicao(models.Model):
-    local_recife = models.ForeignKey(
-        LocalRecife,
-        related_name='monitoramentos',
-        on_delete=models.CASCADE,
-        blank=True,
-        null=True,
-    )
-    data = models.DateField(help_text='Data da medicao')
-
-    # Parametros Fisicos
-    sst_atual = models.FloatField(help_text='Temperatura media da superficie (SST)')
-    limite_termico = models.FloatField(help_text='Limite de branqueamento (MMM)')
-    anomalia = models.FloatField(help_text='SST - Limite')
-    dhw_calculado = models.FloatField(help_text='Graus-Semana de Aquecimento (DHW)')
-
-    # Parametros Ambientais
-    vento_velocidade = models.FloatField(
-        help_text='Velocidade do vento (m/s)',
-        null=True,
-        blank=True,
-    )
-    irradiancia = models.FloatField(
-        help_text='Radiacao Fotossintetica (PAR)',
-        null=True,
-        blank=True,
-    )
-    turbidez = models.FloatField(
-        help_text='Turbidez/Atenuacao da luz (Kd490)',
-        null=True,
-        blank=True,
-    )
-    salinidade = models.FloatField(help_text='Salinidade (PSU)', null=True, blank=True)
-    ph = models.FloatField(help_text='pH da agua', null=True, blank=True)
-    oxigenio = models.FloatField(
-        help_text='Oxigenio Dissolvido (mg/L)',
-        null=True,
-        blank=True,
-    )
-    nitrato = models.FloatField(help_text='Nitrato (umol/L)', null=True, blank=True)
-    clorofila = models.FloatField(help_text='Clorofila-a (mg/m3)', null=True, blank=True)
-
-    risco_integrado = models.FloatField(help_text='Indice de Risco Calculado (0-100)', default=0.0)
-
-    NIVEL_ALERTA_CHOICES = [
-        ('SEM_RISCO', 'Sem Risco'),
-        ('OBSERVACAO', 'Em Observacao'),
-        ('ALERTA_1', 'Alerta Nivel 1'),
-        ('ALERTA_2', 'Alerta Nivel 2'),
-    ]
-    nivel_alerta = models.CharField(
-        max_length=20,
-        choices=NIVEL_ALERTA_CHOICES,
-        default='SEM_RISCO',
-    )
-
-    class Meta:
-        ordering = ['-data']
-        verbose_name = 'Status de predicao'
-        verbose_name_plural = 'Status das Predicoes'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['local_recife', 'data'],
-                name='aquaculture_unique_statuspredicao_local_data',
-            ),
-        ]
-
-    def __str__(self):
-        local = self.local_recife.nome if self.local_recife else 'Geral'
-        return f'{local} - {self.data}: {self.nivel_alerta} (DHW: {self.dhw_calculado})'
 
 
 class DatasetCatalogo(models.Model):
@@ -171,6 +453,40 @@ class DatasetCatalogo(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
+    # --- ponte para o que o projeto realmente guarda -----------------------
+    # 🚨 Estes dois campos existem por causa de um defeito medido em
+    # 27/07/2026: o catalogo anunciava **9 datasets** e o projeto so espelha
+    # **3** deles. pH, clorofila, nitrato, thetao, KD490 e o SST do Met Office
+    # aparecem na pagina "Banco de Dados" como se estivessem disponiveis, e nao
+    # existe uma unica medicao deles no banco. Alem disso, os tres reais
+    # declaravam `data_fim` em 2025 enquanto a serie ja ia ate 24/07/2026.
+    #
+    # A causa nao e descuido de quem cadastrou: e que **cobertura estava
+    # guardada a mao**, e copia guardada envelhece em silencio. Com estes
+    # campos, o serializer deriva a cobertura real do `MedicaoAmbiental` a cada
+    # resposta, e ela nao tem como divergir.
+    #
+    # ⚠️ `fonte_medicao` vazio significa **referencia externa**: o dataset
+    # existe no provedor e o projeto nao o espelha. Isso e legitimo num
+    # catalogo — o que nao era legitimo e nao dizer.
+    fonte_medicao = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text=(
+            'Valor de MedicaoAmbiental.fonte que este dataset alimenta '
+            '(ex.: noaa_crw, copernicus). Vazio = referencia externa, nao '
+            'espelhada no banco.'
+        ),
+    )
+    variaveis_medicao = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text=(
+            'Variaveis canonicas separadas por virgula (ex.: "sst,dhw"). '
+            'Vazio com fonte preenchida = todas as variaveis daquela fonte.'
+        ),
+    )
+
     class Meta:
         ordering = ['ordem_exibicao', 'titulo']
         verbose_name = 'Dataset do catalogo'
@@ -178,3 +494,17 @@ class DatasetCatalogo(models.Model):
 
     def __str__(self):
         return self.titulo
+
+    @property
+    def variaveis(self):
+        """As variaveis declaradas, ja como tupla limpa."""
+        return tuple(
+            parte.strip()
+            for parte in self.variaveis_medicao.split(',')
+            if parte.strip()
+        )
+
+    @property
+    def espelhado(self):
+        """O projeto guarda este dado, ou so aponta para ele?"""
+        return bool(self.fonte_medicao)

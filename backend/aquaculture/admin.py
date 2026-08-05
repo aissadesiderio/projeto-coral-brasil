@@ -3,46 +3,61 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from .code_sync import sync_project_code_from_db
-from .models import DatasetCatalogo, Especie, LocalRecife, StatusPredicao
+from .models import DatasetCatalogo, Especie, LocalRecife
 
 
 class SyncToCodeAdminMixin:
-    sync_success_message = 'Banco salvo e arquivos de codigo sincronizados.'
-    sync_error_message = 'O banco foi salvo, mas a sincronizacao de arquivos falhou.'
+    """Exporta o banco para arquivos de codigo **sob demanda**.
 
-    def _sync_code(self, request):
+    Antes isto rodava automaticamente em `save_related`, `delete_model` e
+    `delete_queryset`: cada edicao no admin reescrevia
+    `frontend/src/recifeData.js` e `generated_admin_sync.py`, ou seja, editar
+    um dado sujava a arvore do git. Agora e uma acao explicita, e os hooks
+    automaticos foram removidos - mante-los, mesmo atras de
+    `ENABLE_CODE_SYNC`, reintroduziria o problema assim que a flag ligasse.
+
+    `ENABLE_CODE_SYNC` continua valendo como interruptor de seguranca: em
+    producao o admin nao deve escrever no sistema de arquivos de forma alguma.
+
+    Alternativa em linha de comando: `python manage.py sync_admin_code`.
+    """
+
+    actions = ['sincronizar_codigo']
+
+    @admin.action(description='Sincronizar banco -> arquivos de codigo (recifeData.js)')
+    def sincronizar_codigo(self, request, queryset):
+        # A exportacao sempre cobre o banco inteiro; a selecao e ignorada.
         if not getattr(settings, 'ENABLE_CODE_SYNC', False):
+            self.message_user(
+                request,
+                'Sincronizacao desativada (ENABLE_CODE_SYNC=False). Ative no '
+                '.env ou use "python manage.py sync_admin_code".',
+                level=messages.WARNING,
+            )
             return
 
         try:
             result = sync_project_code_from_db()
-            changed = result['backend_changed'] or result['frontend_changed']
-            if changed:
-                self.message_user(request, self.sync_success_message, level=messages.SUCCESS)
-            else:
-                self.message_user(
-                    request,
-                    'Banco salvo. Os arquivos de codigo ja estavam atualizados.',
-                    level=messages.INFO,
-                )
         except Exception as exc:
             self.message_user(
                 request,
-                f'{self.sync_error_message} Detalhe: {exc}',
-                level=messages.WARNING,
+                f'Falha ao sincronizar os arquivos de codigo: {exc}',
+                level=messages.ERROR,
             )
+            return
 
-    def save_related(self, request, form, formsets, change):
-        super().save_related(request, form, formsets, change)
-        self._sync_code(request)
-
-    def delete_model(self, request, obj):
-        super().delete_model(request, obj)
-        self._sync_code(request)
-
-    def delete_queryset(self, request, queryset):
-        super().delete_queryset(request, queryset)
-        self._sync_code(request)
+        if result['backend_changed'] or result['frontend_changed']:
+            self.message_user(
+                request,
+                'Arquivos de codigo sincronizados a partir do banco.',
+                level=messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                'Nada a fazer: os arquivos de codigo ja estavam atualizados.',
+                level=messages.INFO,
+            )
 
 
 class EspecieLocalInline(admin.TabularInline):
@@ -53,28 +68,14 @@ class EspecieLocalInline(admin.TabularInline):
     autocomplete_fields = ('especie',)
 
 
-class StatusPredicaoInline(admin.TabularInline):
-    model = StatusPredicao
-    extra = 0
-    fields = (
-        'data',
-        'nivel_alerta',
-        'risco_integrado',
-        'sst_atual',
-        'dhw_calculado',
-    )
-    show_change_link = True
-    ordering = ('-data',)
-
-
 @admin.register(LocalRecife)
 class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     list_display = (
         'nome',
         'estado',
         'cidade',
+        'tem_coordenadas',
         'quantidade_especies',
-        'quantidade_monitoramentos',
         'ultima_atualizacao',
         'ativo',
         'mostrar_imagem',
@@ -83,7 +84,7 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     search_fields = ('nome', 'estado', 'cidade', 'slug')
     prepopulated_fields = {'slug': ('nome', 'estado', 'cidade')}
     readonly_fields = ('mostrar_imagem_grande',)
-    inlines = [EspecieLocalInline, StatusPredicaoInline]
+    inlines = [EspecieLocalInline]
     save_on_top = True
 
     fieldsets = (
@@ -94,6 +95,23 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
             },
         ),
         (
+            'Geolocalizacao',
+            {
+                'fields': (
+                    'latitude',
+                    'longitude',
+                    'profundidade_media_m',
+                    'area_km2',
+                    'fonte_coordenadas',
+                ),
+                'description': (
+                    'Define de onde os conectores de ingestao extraem dados. '
+                    'Sem latitude e longitude, o local fica fora do pipeline. '
+                    'Registre sempre a origem das coordenadas.'
+                ),
+            },
+        ),
+        (
             'Conteudo',
             {
                 'fields': ('descricao', 'imagem', 'mostrar_imagem_grande', 'ultima_atualizacao'),
@@ -101,15 +119,14 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         ),
     )
 
+    @admin.display(boolean=True, description='Geo')
+    def tem_coordenadas(self, obj):
+        return obj.tem_coordenadas
+
     def quantidade_especies(self, obj):
         return obj.especies.count()
 
     quantidade_especies.short_description = 'Especies'
-
-    def quantidade_monitoramentos(self, obj):
-        return obj.monitoramentos.count()
-
-    quantidade_monitoramentos.short_description = 'Monitoramentos'
 
     def mostrar_imagem(self, obj):
         if obj.imagem:
@@ -139,11 +156,11 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         'mostrar_foto',
         'nome_comum',
         'tipo',
-        'status_conservacao',
+        'conservacao_com_procedencia',
         'credito_imagem',
         'tem_fonte_imagem',
     )
-    list_filter = ('tipo', 'status_conservacao', 'locais')
+    list_filter = ('tipo', 'iucn_categoria', 'locais')
     search_fields = ('nome_cientifico', 'nome_comum', 'credito_imagem')
     filter_horizontal = ('locais',)
     readonly_fields = ('mostrar_foto_grande', 'link_imagem', 'link_fonte_imagem', 'link_fonte_info')
@@ -153,7 +170,38 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         (
             'Identificacao',
             {
-                'fields': ('nome_cientifico', 'nome_comum', 'tipo', 'status_conservacao'),
+                'fields': ('nome_cientifico', 'nome_comum', 'tipo'),
+            },
+        ),
+        (
+            'Taxonomia',
+            {
+                'fields': (
+                    'aphia_id', 'gbif_key', 'status_taxonomico', 'nome_aceito',
+                    'taxonomia_conferida_em',
+                ),
+                'description': (
+                    'Identificadores estaveis. Preenchidos por '
+                    '"manage.py resolver_taxonomia" — sinonimo e '
+                    'reclassificacao quebram o nome cientifico como chave.'
+                ),
+            },
+        ),
+        (
+            'Conservacao (IUCN)',
+            {
+                'fields': (
+                    'iucn_origem', 'iucn_categoria', 'iucn_avaliado_em',
+                    'iucn_versao', 'iucn_consultado_em', 'iucn_taxon_id',
+                    'fonte_iucn_url',
+                ),
+                'description': (
+                    'O ANO DA AVALIACAO nao e opcional: sem ele o site nao '
+                    'exibe a categoria, e mostra "sem procedencia registrada". '
+                    'Dendrogyra cylindrus foi Vulneravel de 2008 a 2022 e hoje '
+                    'e Criticamente Ameacada — a categoria sozinha nao diz de '
+                    'quando e a afirmacao.'
+                ),
             },
         ),
         (
@@ -182,6 +230,22 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
             },
         ),
     )
+
+    @admin.display(description='Conservacao', ordering='iucn_categoria')
+    def conservacao_com_procedencia(self, obj):
+        """A categoria so aparece com o ano. Sem ele, o admin diz o que falta.
+
+        O admin e onde alguem preenche isso, entao e onde a falta precisa
+        aparecer — nao so na tela publica.
+        """
+        if not obj.iucn_categoria:
+            return '—'
+        if not obj.iucn_avaliado_em:
+            return format_html(
+                '<span style="color:#b45309">{} (sem ano)</span>',
+                obj.get_iucn_categoria_display(),
+            )
+        return f'{obj.get_iucn_categoria_display()} ({obj.iucn_avaliado_em})'
 
     def mostrar_foto(self, obj):
         if obj.foto:
@@ -232,23 +296,6 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
 
     tem_fonte_imagem.boolean = True
     tem_fonte_imagem.short_description = 'Fonte imagem'
-
-
-@admin.register(StatusPredicao)
-class StatusPredicaoAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
-    list_display = (
-        'data',
-        'local_recife',
-        'nivel_alerta',
-        'risco_integrado',
-        'sst_atual',
-        'dhw_calculado',
-    )
-    list_filter = ('nivel_alerta', 'local_recife')
-    search_fields = ('local_recife__nome',)
-    date_hierarchy = 'data'
-    autocomplete_fields = ('local_recife',)
-    save_on_top = True
 
 
 @admin.register(DatasetCatalogo)

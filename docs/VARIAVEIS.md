@@ -1,0 +1,484 @@
+# Seleção de Variáveis — Modelo de Branqueamento
+
+> **Status:** decisão de *features* e de *target* fechadas (ver §4).
+> **Última revisão:** 25/07/2026
+> **Relacionados:** [FONTES.md](FONTES.md) · [contrato_canonico_variaveis.md](../backend/docs/contrato_canonico_variaveis.md)
+
+Este documento registra **por que cada variável entra ou fica de fora** do modelo de predição de branqueamento. Serve para defender as escolhas em banca e para impedir que uma variável seja reintroduzida sem que o motivo da exclusão seja reexaminado.
+
+---
+
+## 1. Resumo da decisão
+
+| Papel | Variáveis |
+|---|---|
+| **Features baseline** | `CRW_SST`, `CRW_DHW`, `salinidade`, `O₂` — ⚠️ `KD490` **sob revisão**, ver §3.5 |
+| **Opcionais** (após baseline) | `CRW_HOTSPOT`, `CRW_SSTANOMALY` |
+| **Target — entrega 1** | `CRW_BAA` **com horizonte de N dias** (previsão de estresse térmico) |
+| **Target — entrega 2** | Branqueamento observado (Global Coral-Bleaching Database) |
+| **Excluídas** | `temperatura`/`SST anomaly` (Copernicus), `pH`, `CO₂`, `alcalinidade`, `nitrato`, `fosfato`, `ferro dissolvido` |
+
+---
+
+## 2. Os quatro princípios que guiaram a seleção
+
+**2.1 Escala temporal compatível com o fenômeno.** Branqueamento térmico é um evento agudo: instala-se em semanas. Uma variável só discrimina esse evento se ela própria variar em escala de dias a semanas. Variáveis que se movem em décadas (pH, CO₂) ou em meses com forte componente espacial (nitrato, fosfato) entram no modelo como quase-constantes — custam parâmetros e não separam caso de não-caso.
+
+**2.2 Efeito mensurável acima de causa remota.** Quando existe uma cadeia causal, prefere-se medir o elo final. Nitrato alto → bloom de fitoplâncton → consumo de oxigênio → hipóxia → coral estressado. Se o O₂ está sendo medido, o nitrato acrescenta ruído da cadeia inteira sem informação nova sobre o desfecho.
+
+**2.3 Fonte especializada acima de fonte genérica.** Quando duas fontes medem a mesma grandeza, usa-se a produzida especificamente para recifes. O NOAA Coral Reef Watch calibra SST e climatologia para o contexto coralino; o Copernicus é um modelo oceânico global.
+
+**2.4 Ausência de vazamento (*data leakage*).** Nenhuma feature pode ser derivada do target. Isso vale nos dois sentidos — e é justamente onde a decisão sobre o `CRW_BAA` precisa ser reaberta (§4).
+
+---
+
+## 3. Variáveis usadas
+
+### 3.1 `CRW_SST` — Temperatura da superfície do mar
+- **Fonte:** NOAA Coral Reef Watch 5 km v3.1 (CoralTemp) · arquivo `dhw.csv`
+- **Escala:** diária
+- **Mecanismo:** temperatura acima do limiar térmico rompe a simbiose entre o coral e as zooxantelas. O aparato fotossintético da alga passa a produzir espécies reativas de oxigênio, e o coral expulsa o simbionte — perdendo cor e sua principal fonte de energia.
+- **Por que esta e não outra:** é a base de toda a cadeia térmica. HotSpot, DHW e BAA derivam dela. O CoralTemp é o produto calibrado para recifes.
+- **Situação no projeto:** disponível, 2020–2025, no acervo local.
+
+### 3.2 `CRW_DHW` — Degree Heating Week
+- **Fonte:** NOAA Coral Reef Watch 5 km v3.1 · arquivo `dhw.csv`
+- **Escala:** diária, com janela acumulada de 12 semanas
+- **Mecanismo:** o dano ao coral é cumulativo, não instantâneo. O DHW soma os HotSpots de pelo menos 1 °C acima do limiar de branqueamento ao longo das 12 semanas anteriores. Um DHW equivale a uma semana a 1 °C acima do limiar, ou meia semana a 2 °C acima.
+- **Por que é a feature mais forte:** é a métrica com melhor sustentação na literatura para prever branqueamento. A partir de 4 °C·semana espera-se branqueamento significativo; a partir de 8, branqueamento severo e mortalidade.
+- **Situação no projeto:** disponível. ⚠️ O `carregar_historico.py` calcula um DHW próprio, com limiar fixo de 27 °C e somando todos os HotSpots positivos — fora da metodologia NOAA, que usa a MMM por pixel e só acumula HotSpots ≥ 1 °C. Usar a coluna `CRW_DHW` oficial resolve isso.
+
+### 3.3 `salinidade` — Salinidade prática
+- **Fonte:** Copernicus GLOBAL_ANALYSISFORECAST_PHY_001_024, variável `so` · arquivo `salinidade.csv`
+- **Escala:** 6 horas
+- **Mecanismo:** corais são osmoconformadores — não regulam ativamente a concentração salina interna. Desvios bruscos, para baixo ou para cima, provocam estresse osmótico que se soma ao térmico. Na costa brasileira o vetor típico é a pluma de rios e chuvas intensas de verão, que coincidem justamente com a estação de maior temperatura.
+- **Por que entra:** é o único estressor do conjunto **independente da cadeia térmica**. Todo o resto correlaciona com temperatura de alguma forma; a salinidade traz um eixo de variação novo.
+- **Situação no projeto:** disponível, 2022–2025.
+
+### 3.4 `O₂` — Oxigênio dissolvido
+- **Fonte:** Copernicus GLOBAL_MULTIYEAR_BGC_001_029 (reanálise), variável `o2` · arquivo `oxigenio.csv`
+- **Escala:** diária
+- **Mecanismo:** água mais quente dissolve menos oxigênio, e ao mesmo tempo o calor eleva a demanda metabólica do coral. As duas curvas andam em direções opostas. A hipóxia reduz o limiar de temperatura em que o branqueamento se instala — ou seja, o mesmo DHW causa mais dano em água pobre em oxigênio.
+- **Por que entra:** é um **amplificador**, não um estressor paralelo. Permite que o modelo aprenda interação em vez de efeito aditivo, e captura o elo final da cadeia de eutrofização sem precisar dos nutrientes.
+- **Situação no projeto:** disponível, 1993–2025. ⚠️ Produto de reanálise, não de previsão — não misturar com séries `*_recente` sem registrar a diferença.
+
+### 3.5 `KD490` — Coeficiente de atenuação da luz
+- **Fonte:** Copernicus GLOBAL_ANALYSISFORECAST_BGC_001_028, variável `kd` · arquivo `turbidez.csv`
+- **Escala:** diária
+- **Mecanismo:** luz e calor agem em sinergia. Sob estresse térmico, o excesso de radiação fotossinteticamente ativa sobrecarrega o fotossistema II das zooxantelas e acelera a produção de espécies reativas de oxigênio. O efeito é bidirecional: turbidez alta **protege** por sombreamento, turbidez baixa em água quente **agrava**.
+- **Papel pretendido:** compor a irradiância que chega ao coral, via Beer-Lambert: `PAR_fundo = PAR_superfície × e^(−Kd · z)`.
+- **Situação no projeto:** 🚨 **o papel pretendido está bloqueado.** O projeto não tem PAR de superfície utilizável — `par.csv` tem valores mas coordenadas irrecuperáveis, e `par_recente.csv` contém `PAR_error`, o campo de incerteza. Ver [FONTES.md §6.13](FONTES.md). Enquanto o PAR não for rebaixado (NOAA ERDDAP ou NASA OceanColor), o KD490 entra apenas como turbidez — o que ainda tem valor, mas não é o que a justificativa previa.
+- **Bug relacionado:** a profundidade `z` está fixa em 7,5 m para todos os locais. O campo `profundidade_media_m` já existe em `LocalRecife`, mas só Abrolhos está preenchido (10,0 m).
+- 🚨 **Segundo bloqueio, medido em 25/07/2026 no catálogo real do CMEMS:** o `kd` existe **apenas de 2023-11-15 em diante**, e **não há reanálise** dele. Como a série do NOAA já cobre 2020–2026, exigir KD490 no baseline cortaria o conjunto de treino de 6,5 para **2,7 anos** e eliminaria o evento de branqueamento brasileiro de 2020 — um dos dois picos da série.
+
+  **Recomendação: tirar o KD490 do baseline.** O custo é alto e o benefício está duplamente reduzido — o papel previsto (`PAR_fundo`) já está bloqueado por falta de PAR, então ele entraria só como turbidez. Reavaliar depois como *experimento no subperíodo* 2023-11 → presente, comparando um modelo com e sem KD490 na mesma janela. Se agregar, aí sim vale discutir o custo da série curta.
+
+### 3.6 Janelas retrospectivas — trajetória (25/07/2026)
+
+#### Por que elas existem
+
+O valor instantâneo não diz a direção:
+
+> **DHW = 6 hoje** descreve tanto um recife que subiu de 2 na última semana — evento começando, vai piorar — quanto um que caiu de 10 — evento terminando.
+
+São situações opostas com a mesma feature. A linha de base de persistência acerta 84% em 7 dias justamente porque episódio longo é estável no meio; **onde ela erra é no começo e no fim**. Sem janelas, o modelo competiria com a persistência usando *menos* informação do que ela usa implicitamente — e perder assim não ensinaria nada sobre o fenômeno, só sobre a pobreza das features.
+
+Implementadas em `backend/ml/dataset.py`. O conjunto padrão é a **variação em 7 dias** das quatro features do baseline, mais **14 dias** para SST e DHW, cujo sinal é mais lento. São 6 features derivadas, não 24: com ~4 anos-evento de amostra efetiva (§7.2), três operações × quatro variáveis × duas janelas seria receita de sobreajuste.
+
+Custo medido: **75 amostras de 7.134 (1,1%)** — o começo de cada série e as bordas das lacunas.
+
+#### O que a medição mostrou — e não era o esperado
+
+Separação entre **início** de episódio (calmo → alerta em 7 dias) e **fim** (alerta → calmo), que são exatamente os dois casos que a persistência confunde. Medida em desvios-padrão da própria feature; n = 95 e 96.
+
+| Feature | Início | Fim | Separação |
+|---|---|---|---|
+| `sst_variacao_14d` | +0,174 | −0,116 | **0,77 σ** |
+| `sst_variacao_7d` | +0,112 | −0,077 | **0,70 σ** |
+| `oxigenio_variacao_7d` | −0,407 | +0,123 | **0,61 σ** |
+| `dhw_variacao_14d` | +0,854 | +1,444 | 0,61 σ |
+| `dhw_variacao_7d` | +0,502 | +0,637 | **0,27 σ** |
+| `salinidade_variacao_7d` | +0,011 | +0,013 | 0,02 σ |
+
+**A trajetória do DHW quase não separa — e era a que eu esperava que separasse.** Os dois casos dão variação *positiva*: o DHW sobe tanto no começo quanto no fim do episódio. O motivo é mecanístico e devia ter sido antecipado: **o DHW é um acumulador de 12 semanas**. Ele continua subindo enquanto houver estresse recente, e só cai devagar. Serve para dizer *quão avançado* está o evento — o DHW instantâneo separa início de fim em 1,98 σ (1,33 contra 7,90) — mas não para dizer se ele está começando ou acabando.
+
+**Quem separa é a trajetória da SST**, e com o sinal certo: subindo no início, caindo no fim. Faz sentido — a SST governa o HotSpot instantâneo, que é o que define o alerta do dia.
+
+#### O achado que importa para a entrega 2
+
+**A trajetória do oxigênio separa 0,61 σ**, caindo no início do episódio e subindo no fim. É coerente com a física — água mais quente dissolve menos O₂ — e é **a primeira evidência empírica no projeto de que uma variável não-térmica carrega informação** onde as térmicas falham.
+
+Isso é exatamente a pergunta da entrega 2 (§4.4, caminho A), aparecendo antes da hora e num lugar onde ela pode ser testada. Não é resposta: é motivo para o teste valer a pena.
+
+🚨 **O teste foi feito, e o indício NÃO se confirmou (25/07/2026).** Medida a importância dentro do modelo treinado, a *trajetória* do oxigênio contribui **−0,001 (logística) e −0,006 (boosting)** — negativo, ou seja, ruído. O **nível** de oxigênio contribui algo pequeno mas consistente (+0,021 nos dois). Detalhe e as três explicações possíveis em [RESULTADOS.md](RESULTADOS.md) §7.
+
+O que fica: separar dois grupos nas transições **não é o mesmo** que ajudar a prever o ano inteiro. A medição de 0,61 σ acima continua correta como descrição; ela é que não se traduziu em capacidade preditiva. Este parágrafo fica como registro de um indício que não sobreviveu — apagá-lo esconderia o percurso.
+
+A **salinidade não separa nada** (0,02 σ) nas transições. Continua no baseline por hipótese mecanística, mas sem apoio empírico até aqui.
+
+#### 🔁 O mesmo padrão apareceu de novo, em base independente (26/07/2026)
+
+A entrega 2, passo 2, mediu salinidade e oxigênio contra **branqueamento observado** — outro alvo, outro período (1994–2010), outros 119 sítios. O padrão se repetiu exatamente:
+
+| | Separação descritiva | Contribuição preditiva |
+|---|---|---|
+| **Entrega 1** — oxigênio nas transições | 0,61 σ | −0,001 |
+| **Entrega 2** — `oxigenio_media_90d` | *d* = **−0,377** | **−0,045** |
+| **Entrega 2** — `oxigenio_variacao_90d` | *d* = −0,315 | −0,018 |
+| **Entrega 2** — `salinidade_media_90d` | *d* = −0,281 | +0,020 |
+
+E a direção é sempre a fisicamente esperada: os sítios que branquearam tinham oxigênio **mais baixo e caindo**, salinidade **mais baixa e caindo**.
+
+> **Uma vez é indício. Duas vezes, em bases independentes e com alvos diferentes, é um fato sobre o problema:** salinidade e oxigênio *descrevem* o branqueamento sem *prevê-lo* — pelo menos na resolução em que conseguimos medi-los.
+
+⚠️ A ressalva importa e está em [RESULTADOS.md](RESULTADOS.md) §18: a grade do produto de oxigênio é **28 km**, e 20 dos sítios só têm dado a até 33 km do recife. Pode ser que o mecanismo exista e o instrumento não o alcance. Estes dados não separam as duas hipóteses.
+
+~~**A variável não térmica que funciona é outra: o vento.**~~ `Windspeed` é a segunda mais importante em todas as versões do passo 2, com coeficiente −0,72 — mais vento, menos branqueamento. E `oxigenio_variacao_90d` × `Windspeed` tem **r = +0,554**: o vento mistura a coluna d'água e a oxigena, então ele já carrega parte do que o oxigênio diria, e chega antes.
+
+🚨 **Escrito e desmentido em 26/07/2026.** Toda essa evidência vinha de **uma única coluna** — o `Windspeed` do próprio GCBD —, e ninguém tinha conferido se ela descreve o vento. Baixado vento real do ERA5 para os mesmos 166 pontos e datas: as duas fontes **concordam sobre o vento** (r = +0,708) e **discordam sobre o coral** (*d* = −0,461 contra **−0,057**, com o intervalo do ERA5 incluindo zero). **Trocar a coluna por vento medido deixa o modelo pior que não ter vento** — PR-AUC por ano de 0,717 para 0,673, contra 0,692 sem vento nenhum. Ver [RESULTADOS.md](RESULTADOS.md) §20.
+
+**Então o placar real é este: nenhuma variável não térmica testada até hoje se confirma como preditora.** Salinidade, oxigênio e vento — os três descrevem, nenhum prevê. O parágrafo acima fica com o aviso porque apagá-lo esconderia o percurso, que é a mesma regra aplicada ao indício do oxigênio logo acima.
+
+⚠️ **Estes números são sugestivos, não estabelecidos.** São 95 e 96 amostras, tiradas de ~4 anos-evento correlacionados entre si (§7.2). Servem para orientar o desenho do modelo e para dizer o que medir — não para afirmar efeito.
+
+---
+
+## 4. Target — decisão tomada (caminho C)
+
+> **Decidido em 25/07/2026: caminho C — as duas entregas, em sequência.**
+>
+> **Entrega 1 (imediata):** prever o `CRW_BAA` **com horizonte de N dias**, a partir das condições de hoje. Usa os dados já em mãos, destrava o painel de risco e não é circular, porque o DHW futuro não é conhecido no presente.
+> **Nome honesto do produto:** *previsão de estresse térmico* — não "previsão de branqueamento".
+>
+> **Entrega 2 (contribuição científica):** target = branqueamento observado, via Global Coral-Bleaching Database. É o que sustenta a seção de resultados do TCC e permite responder se salinidade, O₂ e turbidez acrescentam sinal além do DHW.
+>
+> As cinco features baseline valem nas duas entregas.
+
+📖 **Como esse alvo é avaliado** — a régua da persistência, o teste sem trapaça
+e por que acurácia não serve — está em [METODOLOGIA.md](METODOLOGIA.md), com
+exemplo trabalhado.
+
+**Regras que a entrega 1 impõe:**
+
+1. `CRW_HOTSPOT` fica **fora** das features — junto com o DHW determina o BAA exatamente.
+2. As features são medidas em `t`; o target é o BAA em `t + N`. Nenhuma janela pode conter informação posterior a `t`.
+3. A validação é **temporal** (*leave-year-out*), nunca aleatória.
+4. O baseline a bater é a **persistência**: "o BAA de daqui a N dias é igual ao de hoje". Um modelo que não supera persistência não se justifica.
+5. `N` é um parâmetro do experimento, não uma constante escondida no código. Valores a testar: 7, 14, 30 dias.
+
+### 4.1 O que estava definido antes
+
+`CRW_BAA` (Bleaching Alert Area) como única variável resposta, **nunca como feature**. O raciocínio original: o BAA deriva de SST e DHW, então usá-lo como entrada seria o modelo colar na prova.
+
+**Esse raciocínio está correto.** O problema é que a mesma constatação, levada um passo adiante, também compromete o BAA como *target* — quando SST e DHW são as features.
+
+### 4.2 A medição
+
+O BAA é definido pela NOAA como função de HotSpot e DHW. Testando isso diretamente no `dhw.csv` do projeto (1.024.100 linhas, Abrolhos, 2020–2025):
+
+| Verificação | Resultado |
+|---|---|
+| Combinações distintas de (`HOTSPOT`, `DHW`) | 178.759 |
+| Combinações que mapeiam para **mais de um** valor de BAA | **0** |
+| Árvore de decisão, profundidade 3, features = só `SST` + `DHW` | **93,6%** de acurácia |
+| Árvore de decisão, profundidade 10, features = só `SST` + `DHW` | **95,7%** de acurácia |
+
+Distribuição do target: 743.195 registros em BAA 0; 200.056 em 1; 43.514 em 2; 21.536 em 3; 15.799 em 4.
+
+### 4.3 O que isso significa
+
+Treinar `{SST, DHW, salinidade, O₂, KD490} → BAA` produz um modelo que atinge ~96% de acurácia **usando apenas SST e DHW**. Salinidade, O₂ e KD490 receberiam importância próxima de zero — não porque sejam biologicamente irrelevantes, mas porque não há nada a explicar: o target já é uma função fechada das outras duas features.
+
+Estruturalmente é o mesmo defeito do `calcular_risco()` em `treinar_modelo.py`, que o roadmap identificou: **o modelo aprende uma fórmula, não o fenômeno.** A diferença é que a fórmula passa a ser a da NOAA em vez de uma escrita à mão — mais respeitável, igualmente circular. Uma acurácia de 96% numa banca convida à pergunta "o que exatamente o seu modelo aprendeu que a tabela de limiares da NOAA já não dizia?".
+
+### 4.4 Três caminhos
+
+**A — Branqueamento observado como target.** Usar o *Global Coral-Bleaching Database* (van Woesik & Burkepile 2022; CC-BY, BCO-DMO 773466). O target passa a ser presença/ausência observada em campo. Todas as cinco features viram legítimas, e "salinidade acrescenta sinal além do DHW?" vira pergunta científica com resposta real.
+*Custo:* juntar registros de sítio a séries ambientais; cobertura brasileira mais rala.
+
+📊 **Base baixada e avaliada em 25/07/2026, e usada em 26/07/2026 — ver
+[GCBD.md](GCBD.md).** O levantamento confirmou o benefício e mediu o custo:
+**166 visitas brasileiras utilizáveis** (~~313 amostras~~ — corrigido em
+26/07/2026, ver GCBD.md Etapa 3), **balanceadas em 53,0%** contra 8% do BAA, em
+119 sítios espalhados por 15 graus de latitude — muito mais independência
+amostral que os 3 recifes colados da entrega 1. Mas o dado brasileiro **vai só
+até 2010**, e **Picãozinho fica sem cobertura**.
+
+✅ **O caminho A foi executado, e a pergunta científica tem resposta.**
+
+**Passo 1 — o sinal térmico sozinho não explica.** A régua publicada da NOAA
+(`DHW ≥ 4`) tem precisão 1,000 e revocação **0,114**: 78 dos 88 branqueamentos
+ocorreram com o acumulador térmico em **zero**. Ver
+[RESULTADOS.md](RESULTADOS.md) §11.
+
+Isso confirma o diagnóstico de circularidade que motivou esta seção: com o BAA
+como alvo, a entrega 1 concluiu que variáveis não térmicas não contribuem
+([RESULTADOS.md](RESULTADOS.md) §8) — mas o BAA **é** térmico. Trocado o alvo,
+sobra o que explicar.
+
+🚨 **Passo 2 — salinidade e oxigênio não preenchem essa lacuna.** Extraídos
+30.212 valores diários da reanálise do Copernicus, **nenhuma combinação supera
+o modelo só-térmico** na validação por ano (0,717); sozinhas as quatro features
+ambientais ficam em 0,527 contra taxa base 0,530 — acaso. Testados e
+descartados o tamanho da janela (7 a 90 dias) e a hipótese de identidade de
+sítio. Ver [RESULTADOS.md](RESULTADOS.md) §15–§19.
+
+**A resposta à pergunta desta seção — "salinidade acrescenta sinal além do
+DHW?" — é, com os dados que temos: não.** Com a ressalva de resolução de
+§18, que é séria e não pode ser omitida.
+
+**B — Previsão de BAA com horizonte.** Manter o BAA, mas mudar a pergunta: em vez de "qual o BAA de hoje dadas as condições de hoje" (circular), prever **o BAA daqui a N dias a partir das condições de hoje**. Não é circular, porque o DHW futuro não é conhecido no presente — e aí salinidade, O₂ e turbidez podem genuinamente antecipar a trajetória térmica.
+*Custo:* nenhum dado novo. Exige rigor na montagem das janelas para não vazar futuro. **Muda o nome honesto do produto:** é previsão de estresse térmico, não de branqueamento.
+
+**C — Híbrido.** B como entrega imediata (funciona com os dados em mãos e destrava o painel), A como contribuição científica do TCC.
+
+**Recomendação: C.** O caminho B entrega um painel defensável em semanas; o A é o que sustenta a seção de resultados do trabalho. E a seleção de features desta decisão **vale integralmente nos três caminhos** — nada do trabalho de seleção se perde.
+
+### 4.5 A agregação do target (corrigida em 25/07/2026)
+
+#### O que estava acontecendo
+
+Abrolhos não é um ponto no mapa. Quando o conector pede dados à NOAA, ele recebe uma **grade de ~121 quadradinhos** (pixels de 5 km) cobrindo a área do recife. Cada quadradinho tem seu próprio nível de alerta, de 0 a 4:
+
+| Nível | Significado |
+|---|---|
+| 0 | sem estresse |
+| 1 | vigilância |
+| 2 | aviso |
+| 3 | **Alerta Nível 1** — branqueamento esperado |
+| 4 | **Alerta Nível 2** — mortalidade esperada |
+
+Mas o banco guarda **um número por dia**, não 121. Então é preciso resumir os 121 num só. O código estava tirando a **média** — e é aí que está o erro.
+
+#### Por que a média está errada
+
+Um recife imaginário de 10 quadradinhos, num dia ruim:
+
+| Quadradinhos | Nível |
+|---|---|
+| 6 deles | 3 — Alerta Nível 1 |
+| 4 deles | 4 — Alerta Nível 2 |
+
+Média = (6×3 + 4×4) ÷ 10 = **3,4** → arredondado para **3**.
+
+O banco grava "Alerta Nível 1". Mas **40% do recife estava em Alerta Nível 2**, o nível em que corais morrem e não apenas branqueiam. Essa informação desapareceu.
+
+O problema de fundo é que esses números **não são quantidades, são rótulos ordenados**. Média de rótulo não devolve rótulo — é como tirar a média de "fundamental, médio, superior" e obter 2,4. O valor 3,4 não corresponde a nenhum estado que a NOAA define.
+
+O caso real, medido em Abrolhos em **17/05/2024**: 70 pixels em nível 3, 45 em nível 4, 6 em nível 2. Média 3,32 → gravado **3**. Trinta e sete por cento da área estava em Alerta Nível 2.
+
+#### A correção
+
+**1. O BAA passa a ser o máximo, não a média.** No exemplo acima, grava 4. A pergunta que um sistema de alerta responde não é "como está o pedaço médio do recife", e sim "qual a pior situação dentro dele". Os sumários regionais da própria NOAA reportam o nível máximo da área.
+
+*Por que não a moda:* ela daria 3 em 17/05/2024 — o mesmo valor errado que a média, porque os 70 pixels em nível 3 são mais numerosos que os 45 em nível 4. Moda responde "qual o estado típico"; não é a pergunta.
+
+**2. Nova variável `baa_area_alerta`**, que guarda **quanto** do recife está em alerta — 0,40 no exemplo, 115/121 = 0,950 no caso real. Ela existe porque o máximo sozinho tem um defeito simétrico: daria 4 tanto para "1 quadradinho em alerta" quanto para "os 121 em alerta". São situações muito diferentes.
+
+Juntas, as duas respondem a perguntas complementares: o máximo diz **o quão grave**, a fração diz **o quanto do recife**.
+
+A fração conta apenas pixels com valor válido. Dividir pelo total da grade misturaria "sem estresse" com "sem dado", e diluiria o alerta justamente nos dias de pior cobertura — os que mais importam.
+
+#### O que isso muda para o experimento
+
+1. **A distribuição do alvo muda** — e mudou de fato. Reingerido em 25/07/2026, o Alerta Nível 2 passou de 160 para **369** registros e o Alerta Nível 1 de 147 para 229. As classes altas deixam de ser raras por artefato de agregação. Qualquer balanceamento de classe calibrado na distribuição antiga precisa ser refeito.
+2. **`baa_area_alerta` é uma segunda variável resposta candidata** — contínua em [0, 1]. Prever *extensão* é pergunta diferente de prever *severidade*, e possivelmente mais útil para manejo. Não entra na entrega 1; fica registrada para não se perder.
+3. **A medição de circularidade da §4.2 não é afetada.** Ela foi feita no dado por pixel, onde a relação BAA = f(HotSpot, DHW) vale exatamente. O defeito era da agregação, não da relação.
+
+⚠️ **`baa_area_alerta` não pode ser feature de um modelo que prevê `baa`.** As duas saem da mesma grade, no mesmo instante: saber que 95% do recife está em alerta é praticamente saber o alerta máximo. É a mesma armadilha do `CRW_HOTSPOT` (§4, regra 1) — o modelo não estaria prevendo, estaria lendo a resposta.
+
+Medições, evidência e o registro do defeito em [FONTES.md](FONTES.md) §6.16. A regra geral — variável ordinal precisa declarar sua agregação — está no [contrato canônico](../backend/docs/contrato_canonico_variaveis.md), regra 5.
+
+### 4.6 Por que a regra da NOAA vale por pixel e não vale por recife
+
+*Escrito em 30/07/2026, ao construir a linha de base da regra publicada.*
+
+A §4.2 mediu, no dado por pixel, que o BAA é **função determinística** de
+(HotSpot, DHW): 178.759 combinações distintas, **zero** ambíguas. A §4.5
+decidiu agregar o BAA por **máximo** e as contínuas por **média**. As duas
+coisas são certas, e juntas produzem um resultado que não é óbvio e já causou
+um erro de leitura:
+
+> **A regra da NOAA deixa de valer depois da agregação.** Não porque ela esteja
+> errada, mas porque passou a ser aplicada a números que respondem a outra
+> pergunta.
+
+#### O exemplo, com quatro pixels
+
+Recife com 4 pixels, todos com HotSpot acima de 1 °C:
+
+| Pixel | DHW | BAA daquele pixel |
+|---|---|---|
+| 1 | 9,0 | **4** (Alerta Nível 2, DHW ≥ 8) |
+| 2 | 1,0 | 2 (Aviso) |
+| 3 | 1,0 | 2 |
+| 4 | 1,0 | 2 |
+
+O que o banco grava, pelas regras da §4.5:
+
+- `baa` = **máximo** dos pixels = **4**
+- `dhw` = **média** dos pixels = (9 + 1 + 1 + 1) / 4 = **3,0**
+
+Agora aplique a regra publicada aos valores gravados: `DHW = 3,0 < 4`, logo
+"sem Alerta Nível 1" — sobre um recife cujo próprio `baa` gravado diz **4**. O
+registro se contradiz, e nenhum dos dois campos está errado. Um diz *o pior
+pedaço*; o outro, *o pedaço médio*.
+
+**O desvio só acontece nesse sentido.** O máximo é sempre ≥ a média, então o
+BAA pode subir sem as médias alcançarem o corte; o contrário exigiria a média
+ultrapassar o máximo. Medido na série inteira ([FONTES.md](FONTES.md) §6.16):
+**0** casos do lado impossível, 261 do lado possível.
+
+#### As duas consequências
+
+1. **O corte 4 não é transferível.** Ele é o número certo para a grade de 5 km
+   da NOAA e chega tarde demais para uma média de bbox. Remedido nesta escala,
+   o ponto de operação é `DHW ≥ 1` mantido o HotSpot — 15 dos 19 episódios
+   contra 10 do corte publicado ([RESULTADOS.md](RESULTADOS.md) §24.2).
+2. **`hotspot` continua proibido como feature, e a regra continua permitida
+   como linha de base.** São coisas diferentes: um modelo que visse o HotSpot
+   estaria lendo metade da resposta; uma linha de base que o vê não prevê nada,
+   só aplica hoje o critério publicado para que a previsão de daqui a N dias
+   tenha contra o que se medir. Ver `ml/dataset.py`,
+   `VARIAVEIS_DE_LINHA_DE_BASE`.
+
+🚨 **O erro que isto corrige.** Em 30/07/2026 foi afirmado que, como o alvo é
+`BAA ≥ 3` e o BAA é função do DHW, o modelo "apenas extrapola uma curva de DHW
+sete dias à frente". A frase junta a §4.2 (verdadeira por pixel) com o alvo do
+banco (agregado) como se fossem o mesmo número. Só com DHW, a regra faz F1
+**0,480**; o modelo faz 0,671. **Mais importante não é suficiente** — e essa
+distinção é exatamente o que a agregação torna mensurável.
+
+---
+
+## 5. Variáveis opcionais
+
+Entram somente se, após o baseline, mostrarem sinal independente.
+
+### 5.1 `CRW_HOTSPOT`
+Anomalia térmica positiva em relação ao limiar de branqueamento. É o elo intermediário da cadeia `SST → HOTSPOT → DHW → BAA`, e o DHW já absorve boa parte do seu sinal.
+⚠️ **Se o target for BAA, o HOTSPOT não pode entrar como feature em hipótese alguma** — junto com o DHW ele determina o BAA exatamente, levando a acurácia a 100% e a interpretabilidade a zero.
+
+### 5.2 `CRW_SSTANOMALY`
+Desvio da SST em relação à climatologia. Mais útil para detectar aquecimento fora de estação, e mais relevante em arquiteturas sequenciais (LSTM) que em árvores. Redundante com HotSpot na maior parte do tempo.
+
+---
+
+## 6. Variáveis excluídas
+
+### 6.1 Redundância direta
+
+| Variável | Duplica | Detalhe |
+|---|---|---|
+| `temperatura` (Copernicus `thetao`) | `CRW_SST` | Mesma grandeza. O CRW é especializado em recifes; o `thetao` local ainda foi extraído a 13,47 m de profundidade, não em superfície. |
+| `SST anomaly` (Copernicus) | `CRW_SSTANOMALY` | Mesma fórmula sobre climatologias diferentes; correlação acima de 0,92. Manter as duas só infla a dimensionalidade. |
+
+### 6.2 Escala temporal incompatível — sistema carbônico
+
+`pH`, `CO₂` e `alcalinidade` formam um sistema interdependente: conhecidos dois dos três mais a temperatura, o terceiro é calculável. Incluí-los juntos cria colinearidade tripla.
+
+Mais decisivo é a escala: a acidificação oceânica move o pH em cerca de 0,2 unidade ao longo de dois séculos. O mecanismo é real e grave — afeta a calcificação e a recuperação pós-evento — mas é **crônico**. Num recorte de dias a semanas, o pH é praticamente uma constante e não separa evento de não-evento.
+
+> **Nota:** o `ph.csv` do projeto contém, na verdade, `talk` (alcalinidade). O pH real está em outro arquivo. Ver [FONTES.md §6.3](FONTES.md) — é um bug ativo em `carregar_historico.py`, independente desta decisão de modelagem.
+
+### 6.3 Mecanismo indireto — eutrofização crônica
+
+`nitrato` e `fosfato` atuam por uma cadeia longa: enriquecimento → bloom → sombreamento e consumo de O₂ → fragilização do coral. A escala é de meses, e a variação espacial supera a temporal — num único ponto, quase não se movem.
+
+Aplica-se o princípio 2.2: o O₂ mede o elo final dessa cadeia.
+
+> **Ressalva honesta para a banca:** existe literatura ligando enriquecimento de nitrogênio à **redução do limiar térmico** de branqueamento, por um caminho fisiológico direto e não apenas pelo bloom. A exclusão aqui se defende pela escala temporal e pela cobertura do O₂ — não pela inexistência do mecanismo. Se algum avaliador levantar o ponto, a resposta correta é essa, não "nitrato não afeta coral".
+
+### 6.4 Sem mecanismo estabelecido para corais
+
+`ferro dissolvido` é micronutriente limitante para fitoplâncton em oceano aberto, sobretudo em regiões HNLC. Não há via estabelecida de efeito direto sobre a simbiose coral–zooxantela, e os efeitos indiretos que teria já estão cobertos por KD490 e O₂.
+
+---
+
+## 7. Bloqueios abertos
+
+| # | Bloqueio | Impacto |
+|---|---|---|
+| 1 | ~~Target `CRW_BAA` circular~~ | ✅ **Resolvido** pelo caminho C: horizonte de N dias na entrega 1, branqueamento observado na entrega 2 (§4) |
+| 2 | Sem PAR de superfície utilizável | `PAR_fundo` não é calculável; KD490 fica reduzido a turbidez |
+| 3 | `profundidade_media_m` só preenchida para Abrolhos | Beer-Lambert usaria 7,5 m fixo para os demais locais |
+| 4 | ~~`carregar_historico.py` lê `talk` como `ph`~~ | ✅ **Neutralizado no novo pipeline**: `normalizacao.resolver_variavel('talk')` levanta `ColunaRecusada`, com teste. O script antigo segue com o bug até ser aposentado. |
+| 5 | ~~DHW recalculado fora da norma NOAA~~ | ✅ **Resolvido no novo pipeline**: o conector lê a coluna `CRW_DHW` oficial, sem recalcular. |
+| 6 | **6 datas ausentes na série do CRW** | Janelas e defasagens que as atravessem ficam mais curtas do que declaram — ver §7.1 |
+| 8 | **Amostra efetiva é de ~4 anos-evento, não 7.173 dias** | Limitação central do trabalho: métrica por episódio, *leave-year-out* obrigatório, e a pergunta da entrega 2 fica difícil com essa base — ver §7.2 |
+| 7 | ~~Target agregado por média espacial~~ | ✅ **Resolvido e reingerido** em 25/07/2026: BAA agregado por máximo, com `baa_area_alerta` ao lado (§4.5). Banco reconstruído — 43.038 medições, Alerta Nível 2 de 160 para 369 registros. |
+| 9 | **As térmicas do GCBD são colineares entre si** | Duas famílias de anomalia para o mesmo calor (`SSTA` contra a média do mês, `TSA` contra o máximo da climatologia): `SSTA_Frequency`×`TSA_Frequency` **r = 0,881**, `Temperature_Kelvin`×`TSA` **r = 0,881**, VIF até 11,7. Com as 8, **4 coeficientes saem invertidos** — `SSTA` = −0,58 diria que anomalia quente protege o coral. Mitigado pelo conjunto reduzido (`TSA_DHW`, `TSA`, `Windspeed`), que zera as inversões, mas **com viés de seleção declarado** — ver [RESULTADOS.md](RESULTADOS.md) §12 |
+| 10 | **`ClimSST` e `SSTA_Mean` do GCBD são inutilizáveis** | `ClimSST` = 262,15 K (−11 °C) em 115 de 313 registros brasileiros — ausência codificada como número; `SSTA_Mean` é constante. Ambas recusadas em `ml/gcbd.py`, com teste. Ver [FONTES.md](FONTES.md) §6.17 |
+
+### 7.2 O tamanho real da amostra são ~19 episódios, não 7.173 dias (medido em 25/07/2026)
+
+Esta é **a limitação mais séria do trabalho** e precisa aparecer no TCC como tal, não ser descoberta pela banca.
+
+Depois da correção da agregação (§4.5), a série tem **598 dias em Alerta Nível 1 ou acima** nos três locais. Isso parece amostra confortável. Não é. Agrupando dias contíguos — tolerando até 3 dias de folga, para que uma lacuna do produto ou uma oscilação diária não parta um evento em dois:
+
+| Local | Dias em alerta | Episódios | Anos com evento |
+|---|---|---|---|
+| Picãozinho (PB) | 294 | 8 | 2020, 2022, 2024, 2025, 2026 |
+| Porto de Galinhas (PE) | 160 | 6 | 2020, 2024, 2025 |
+| Abrolhos (BA) | 144 | 5 | 2020, 2022, 2024, 2025 |
+| **Total** | **598** | **19** | |
+
+Os maiores episódios:
+
+| Período | Local | Duração |
+|---|---|---|
+| 2024-01-27 → 2024-05-23 | Picãozinho | 117 dias |
+| 2024-03-01 → 2024-05-18 | Porto de Galinhas | 79 dias |
+| 2024-03-13 → 2024-05-22 | Abrolhos | 71 dias |
+| 2020-03-03 → 2020-05-08 | Picãozinho | 66 dias |
+
+**Os episódios caem nos mesmos anos nos três locais.** São o mesmo forçante oceanográfico atingindo três pontos da mesma costa — não 19 eventos independentes. O número efetivo de observações independentes está na casa de **quatro anos-evento** (2020, 2022, 2024, 2025), com 2026 aparecendo só em Picãozinho.
+
+#### O que isso obriga
+
+1. **Métrica por evento, não por dia.** Com 92% dos dias sem alerta, um modelo que sempre responde "sem alerta" acerta 92%. Acurácia sobre ~7.000 linhas diárias seria um número bonito e vazio. Usar PR-AUC, e reportar acerto/erro **por episódio**.
+2. **Validação *leave-year-out* deixa de ser preferência e vira obrigação** (§4, regra 3). Com quatro anos-evento, cada dobra remove ~25% do sinal disponível. Isso limita o quanto se pode afinar hiperparâmetro sem vazar.
+3. **A pergunta da entrega 2 fica mais difícil do que parecia.** "Salinidade acrescenta sinal além do DHW?" é uma pergunta sobre quatro eventos. É honesto saber disso *antes* de rodar o experimento, e é argumento a favor de integrar o GCBD (§4.4, caminho A) para ampliar a base de rótulos.
+4. **Dias dentro de um mesmo episódio são fortemente autocorrelacionados.** Tratá-los como amostras independentes infla qualquer intervalo de confiança. Se houver teste estatístico no TCC, a unidade amostral é o episódio.
+
+Medido com contagem de sequências contíguas de `baa >= 3` sobre `MedicaoAmbiental`, três locais, 2020-01-01 a 2026-07-24.
+
+---
+
+### 7.1 Lacunas na série do CRW (medido em 25/07/2026)
+
+A série ingerida (2020-01-01 a 2026-07-23, três locais) tem **6 datas ausentes no produto**, iguais nos três locais e confirmadas em dois espelhos independentes: `2024-01-30`, `2024-07-04`, `2024-07-05`, `2024-07-06`, `2024-07-25`, `2026-04-25`.
+
+São 99,75% de cobertura, mas **três delas são consecutivas** (04–06/07/2024). Isso importa para toda feature construída sobre janela ou defasagem: uma média móvel de 30 dias que atravesse esse trecho é média de 27. A decisão — interpolar, encurtar a janela ou descartar a amostra — precisa ser **explícita no código do modelo** e registrada aqui quando for tomada. O risco não é a perda de 0,25% do dado; é uma feature cujo nome diz uma coisa e cujo conteúdo diz outra.
+
+Detalhes e a evidência de que a lacuna é do produto, não do pipeline, em [FONTES.md](FONTES.md) §1.1.
+
+---
+
+## 8. Como revisar esta decisão
+
+Antes de adicionar ou remover qualquer variável:
+
+1. Verificar em qual **escala temporal** ela varia no ponto de interesse — não em teoria, medindo na série.
+2. Checar se ela **duplica** algo já presente (correlação e, principalmente, relação analítica).
+3. Confirmar que **não deriva do target**, nem o target deriva dela.
+4. Registrar o **mecanismo biológico** que justifica a entrada, com referência.
+5. Atualizar este documento, o [contrato canônico](../backend/docs/contrato_canonico_variaveis.md) e o [FONTES.md](FONTES.md) no mesmo commit.
+
+---
+
+## 9. Histórico
+
+| Data | Alteração |
+|---|---|
+| 27/07/2026 | **`Windspeed` removido do conjunto interpretável da entrega 2.** Ele dava o melhor número (0,717 contra 0,692), mas o efeito vinha de **uma coluna do GCBD que ninguém tinha conferido**, e não sobrevive à troca por vento medido ([RESULTADOS.md](RESULTADOS.md) §20). A diferença de 0,025 já estava declarada como ruído. Fica `TSA_DHW` + `TSA`, com coeficientes +1,011 e +0,374, ambos no sinal físico. Critério registrado: entre um número melhor dentro do ruído e um conjunto em que toda entrada se defende sozinha, escolher o segundo. |
+| 27/07/2026 | **Qualidade da água testada — clorofila, nitrato e silicato.** Sai do mesmo produto do oxigênio, custo quase nulo. **Nenhuma melhora a previsão por ano.** O `silicato_variacao_90d` é a única com efeito distinguível de zero (*d* = +0,396, IC [+0,077, +0,746]), mas colado no zero e entre 9 variáveis testadas. 🚨 **A hipótese do aporte continental não se sustentou**: o silicato correlaciona **+0,363 com a salinidade**, oposto do que uma pluma de água doce produziria. Colinearidade de volta: `nitrato` × `silicato` r = 0,733, com `nitrato` saindo em −0,607 — o que diria que adubo protege coral. **O placar fecha em quatro famílias testadas, todas descrevendo e nenhuma prevendo.** Ver [RESULTADOS.md](RESULTADOS.md) §21. |
+| 26/07/2026 | 🚨 **§3.6 corrigida — o vento também não se confirmou.** A afirmação de que "a variável não térmica que funciona é o vento", escrita horas antes, vinha da coluna `Windspeed` do próprio GCBD, nunca verificada. Contra vento medido do ERA5: concordam sobre o vento (r = +0,708), discordam sobre o coral (*d* = −0,461 contra **−0,057**, IC do ERA5 incluindo zero), e substituir deixa o modelo pior que sem vento. **Placar real: nenhuma variável não térmica testada se confirma como preditora** — salinidade, oxigênio e vento, os três descrevem e nenhum prevê. O parágrafo original fica com o aviso, mesma regra do indício do oxigênio. Ver [RESULTADOS.md](RESULTADOS.md) §20. |
+| 26/07/2026 | **§3.6 e §4.4 — o passo 2 foi executado, e a resposta à pergunta central é não.** Salinidade e oxigênio de reanálise, na janela antes de cada visita, **não superam o modelo só-térmico** e sozinhas ficam no acaso. O padrão do oxigênio da entrega 1 — separação descritiva sem capacidade preditiva — **se repetiu em base independente, com outro alvo e outro período**, o que o promove de indício a fato sobre o problema. As direções são sempre as fisicamente esperadas (oxigênio e salinidade mais baixos e caindo onde branqueou). Registrada a ressalva séria de resolução ([RESULTADOS.md](RESULTADOS.md) §18) e o achado de que **a não térmica que funciona é o vento** — 2ª mais importante, coeficiente −0,72, e correlacionada com a trajetória do oxigênio em r = 0,554. |
+| 26/07/2026 | **§4.4 — o caminho A foi executado, e a pergunta recebeu resposta.** Com branqueamento observado como alvo, **o sinal térmico sozinho não explica**: a régua da NOAA tem precisão 1,000 e revocação 0,114, e **78 dos 88 branqueamentos brasileiros ocorreram com o acumulador térmico em zero**. Isso confirma que a conclusão da entrega 1 — "variáveis não térmicas não contribuem" — era efeito do alvo, não do fenômeno. Corrigido o tamanho da base: **166 visitas**, não 313 amostras. Abertos dois bloqueios novos em §7: **(9)** as térmicas do GCBD são colineares entre si (`SSTA` e `TSA` são duas réguas do mesmo calor, r = 0,881, VIF até 11,7, 4 coeficientes invertidos) e **(10)** `ClimSST` e `SSTA_Mean` são inutilizáveis. |
+| 25/07/2026 | Documento criado a partir da sessão de seleção de variáveis. Registradas as 5 features baseline, 2 opcionais e 7 exclusões. Acrescentadas duas constatações verificadas em dados: a circularidade do `CRW_BAA` como target (§4.2) e a indisponibilidade de PAR de superfície (§3.5). |
+| 25/07/2026 | **§3.6 atualizada — o indício do oxigênio não se confirmou.** Medida a importância dentro do modelo treinado, a *trajetória* do oxigênio contribui −0,001 (logística) e −0,006 (boosting): ruído. Só o *nível* contribui algo pequeno e consistente (+0,021). A separação de 0,61 σ nas transições continua correta como descrição — ela é que não virou capacidade preditiva, provavelmente por redundância com as térmicas. O parágrafo original fica no documento com o aviso em cima: apagá-lo esconderia o percurso. Ver [RESULTADOS.md](RESULTADOS.md) §7. |
+| 25/07/2026 | **§3.6 — janelas retrospectivas implementadas e medidas.** Variação em 7 e 14 dias entra como feature (`backend/ml/dataset.py`), ao custo de 1,1% das amostras. A medição contrariou a expectativa: **a trajetória do DHW quase não distingue início de fim de episódio (0,27 σ)**, porque o DHW é acumulador de 12 semanas e sobe nos dois casos. Quem separa é a trajetória da **SST** (0,77 σ, com o sinal certo) e — o achado relevante — a do **oxigênio** (0,61 σ), primeira evidência de variável não-térmica carregando informação onde as térmicas falham. Salinidade não separa (0,02 σ). Números sugestivos, não estabelecidos: n≈95 sobre ~4 anos-evento correlacionados. |
+| 25/07/2026 | **§7.2 — o tamanho real da amostra medido.** Os 598 dias em alerta se agrupam em apenas **19 episódios**, concentrados nos mesmos quatro anos nos três locais (2020, 2022, 2024, 2025). A amostra efetiva são ~4 anos-evento, não 7.173 dias. Consequências registradas: métrica por episódio e não por dia, *leave-year-out* obrigatório, autocorrelação dentro do episódio, e a pergunta da entrega 2 exigindo o GCBD para ter base suficiente. Registrado como bloqueio 8 — a limitação central do trabalho. |
+| 25/07/2026 | **Agregação do target corrigida (§4.5).** O BAA é categoria ordinal e estava sendo agregado dos ~121 pixels por média, o que subestimava o alerta — Alerta Nível 1 registrado num dia com 37% da área em Alerta Nível 2. Passa a ser agregado por máximo. Nova variável `baa_area_alerta` (fração do recife em Alerta Nível 1 ou acima) fica registrada como segunda resposta candidata, e **proibida como feature** de um modelo que prevê `baa`. A medição de circularidade da §4.2 não é afetada: foi feita no dado por pixel. |
+| 25/07/2026 | **Target decidido: caminho C.** Entrega 1 = previsão de `CRW_BAA` com horizonte de N dias; entrega 2 = branqueamento observado via GCBD. Registradas as cinco regras que a entrega 1 impõe ao pipeline e ao treino. |

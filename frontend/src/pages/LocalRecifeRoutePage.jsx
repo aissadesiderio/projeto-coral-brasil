@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { obterDatasetsRelacionadosFallback } from '../data/datasets';
 import { FALLBACK_RECIFES } from '../data/recifeData';
-import { buscarJson } from '../utils/api';
+import { buscarDatasetsRelacionadosPorLocal, buscarJson } from '../utils/api';
+import { normalizarDatasetCatalogo } from '../utils/datasets';
 import { combinarDetalhe } from '../utils/recifes';
 import { ROTAS_APP } from '../utils/navigation';
 import LocalRecifePage from './LocalRecifePage';
@@ -64,6 +66,10 @@ export default function LocalRecifeRoutePage({
   const detalheCache = slug ? detalhesPorSlug[slug] : null;
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
   const [erroDetalhe, setErroDetalhe] = useState(false);
+  const [datasetsRelacionados, setDatasetsRelacionados] = useState([]);
+  const [carregandoDatasetsRelacionados, setCarregandoDatasetsRelacionados] = useState(false);
+  const [erroDatasetsRelacionados, setErroDatasetsRelacionados] = useState(false);
+  const [usandoFallbackDatasets, setUsandoFallbackDatasets] = useState(false);
 
   const localBase = useMemo(
     () =>
@@ -113,6 +119,51 @@ export default function LocalRecifeRoutePage({
     };
   }, [detalheCache, localBase, setDetalhesPorSlug, slug]);
 
+  useEffect(() => {
+    let ativo = true;
+
+    if (!slug || !localBase) {
+      setDatasetsRelacionados([]);
+      setCarregandoDatasetsRelacionados(false);
+      setErroDatasetsRelacionados(false);
+      setUsandoFallbackDatasets(false);
+      return undefined;
+    }
+
+    async function carregarDatasetsRelacionados() {
+      setCarregandoDatasetsRelacionados(true);
+      setErroDatasetsRelacionados(false);
+      setUsandoFallbackDatasets(false);
+      setDatasetsRelacionados([]);
+
+      const payload = await buscarDatasetsRelacionadosPorLocal(slug);
+      if (!ativo) {
+        return;
+      }
+
+      if (Array.isArray(payload)) {
+        setDatasetsRelacionados(payload.map(normalizarDatasetCatalogo).filter(Boolean));
+        setCarregandoDatasetsRelacionados(false);
+        return;
+      }
+
+      const fallbackDatasets = obterDatasetsRelacionadosFallback(slug)
+        .map(normalizarDatasetCatalogo)
+        .filter(Boolean);
+
+      setDatasetsRelacionados(fallbackDatasets);
+      setErroDatasetsRelacionados(true);
+      setUsandoFallbackDatasets(fallbackDatasets.length > 0);
+      setCarregandoDatasetsRelacionados(false);
+    }
+
+    carregarDatasetsRelacionados();
+
+    return () => {
+      ativo = false;
+    };
+  }, [localBase, slug]);
+
   const recifeAtual = useMemo(
     () => combinarDetalhe(localBase, detalheCache),
     [detalheCache, localBase],
@@ -134,6 +185,10 @@ export default function LocalRecifeRoutePage({
       onOpenEspecie={onOpenEspecie}
       carregandoDetalhe={carregandoDetalhe}
       erroDetalhe={erroDetalhe}
+      datasetsRelacionados={datasetsRelacionados}
+      carregandoDatasetsRelacionados={carregandoDatasetsRelacionados}
+      erroDatasetsRelacionados={erroDatasetsRelacionados}
+      usandoFallbackDatasets={usandoFallbackDatasets}
     />
   );
 }

@@ -89,6 +89,7 @@ export default function App() {
                 locais={locais}
                 carregando={carregandoLocais}
                 erroCarregamento={erroCarregamentoLocais}
+                siteOffline={siteOffline}
               />
             }
           />

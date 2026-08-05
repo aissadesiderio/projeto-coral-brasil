@@ -11,36 +11,118 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import re
+import sys
 from pathlib import Path
 
+try:
+    import environ
+except ImportError as exc:  # pragma: no cover - depende do ambiente, nao do codigo
+    # Quase sempre significa "esqueci de ativar o venv". O traceback padrao do
+    # Django para isso e um ModuleNotFoundError no meio de dez frames de
+    # importlib, que nao sugere a causa nem o conserto.
+    raise ImportError(
+        'Nao foi possivel importar "environ" (django-environ).\n\n'
+        f'Python em uso: {sys.executable}\n\n'
+        'Se esse caminho nao aponta para a pasta venv do projeto, o ambiente '
+        'virtual nao esta ativo. Ative com:\n'
+        '    .\\venv\\Scripts\\activate\n\n'
+        'Se estiver ativo e o erro continuar, instale as dependencias:\n'
+        '    pip install -r requirements.txt'
+    ) from exc
 
-def env_bool(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}
-
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-(d_7#2p8#ut+9ig647u(@@2-*8y&j0(1j-hp#(0+v8d#v&2w3%',
+env = environ.Env()
+
+# Le backend/.env quando existir. Variaveis reais de processo tem precedencia.
+environ.Env.read_env(BASE_DIR / '.env')
+
+# Chave de linha do .env: o mesmo formato que o django-environ reconhece.
+_LINHA_DO_ENV = re.compile(r'\A(?:export )?([A-Za-z_0-9]+)=')
+
+
+def _aparar_valores_do_env(caminho):
+    """Remove espaco em branco nas pontas dos valores vindos do `.env`.
+
+    🚨 **O django-environ nao faz isso, e o resultado e um erro que aponta
+    para o lugar errado.** Ele le a linha com `(.*)\\Z` e so descasca aspas —
+    um espaco sobrando no fim sobrevive ate o valor final. Aconteceu em
+    29/07/2026, num `.env` montado por copiar-e-colar:
+
+        DATABASE_URL=postgres://.../coral_brasil<espaco>
+
+    O PostgreSQL respondeu `FATAL: database "coral_brasil " does not exist`, e
+    a leitura natural dessa mensagem e "o banco nao foi criado" — manda quem
+    esta diagnosticando conferir o Docker, que estava certo o tempo todo. A
+    unica pista era o espaco entre o `l` e a aspa.
+
+    O mesmo caractere em `NEO4J_PASSWORD` produziria "credencial invalida" com
+    a senha certa digitada, e em `NOAA_ERDDAP_DATASET`, um 404.
+
+    ⚠️ **So mexe nas chaves que o proprio `backend/.env` declara.** Varrer
+    `os.environ` inteiro alteraria variaveis do sistema que nao sao nossas —
+    e espaco no fim de uma delas pode ser deliberado. Aqui nao pode: nenhum
+    valor deste projeto termina em espaco de proposito.
+    """
+    if not caminho.exists():
+        return ()
+
+    aparadas = []
+    for linha in caminho.read_text(encoding='utf-8').splitlines():
+        casa = _LINHA_DO_ENV.match(linha)
+        if not casa:
+            continue
+        chave = casa.group(1)
+        valor = os.environ.get(chave)
+        if valor is not None and valor != valor.strip():
+            os.environ[chave] = valor.strip()
+            aparadas.append(chave)
+    return tuple(aparadas)
+
+
+ENV_APARADAS = _aparar_valores_do_env(BASE_DIR / '.env')
+
+DEBUG = env.bool('DJANGO_DEBUG', default=False)
+
+# Uma variavel definida como vazia (`DJANGO_SECRET_KEY=` no .env) nao cai no
+# default do django-environ: ele devolve string vazia. Sem este tratamento, um
+# .env copiado do exemplo trocaria a mensagem clara abaixo por um
+# "SECRET_KEY must not be empty" do proprio Django, bem mais dificil de ligar
+# a causa.
+_secret_key = env('DJANGO_SECRET_KEY', default='').strip()
+
+# Fail fast: fora de DEBUG, rodar sem SECRET_KEY explicita e um erro de
+# configuracao, nao algo para silenciar com um fallback inseguro.
+if _secret_key:
+    SECRET_KEY = _secret_key
+elif DEBUG:
+    SECRET_KEY = 'django-insecure-apenas-para-desenvolvimento-local'
+else:
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY nao esta definida (ou esta vazia) e DJANGO_DEBUG '
+        'e False.\n\n'
+        'Para desenvolvimento local, crie backend/.env com:\n'
+        '    DJANGO_DEBUG=True\n'
+        '    DJANGO_SECRET_KEY=<chave>\n\n'
+        'Gere a chave com:\n'
+        '    python -c "from django.core.management.utils import '
+        'get_random_secret_key as k; print(k())"\n\n'
+        'Veja backend/.env.example. O arquivo .env nao e versionado.'
+    )
+
+ALLOWED_HOSTS = env.list(
+    'DJANGO_ALLOWED_HOSTS',
+    default=['localhost', '127.0.0.1'],
 )
 
-DEBUG = env_bool('DJANGO_DEBUG', True)
+OFFLINE_MODE = env.bool('OFFLINE_MODE', default=False)
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get(
-        'DJANGO_ALLOWED_HOSTS',
-        'localhost,127.0.0.1',
-    ).split(',')
-    if host.strip()
-]
-
-OFFLINE_MODE = env_bool('OFFLINE_MODE', False)
-ENABLE_CODE_SYNC = env_bool('ENABLE_CODE_SYNC', False)
+# Permite a exportacao do banco para arquivos de codigo (recifeData.js).
+# Desligado por padrao: editar dados nao deve reescrever arquivos-fonte.
+ENABLE_CODE_SYNC = env.bool('ENABLE_CODE_SYNC', default=False)
 
 # Integracoes externas desativadas por padrao durante a reestruturacao local.
 USE_S3_STORAGE = False
@@ -89,11 +171,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'coral_site.wsgi.application'
 
+# Banco configurado por URL, para que a troca SQLite -> PostgreSQL seja uma
+# mudanca de ambiente e nao de codigo. Ex.:
+#   DATABASE_URL=postgres://usuario:senha@localhost:5432/coral_brasil
+# Para PostgreSQL, descomente psycopg no requirements.txt.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db_url(
+        'DATABASE_URL',
+        default=f'sqlite:///{(BASE_DIR / "db.sqlite3").as_posix()}',
+    )
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -111,23 +197,18 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get(
-        'CORS_ALLOWED_ORIGINS',
-        'http://localhost:3000',
-    ).split(',')
-    if origin.strip()
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=['http://localhost:3000'],
+)
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get(
-        'CSRF_TRUSTED_ORIGINS',
-        'https://projetocoralbrasil.com.br,https://www.projetocoralbrasil.com.br',
-    ).split(',')
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = env.list(
+    'CSRF_TRUSTED_ORIGINS',
+    default=[
+        'https://projetocoralbrasil.com.br',
+        'https://www.projetocoralbrasil.com.br',
+    ],
+)
 
 LANGUAGE_CODE = 'en-us'
 
@@ -145,6 +226,160 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
-NEO4J_USER = os.environ.get('NEO4J_USER', 'neo4j')
-NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', '')
+# --- Seguranca de transporte -----------------------------------------------
+# Ativas por padrao fora de DEBUG. Podem ser desligadas por ambiente quando o
+# TLS e terminado num proxy reverso ou num teste local com DEBUG=False.
+SECURE_SSL_REDIRECT = env.bool('DJANGO_SECURE_SSL_REDIRECT', default=not DEBUG)
+SESSION_COOKIE_SECURE = env.bool('DJANGO_SESSION_COOKIE_SECURE', default=not DEBUG)
+CSRF_COOKIE_SECURE = env.bool('DJANGO_CSRF_COOKIE_SECURE', default=not DEBUG)
+
+# HSTS: comeca em 0 de proposito. So aumente (ex.: 31536000 = 1 ano) depois de
+# confirmar que todo o dominio, incluindo subdominios, serve HTTPS - o header
+# e praticamente irreversivel do lado do navegador.
+SECURE_HSTS_SECONDS = env.int('DJANGO_SECURE_HSTS_SECONDS', default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
+    'DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False
+)
+SECURE_HSTS_PRELOAD = env.bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
+
+# Confia no cabecalho do proxy reverso para detectar HTTPS (Heroku, Render,
+# nginx). Sem isto, SECURE_SSL_REDIRECT entra em loop atras de um proxy.
+if env.bool('DJANGO_BEHIND_PROXY', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# --- Fontes externas de dados (pipeline de ingestao) ------------------------
+# Servidor e dataset andam em par: cada espelho ERDDAP publica o produto do
+# Coral Reef Watch sob um identificador proprio.
+#
+# Padrao PACIOOS: e o unico espelho que responde dentro e fora de rede com
+# dominio federal, e o backfill nos dois espelhos deu resultado identico bloco
+# a bloco. Ver ingestao/conectores/noaa_crw.py para a evidencia completa.
+NOAA_ERDDAP_SERVER = env(
+    'NOAA_ERDDAP_SERVER',
+    default='https://pae-paha.pacioos.hawaii.edu/erddap',
+)
+NOAA_ERDDAP_DATASET = env('NOAA_ERDDAP_DATASET', default='dhw_5km')
+
+# Quantas vezes tentar antes de desistir de uma fonte. Vale so para falhas
+# passageiras (503, timeout); certificado invalido ou 403 falham de primeira.
+# Ver backend/ingestao/retentativa.py.
+INGESTAO_TENTATIVAS = env.int('INGESTAO_TENTATIVAS', default=3)
+
+# Tamanho do bloco em que o periodo e fatiado antes de virar requisicao.
+# Pedir seis anos de uma vez faz o ERDDAP responder 408/ReadTimeout.
+INGESTAO_JANELA_DIAS = env.int('INGESTAO_JANELA_DIAS', default=180)
+
+# Copernicus Marine. A biblioteca `copernicusmarine` le estas variaveis
+# direto do ambiente; como o django-environ exporta o que le do .env para
+# os.environ, basta declara-las la. Sao espelhadas aqui para que o comando
+# `testar_fontes` consiga relatar se estao configuradas.
+COPERNICUSMARINE_SERVICE_USERNAME = env(
+    'COPERNICUSMARINE_SERVICE_USERNAME', default=''
+)
+COPERNICUSMARINE_SERVICE_PASSWORD = env(
+    'COPERNICUSMARINE_SERVICE_PASSWORD', default=''
+)
+
+# Series coletadas do Copernicus. `kd490` fica de fora do padrao: so existe de
+# 2023-11-15 em diante e nao tem reanalise, o que cortaria o treino de 6,5 para
+# 2,7 anos. Ver docs/VARIAVEIS.md secao 3.5.
+COPERNICUS_SERIES = env.list(
+    'COPERNICUS_SERIES', default=['salinidade', 'oxigenio']
+)
+
+NEO4J_URI = env('NEO4J_URI', default='bolt://localhost:7687')
+NEO4J_USER = env('NEO4J_USER', default='neo4j')
+NEO4J_PASSWORD = env('NEO4J_PASSWORD', default='')
+
+# ---------------------------------------------------------------------------
+# Django REST Framework
+# ---------------------------------------------------------------------------
+# 🚨 **Paginacao e por view, e NAO global. A decisao tem historia.**
+#
+# `MedicaoAmbiental` tem 57.420 linhas e cresce 24 por dia. Sem paginacao, o
+# endpoint devolveria a serie inteira numa resposta - alguns MB de JSON,
+# montados em memoria antes de sair. Ate 27/07/2026 o projeto nao tinha
+# `REST_FRAMEWORK` configurado, ou seja, paginacao desligada.
+#
+# A primeira tentativa foi ligar `DEFAULT_PAGINATION_CLASS` aqui. **Errado**, e
+# tres testes existentes flagraram: isso troca a resposta de TODA lista de um
+# array cru para um envelope `{count, results, ...}`. Os endpoints
+# `/api/locais/`, `/api/datasets/`, `/api/especies/` e `/api/monitoramento/`
+# ja sao consumidos pelo frontend como array — seria **quebra de contrato
+# disfarcada de configuracao**.
+#
+# E eles nao precisam: tem 3, 9, 9 e 3 registros. O unico com volume e o das
+# medicoes, que e novo e portanto nao tem contrato a quebrar.
+#
+# Regra que fica: **paginacao se liga onde ha volume**, declarada na view.
+DRF_PAGE_SIZE = env.int('DRF_PAGE_SIZE', default=100)
+
+# Teto de `page_size`. O parametro vem da query string: sem limite,
+# `?page_size=999999` desfaz a paginacao a pedido do cliente.
+DRF_MAX_PAGE_SIZE = env.int('DRF_MAX_PAGE_SIZE', default=1000)
+
+# ---------------------------------------------------------------------------
+# Painel de risco
+# ---------------------------------------------------------------------------
+# Qual artefato o endpoint /api/painel-risco/ carrega. E derivado e nao
+# versionado: se nao existir no disco, o endpoint responde 503 pedindo
+# "manage.py treinar_final" em vez de servir predicao de origem desconhecida.
+PAINEL_MODELO = env('PAINEL_MODELO', default='entrega1_baa')
+
+# 🚨 **O limiar de alerta e decisao de produto, e por isso mora aqui e vai no
+# payload — nao esta escondido no codigo do modelo.**
+#
+# 🚨 **Substituido por uma ESCALA em 30/07/2026.** Ver `PAINEL_NIVEIS` abaixo.
+# Este valor continua existindo porque `alerta` e `limiar` viajam no payload
+# desde 27/07 e ha consumidor lendo os dois; ele passou a ser **derivado** do
+# degrau que exige acao, e nao mais a decisao em si.
+#
+# O historico da decisao antiga, e por que ela caiu:
+#
+# Adotou-se 0,10 em 27/07/2026 com o criterio "priorizar antecedencia". A
+# justificativa registrada dizia que 0,10 comprava o episodio de **nove dias**
+# de Picaozinho em 2022. 🚨 **Era falso, e o erro so apareceu em 30/07**: a
+# tabela de docs/RESULTADOS.md secao 22.9.2 saiu com duas linhas trocadas.
+# 0,10 tambem perde o episodio de nove dias; o que ele recuperava sobre o 0,20
+# era um episodio de **um dia** (Porto de Galinhas, 07/05/2020). O de nove
+# dias so volta em 0,05.
+#
+# ⚠️ **Nao existe corte natural, e o 0,20 anterior nunca foi escolhido.** Ate a
+# recalibracao, `class_weight='balanced'` empurrava a probabilidade para cima,
+# o que equivale a baixar o limiar sem declarar: o 0,50 do `predict` operava
+# como 0,20. O 0,20 herdou essa equivalencia — nao uma decisao.
+#
+# ⚠️ **Nenhum corte pega todos os episodios.** Um evento de Picaozinho
+# (21–23/04/2026) escapa em todos os varridos. O teto ai e do modelo.
+PAINEL_LIMIAR = env.float('PAINEL_LIMIAR', default=0.20)
+
+# ---------------------------------------------------------------------------
+# A escala de aviso
+# ---------------------------------------------------------------------------
+# 🚨 **Tres degraus em vez de um corte, decidido em 30/07/2026.** Um corte
+# unico obrigava a escolher entre duas coisas que nao se conciliam:
+#
+#   - cobrir tudo  -> so 0,05 alcanca o teto do modelo (18/19 episodios),
+#                     e ali metade dos avisos e falsa;
+#   - ser levado a serio -> 0,20 acerta 7 em 10, mas descarta de proposito
+#                     dois episodios que o modelo conseguia pegar.
+#
+# Com escala os dois deixam de competir: o degrau mais baixo garante cobertura
+# **sem pedir acao**, e o mais alto pede acao com precisao para sustenta-la.
+#
+# Medido em 30/07/2026 sobre as predicoes fora da dobra (7.095 amostras):
+#
+#   corte  precisao  episodios  1o dia  atraso  falsos/ano/recife  dias/ano
+#    0,05    0,498     18/19      19    0,45 d       27,0            53,7
+#    0,20    0,719     16/19      16    1,50 d       10,0            35,5
+#    0,50    0,826     14/19      10    4,94 d        4,5            25,7
+#
+# ⚠️ **Isto nao e o `RISCO_STATUS` legado de volta.** Aquele tinha quatro
+# niveis herdados do `StatusPredicao` e nenhum numero por tras; foi removido em
+# 28/07/2026. A diferenca nao e de forma, e de procedencia.
+#
+# O publico a que a escala responde esta declarado em docs/VISAO_GERAL.md
+# secao 2.1. Reproduza o material com: python backend/manage.py limiar
+#
+# Deixe vazio para usar a escala canonica de `ml/niveis.py`.
+PAINEL_NIVEIS = []

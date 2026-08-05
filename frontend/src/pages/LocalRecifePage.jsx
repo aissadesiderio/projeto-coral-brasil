@@ -1,15 +1,14 @@
-import { Activity, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import CardEspecie from '../components/CardEspecie';
 import DatasetCard from '../components/DatasetCard';
 import ImagemRecife from '../components/ImagemRecife';
-import PainelRisco from '../components/PainelRisco';
+import PainelPredicao from '../components/PainelPredicao';
 import SectionTitle from '../components/SectionTitle';
-import { obterDatasetsRelacionados } from '../data/datasets';
+import SerieAmbiental from '../components/SerieAmbiental';
 import { formatarData, formatarLocal } from '../utils/formatters';
 import { ROTAS_APP } from '../utils/navigation';
-import { possuiPainelCompleto } from '../utils/recifes';
 
 export default function LocalRecifePage({
   recife,
@@ -18,11 +17,12 @@ export default function LocalRecifePage({
   onOpenEspecie,
   carregandoDetalhe = false,
   erroDetalhe = false,
+  datasetsRelacionados = [],
+  carregandoDatasetsRelacionados = false,
+  erroDatasetsRelacionados = false,
+  usandoFallbackDatasets = false,
 }) {
-  const medicaoAmbientalAtual = recife.monitoramento_recente;
-  const painelDisponivel = possuiPainelCompleto(medicaoAmbientalAtual);
   const especiesAssociadas = recife.especies || [];
-  const datasetsRelacionados = obterDatasetsRelacionados(recife.slug);
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -72,34 +72,26 @@ export default function LocalRecifePage({
 
       <section className="space-y-4">
         <SectionTitle
-          titulo="Painel de predicao"
-          descricao={`Painel consolidado de predicao de risco e monitoramento associado a ${recife.nome}.`}
+          titulo="Previsao de estresse termico"
+          descricao={`Probabilidade de alerta termico em ${recife.nome} nos proximos 7 dias, calculada a partir da serie do satelite.`}
         />
 
-        {painelDisponivel ? (
-          <PainelRisco dados={medicaoAmbientalAtual} />
-        ) : (
-          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            O painel de predicao permanece desabilitado para este recife ate que as
-            variaveis obrigatorias sejam completadas.
-          </div>
-        )}
+        {/* O proprio painel decide o que mostrar em cada estado — inclusive
+            quando falta dado. O portao anterior exigia sete campos do modelo
+            legado, dois deles de variaveis que o projeto nem coleta (`par` e
+            `kd490`), e por isso nunca liberava com dado real. Aquela funcao
+            (`possuiPainelCompleto`) foi removida em 28/07/2026 junto com o
+            resto da camada legada. */}
+        <PainelPredicao slug={recife.slug} publicOffline={siteOffline} />
+      </section>
 
-        <div className="rounded-2xl border border-sand-dark/20 bg-white p-4 shadow-sm sm:p-5">
-          <p className="inline-flex items-center gap-2 text-sm font-medium text-ocean-dark">
-            {painelDisponivel ? (
-              <>
-                <CheckCircle2 size={16} />
-                Variaveis minimas disponiveis para predicao nesta localizacao.
-              </>
-            ) : (
-              <>
-                <AlertTriangle size={16} />
-                Ainda faltam variaveis essenciais para liberar a predicao.
-              </>
-            )}
-          </p>
-        </div>
+      <section className="space-y-4">
+        <SectionTitle
+          titulo="A serie medida"
+          descricao={`O que o satelite registrou em ${recife.nome}, com a proveniencia de cada valor. E a entrada da previsao acima — nao a previsao.`}
+        />
+
+        <SerieAmbiental slug={recife.slug} publicOffline={siteOffline} />
       </section>
 
       <section className="space-y-4">
@@ -133,7 +125,20 @@ export default function LocalRecifePage({
           descricao={`Datasets do catalogo geral que fazem referencia direta a ${recife.nome}.`}
         />
 
-        {datasetsRelacionados.length > 0 ? (
+        {erroDatasetsRelacionados && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            Nao foi possivel atualizar os datasets relacionados por API agora.
+            {usandoFallbackDatasets
+              ? ' Exibindo uma referencia local transitoria quando disponivel.'
+              : ''}
+          </div>
+        )}
+
+        {carregandoDatasetsRelacionados && datasetsRelacionados.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
+            Carregando datasets relacionados desta localizacao...
+          </div>
+        ) : datasetsRelacionados.length > 0 ? (
           <div className="grid gap-5 lg:grid-cols-2">
             {datasetsRelacionados.map((dataset) => (
               <DatasetCard key={dataset.id} item={dataset} compact />
@@ -141,7 +146,9 @@ export default function LocalRecifePage({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
-            Ainda nao ha datasets relacionados diretamente a esta localizacao.
+            {erroDatasetsRelacionados
+              ? 'Nao foi possivel carregar datasets relacionados no momento e nenhuma referencia local estava disponivel.'
+              : 'Ainda nao ha datasets relacionados diretamente a esta localizacao.'}
           </div>
         )}
       </section>

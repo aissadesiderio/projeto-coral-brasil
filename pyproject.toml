@@ -1,0 +1,74 @@
+# Configuracao de ferramentas de qualidade do Coral Brasil.
+# As dependencias do projeto ficam em requirements.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [
+    "venv",
+    "*/migrations/*",
+    "backend/aquaculture/generated_admin_sync.py",  # arquivo gerado
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "DJ",   # flake8-django
+    "C4",   # comprehensions
+    "SIM",  # simplify
+]
+ignore = [
+    "E501",  # comprimento de linha ja e tratado pelo formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/aquaculture/tests.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+# ---------------------------------------------------------------------------
+# Testes: o executor e o `manage.py test`, e nao ha secao de pytest aqui
+# ---------------------------------------------------------------------------
+# 🚨 Havia uma `[tool.pytest.ini_options]`, removida em 30/07/2026, e ela era
+# **enganosa em dois niveis ao mesmo tempo**:
+#
+# 1. `python_files = ["test_*.py", "tests.py"]` nao casava com quase nada. Os
+#    arquivos deste projeto se chamam `testes_*.py` — com "e", em portugues —,
+#    e `test_*` exige o sublinhado logo depois de "test". Dos 24 arquivos de
+#    teste, o padrao via **4**; os outros 20, incluindo todos os `testes_*.py`,
+#    eram invisiveis.
+# 2. Mesmo com o padrao corrigido nao funcionaria: `pytest` e `pytest-django`
+#    nao estao no requirements.txt nem instalados, entao o
+#    `DJANGO_SETTINGS_MODULE` daquela secao nao era lido por ninguem e todo
+#    `TestCase` erraria por falta de banco.
+#
+# ⚠️ **O estrago nao era quebrar o CI — era o numero parcial.** Uma IDE que
+# detecta a secao (VS Code e PyCharm procuram exatamente por ela) ligaria o
+# pytest sozinha e mostraria "4 testes" num projeto com mais de 600. Zero teste
+# se le como "pytest nao esta configurado aqui"; quatro se le como "este
+# projeto quase nao tem teste". O numero parcial e o que mente.
+#
+# Removida em vez de corrigida porque a condicao para corrigi-la nao se
+# sustenta: o pytest nao e usado. O CI e o desenvolvimento rodam
+#
+#     cd backend && python manage.py test
+#
+# que usa o discovery do unittest, cujo padrao e `test*.py` — **sem** o
+# sublinhado — e por isso enxerga os `testes_*.py` normalmente. A convencao de
+# nome esta protegida por `coral_site/testes_configuracao.py`, que falha se
+# algum arquivo de teste deixar de ser descoberto.
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "*/migrations/*",
+    "*/tests.py",
+    "backend/manage.py",
+    "backend/coral_site/wsgi.py",
+    "backend/coral_site/asgi.py",
+]

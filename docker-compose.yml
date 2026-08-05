@@ -1,0 +1,95 @@
+# Infraestrutura local do Coral Brasil: PostgreSQL + Neo4j.
+#
+# Sobe os dois bancos com um comando, nas mesmas versoes em qualquer maquina:
+#
+#     docker compose up -d
+#
+# Nao ha Dockerfile aqui de proposito. Dockerfile serve para *construir* uma
+# imagem; o Postgres e o Neo4j ja publicam imagens oficiais, entao o que este
+# arquivo faz e compo-las. Escrever um Dockerfile para eles seria reconstruir
+# o que ja existe, e ficar responsavel por atualizar.
+#
+# O Django NAO esta aqui, e isso e deliberado: durante o desenvolvimento o
+# `manage.py` roda dezenas de vezes por sessao, e cada uma delas passaria a
+# custar um rebuild de imagem. O venv no host continua sendo o caminho certo
+# para a aplicacao; o container e para o que e infraestrutura.
+#
+# Ver docs/arquitetura.md para o papel de cada banco. Resumo: o PostgreSQL e a
+# fonte unica de escrita, o Neo4j e projecao derivada e reconstruivel.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: coral-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-coral_brasil}
+      POSTGRES_USER: ${POSTGRES_USER:-coral}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coral_dev_local}
+      # Sem isto o initdb usa a locale da imagem e a ordenacao de texto muda
+      # entre maquinas - o mesmo ORDER BY devolve ordem diferente.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_dados:/var/lib/postgresql/data
+    healthcheck:
+      # `docker compose up` so reporta "healthy" quando o banco aceita conexao.
+      # Sem isto, `migrate` logo apos o `up` falha por o Postgres ainda estar
+      # subindo - o container existe antes de o servico responder.
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-coral} -d ${POSTGRES_DB:-coral_brasil}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: coral-neo4j
+    restart: unless-stopped
+    environment:
+      # A senha precisa ter no minimo 8 caracteres: o Neo4j 5 recusa a subir
+      # com menos, e a mensagem so aparece no log do container.
+      #
+      # 🚨 O usuario vai **literal**, e nao por variavel. O Neo4j so aceita
+      # `neo4j` como administrador inicial; qualquer outro valor faz o
+      # entrypoint sair com codigo 1 antes de o banco existir, e o Docker
+      # reiniciar para sempre. O `ps` mostra so `Restarting (1)` e a coluna
+      # PORTS vazia — o motivo (`Invalid admin username, it must be neo4j.`)
+      # fica apenas em `docker compose logs neo4j`.
+      #
+      # Ate 30/07/2026 esta linha usava ${NEO4J_USER:-neo4j}, oferecendo um
+      # botao que o Neo4j nao aceita: um NEO4J_USER sobrando no ambiente do
+      # Windows derrubou o container em laco numa das maquinas do projeto. O
+      # NEO4J_USER continua valendo para *conectar* (healthcheck e
+      # backend/.env), que e outra coisa.
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-coral_dev_local}
+      # Limites modestos: numa maquina de desenvolvimento o Neo4j reserva
+      # memoria com folga por padrao e briga com o resto do sistema.
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512M
+    ports:
+      - '${NEO4J_HTTP_PORT:-7474}:7474'   # Neo4j Browser (interface web)
+      - '${NEO4J_BOLT_PORT:-7687}:7687'   # protocolo Bolt (o driver Python)
+    volumes:
+      - neo4j_dados:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-coral_dev_local} "RETURN 1" > /dev/null 2>&1 || exit 1',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+# Volumes nomeados, e nao pastas do projeto. O dado sobrevive a
+# `docker compose down` e a `docker compose up` de novo; some so com
+# `docker compose down -v`, que e o comando a evitar sem backup.
+volumes:
+  postgres_dados:
+  neo4j_dados:
+  neo4j_logs:

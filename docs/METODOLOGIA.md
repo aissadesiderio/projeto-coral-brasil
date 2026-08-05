@@ -1,0 +1,390 @@
+# Metodologia — Como o modelo é avaliado
+
+Este documento explica **o desenho do experimento**: o que estamos tentando
+responder, contra o que o modelo é comparado, e como o teste é feito sem
+trapaça. É o documento que vira o capítulo de metodologia do TCC.
+
+📖 **Existe uma versão sem jargão deste documento**, com o mesmo conteúdo e
+analogias no lugar dos termos técnicos:
+[METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md). Use aquela para explicar a
+alguém ou apresentar; esta para implementar e auditar.
+
+Os outros documentos respondem outras perguntas:
+[FONTES.md](FONTES.md) diz de onde vêm os dados,
+[VARIAVEIS.md](VARIAVEIS.md) diz por que cada variável entra,
+[arquitetura.md](arquitetura.md) diz onde tudo isso mora.
+
+---
+
+## 1. A pergunta
+
+Uma só:
+
+> **Olhando o mar hoje, dá para saber se daqui a N dias o recife estará em
+> alerta de branqueamento?**
+
+Se a resposta for sim, o site vira um sistema de aviso — dá tempo de agir. Se
+for não, **isso também é um resultado válido**, e é melhor descobrir cedo do
+que depois de meses construindo em cima de uma premissa falsa.
+
+`N` é parâmetro do experimento, não constante escondida no código. Valores
+testados: 7, 14 e 30 dias.
+
+A escolha desse alvo — e por que ele não é circular — está em
+[VARIAVEIS.md](VARIAVEIS.md) §4.
+
+---
+
+## 2. As réguas: persistência e a regra da NOAA
+
+Antes de construir qualquer modelo, é preciso saber **o que seria fácil**.
+
+Existe uma previsão burra que funciona surpreendentemente bem:
+
+> *"Daqui a N dias vai estar igual a hoje."*
+
+É como prever o tempo dizendo "amanhã vai ser igual a hoje". Não é inteligente,
+mas acerta muito — porque o clima não muda de uma hora para outra.
+
+**É o piso, e ele é alto.** Medido em 25/07/2026, para N = 7 dias:
+
+| | Persistência |
+|---|---|
+| Dos alertas que ela dá, quantos acontecem | **84%** |
+| Dos eventos reais, quantos ela avisa | **84%** |
+| Episódios detectados | 15 de 19 |
+
+Ela funciona porque **um evento de branqueamento dura semanas**: o maior da
+série durou 117 dias. Se hoje está em alerta, daqui a uma semana provavelmente
+ainda está.
+
+### O que isso obriga
+
+**Um modelo que acerte 80% é pior que não fazer nada.** Ele só se justifica se
+superar a persistência — e a comparação precisa ser feita **nas mesmas
+linhas**, senão não diz nada.
+
+Também já sabemos **onde a persistência erra**: no começo e no fim dos
+episódios. Ela não vê o evento chegar nem acabar. Em 2026, que teve episódios
+curtos, ela caiu para 47%. **É nessas transições que um modelo pode ganhar** —
+e é por isso que existem as features de trajetória ([VARIAVEIS.md](VARIAVEIS.md)
+§3.6).
+
+### 2.1 🚨 A segunda régua, e ela é mais alta
+
+*Acrescentada em 30/07/2026.*
+
+Até aqui a persistência era **a única** linha de base, e ela tem uma fraqueza
+como adversária: é uma **cópia** do dado de ontem. Ganhar de uma cópia não é o
+mesmo que ganhar do que já existe no mundo.
+
+O que já existe no mundo é a **regra publicada da NOAA**, que sai diariamente
+no site deles e não depende deste projeto:
+
+> `HotSpot ≥ 1 °C` **e** `DHW ≥ 4 °C·semana` → Alerta Nível 1
+
+Medida no mesmo *leave-year-out*, nas mesmas linhas, com o corte escolhido
+**dentro da dobra de treino**:
+
+| | Precisão | Revocação | F1 | Episódios | Alarmes falsos |
+|---|---|---|---|---|---|
+| modelo | 0,560 | **0,876** | 0,671 | **17/19** | **11** |
+| persistência | 0,738 | 0,738 | 0,738 | 15/19 | **4** |
+| **regra NOAA** | **0,819** | 0,751 | **0,779** | 15/19 | 6 |
+
+**O modelo ganha no critério declarado e perde nos outros dois.** Pega 2
+episódios a mais e cobra 5 a 7 alarmes falsos a mais.
+
+O que isso obriga: **o piso é o maior dos dois**, e o veredito de
+`manage.py treinar_modelo` passou a julgar assim. Relatar 17/19 sem o contraste
+afirma demais — a frase honesta não é *"o modelo é melhor que a regra da
+NOAA"*, e sim *"o modelo é **mais sensível** que ela"*.
+
+⚠️ Uma armadilha que quase passou: a regra é aplicada aos valores **agregados**
+do banco, e a agregação (BAA por máximo, DHW por média) faz o corte publicado de
+4 chegar tarde na escala do recife — ele pega 10 dos 19 episódios. O ponto de
+operação remedido é `DHW ≥ 1`. Ver [RESULTADOS.md](RESULTADOS.md) §24 e
+[VARIAVEIS.md](VARIAVEIS.md) §4.6.
+
+---
+
+## 3. Como testar sem trapacear
+
+Esta é a parte que mais confunde, e a mais importante.
+
+Imagine estudar para uma prova **usando exatamente as questões que vão cair**.
+Você tira 10, e isso não significa nada.
+
+Com dados é igual: se o modelo treinar nos mesmos dias em que for testado, ele
+decora em vez de aprender.
+
+### A armadilha sutil
+
+**Não basta separar dias aleatoriamente.**
+
+Se o modelo treinar no dia 15 de março e for testado no dia 16, ele já sabe a
+resposta — o recife não muda de um dia para o outro, e os dois dias pertencem
+ao mesmo episódio. É colar sem perceber.
+
+Esse é o defeito do `train_test_split` aleatório do modelo antigo do projeto.
+Em série temporal, ele é vazamento puro.
+
+### A solução: esconder um ano inteiro
+
+| Treina em | Testa em |
+|---|---|
+| 2021, 2022, 2023, 2024, 2025, 2026 | **2020** |
+| 2020, 2021, 2023, 2024, 2025, 2026 | **2022** |
+| 2020, 2021, 2022, 2023, 2025, 2026 | **2024** |
+| … | … |
+
+O modelo nunca viu aquele ano. Se acerta ali, aprendeu de verdade.
+
+⚠️ **A divisão é pelo ano da data do alvo**, não da data das features. O que
+define a dobra é *o dia sobre o qual a previsão fala*. Uma amostra com features
+de 28/12/2023 prevendo 04/01/2024 pertence a 2024.
+
+### 3.1 Na entrega 2 o mesmo princípio muda de forma
+
+A entrega 2 não é série temporal: cada amostra é **uma visita** de mergulhador a
+um recife, num dia. Não há "dia seguinte" a vazar. Mas o princípio — *nunca
+testar em algo que o modelo já viu* — continua, e agora tem **duas leituras
+diferentes**, porque há duas maneiras de duas visitas serem parecidas.
+
+| Agrupamento | O que fica de fora | Pergunta que responde |
+|---|---|---|
+| Por **sítio** | Todas as visitas àquele recife | "Generaliza para um **recife novo**?" |
+| Por **ano** | Todas as visitas daquele ano | "Generaliza para um **evento novo**?" |
+
+**As duas são necessárias, e elas discordam.** No passo 1 da entrega 2, o mesmo
+modelo deu PR-AUC **0,803 por sítio** e **0,614 por ano**
+([RESULTADOS.md](RESULTADOS.md) §11.3).
+
+A discordância é diagnóstico, não inconveniente. Agrupando por sítio, o modelo
+ainda vê outras visitas *do mesmo ano*, com a mesma anomalia térmica — então
+pode acertar reconhecendo o ano em vez do fenômeno. Agrupando por ano, essa
+saída se fecha. O exemplo numérico está em [RESULTADOS.md](RESULTADOS.md) §11.4.
+
+> **Para um sistema de aviso, o número do ano é o que vale.** O evento sobre o
+> qual o site vai avisar é, por definição, um que não estava no treino.
+
+### 3.2 Por que as predições são reunidas em vez de a métrica ser promediada
+
+Na entrega 1, cada ano vira uma dobra e as métricas são promediadas sobre os
+anos com evento. Na entrega 2 isso não funcionaria: as dobras são muito
+desiguais — 1994 tem 1 visita, 2007 tem 33.
+
+Uma média por dobra daria o **mesmo peso** a uma dobra de 1 amostra e a uma de
+33. Então aqui se guarda a predição **fora da dobra** de cada visita e se
+calcula **uma métrica só** sobre todas. Cada visita conta uma vez, que é o que
+se quer.
+
+---
+
+## 4. Por que não medimos "quantos por cento acertou"
+
+**92% dos dias não têm alerta.**
+
+Então um modelo que responde sempre *"sem alerta, pode ficar tranquilo"* acerta
+92% — e é inútil, porque nunca avisa ninguém.
+
+**Acurácia aqui é um número bonito e vazio.** Qualquer acurácia relatada precisa
+vir ao lado da taxa da classe majoritária, senão engana. O código calcula as
+duas juntas de propósito (`baseline.taxa_da_classe_majoritaria`).
+
+### O que medimos no lugar
+
+| Métrica | A pergunta que ela responde |
+|---|---|
+| **Precisão** | Quando ele avisa, tem razão? |
+| **Revocação** | Dos eventos reais, quantos ele avisou? |
+| **F1** | As duas juntas, num número |
+| **PR-AUC** | O mesmo, sem depender de onde se corta o "avisar ou não" |
+| **Brier score** | A probabilidade é honesta? |
+
+**Por que PR-AUC e não ROC-AUC.** Com 8% de positivos, o ROC-AUC premia acerto
+na classe majoritária e fica otimista por construção. A curva
+precisão-revocação mede o que interessa quando o evento é raro.
+
+**Por que Brier importa.** O painel vai exibir algo como "risco: 37%". Esse
+número precisa querer dizer alguma coisa — que em 100 dias parecidos, o evento
+aconteceu em cerca de 37. Um modelo pode ordenar bem os dias e ainda assim
+estar sistematicamente errado na escala. Calibração é o que separa "37%" de
+"um número que sobe quando piora".
+
+---
+
+## 5. Quais modelos, e por que dois
+
+O projeto roda **dois modelos lado a lado**, em toda avaliação:
+
+| Nome no código | O que é | É árvore de decisão? |
+|---|---|---|
+| `logistica` | Regressão logística | ❌ não — é linear |
+| `boosting` | `HistGradientBoostingClassifier` | ✅ **sim** — centenas de árvores |
+
+O *gradient boosting* constrói muitas árvores pequenas em sequência, cada uma
+corrigindo os erros da anterior. É uma família de árvores, não uma só, mas o
+bloco de construção é a árvore de decisão.
+
+*(O modelo antigo do projeto, descartado, era uma Random Forest — também
+árvore. Ver [VISAO_GERAL.md](VISAO_GERAL.md) §11 para por que foi descartado.)*
+
+### O que cada família consegue representar
+
+Esta parte costuma ser entendida ao contrário, então vale o exemplo.
+
+Suponha que a salinidade estresse o coral **nos dois extremos** — muito baixa
+(chuva, água doce) e muito alta (evaporação). Uma relação em U.
+
+**A regressão logística só sabe dizer uma direção.** Ela é obrigada a escolher
+entre *"mais sal = mais risco"* ou *"menos sal = mais risco"*. Diante de um U,
+ela responde uma reta, e erra nas duas pontas.
+
+**A árvore não assume direção nenhuma** — ela corta o espaço em pedaços:
+
+```
+salinidade < 34?   →  risco alto
+salinidade 34–38?  →  risco baixo
+salinidade > 38?   →  risco alto
+```
+
+| | Relação sempre na mesma direção | Relação que muda de direção |
+|---|---|---|
+| Regressão logística | ✅ boa | ❌ ruim |
+| Árvore / boosting | ✅ boa | ✅ **boa** |
+
+⚠️ **Portanto: variável que influencia "para mais e para menos" é argumento a
+favor de árvore, não contra.** Quem tem dificuldade com isso é o modelo linear.
+
+### Por que os dois ficam, em vez de escolher um
+
+Não é indecisão — cada um responde uma pergunta diferente.
+
+**A logística é interpretável** — *sob uma condição que este projeto não
+cumpre*. Ela dá um coeficiente por variável, o que em princípio permite
+afirmar *"o oxigênio caindo aumenta o risco, nesta magnitude"*.
+
+🚨 **Medido em 25/07/2026: com o conjunto atual de features, os coeficientes
+não são interpretáveis.** O do `dhw` saiu **negativo** — lido como mecanismo,
+diria que calor acumulado protege o coral. É artefato de colinearidade.
+
+**A causa medida não é a que se supunha.** Nível e trajetória quase não se
+correlacionam (r ≈ 0,10). A colinearidade está entre as **duas janelas da mesma
+variável**: `dhw_variacao_7d` e `dhw_variacao_14d` têm **r = 0,976**.
+
+✅ **E há solução medida:** usar **uma janela por variável** elimina o problema
+sem custo de desempenho — 4 entradas em vez de 10, F1 0,728 contra 0,707, o
+melhor PR-AUC de todas as versões testadas, e **nenhum coeficiente térmico
+invertido**. Ver [RESULTADOS.md](RESULTADOS.md) §8 para as cinco versões
+comparadas.
+
+Enquanto essa mudança não for aplicada ao código, **a leitura defensável é a
+importância por grupo**, que dá magnitude mas não direção.
+
+**O boosting responde "e se um modelo mais expressivo ganhasse?"**. Se ele
+**não** superar a logística, isso é resultado publicável: ou a relação é
+simples, ou a amostra é pequena demais para sustentar algo maior.
+
+Na primeira rodada foi o segundo caso — nenhum dominou:
+
+| | Acerto diário (F1) | Episódios detectados |
+|---|---|---|
+| Logística | 0,707 | **18/19** |
+| Boosting | **0,741** | 17/19 |
+
+Com ~4 anos-evento, essa diferença é ruído. **O boosting não comprou nada
+claro**, que é exatamente o esperado com esta base. Ver
+[RESULTADOS.md](RESULTADOS.md).
+
+📌 **Estes números são de 25/07/2026, no limiar 0,50.** O ponto de operação do
+site mudou para 0,20 em 30/07, e no ponto de operação atual a logística faz
+**17/19** contra as duas linhas de base (§2.1). Comparar as duas tabelas
+diretamente não faz sentido — são cortes diferentes.
+
+### Ambos ficam nos padrões, de propósito
+
+Nenhum hiperparâmetro foi ajustado. Com ~4 anos-evento, ajuste fino é
+sobreajuste disfarçado de melhoria — e o *leave-year-out* não tem dobras
+suficientes para separar melhora real de sorte na dobra.
+
+A única configuração deliberada é `class_weight='balanced'` nos dois: com 8%
+de positivos, sem isso o modelo aprende que **nunca avisar quase sempre
+acerta**.
+
+---
+
+## 6. Métrica por episódio
+
+Contar acerto dia a dia infla a impressão de evidência, porque dias dentro do
+mesmo episódio são quase o mesmo dia.
+
+Então, além do desempenho diário, medimos por evento:
+
+- **Um episódio conta como detectado se algum dos seus dias foi previsto.**
+  Se o evento durou 70 dias e o modelo acertou o início com 3 dias de atraso,
+  isso é sucesso, não fracasso — quem lê um aviso quer saber do evento, não da
+  data exata.
+- **Alarme falso é um episódio previsto que não encosta em nenhum evento real** —
+  não um dia isolado a mais dentro de um evento que de fato aconteceu.
+
+⚠️ O agrupamento é **por local**. Num quadro com vários recifes as datas se
+repetem, e agrupar só por data funde episódios simultâneos de recifes
+diferentes num evento só. Na primeira execução real isso fez 19 episódios
+contarem como 7.
+
+---
+
+## 7. Limitações declaradas
+
+**A amostra efetiva são ~4 anos-evento, não 7.134 dias.** Os 598 dias em alerta
+se agrupam em 19 episódios, concentrados nos mesmos quatro anos nos três
+recifes — é o mesmo forçante oceanográfico atingindo três pontos da mesma
+costa. Detalhe e medição em [VARIAVEIS.md](VARIAVEIS.md) §7.2.
+
+Consequências que precisam aparecer no trabalho, não serem descobertas pela
+banca:
+
+1. **Cada dobra do leave-year-out remove ~25% do sinal disponível.**
+2. **Nenhum ajuste fino de hiperparâmetro se sustenta nessa base.** Por isso os
+   modelos usados são simples e ficam nos padrões.
+3. **A média de desempenho é calculada só sobre anos com evento.** Incluir 2021
+   e 2023, que não tiveram nenhum, mediria o clima e não o modelo.
+4. **Dias de um mesmo episódio são autocorrelacionados.** Se houver teste
+   estatístico, a unidade amostral é o episódio.
+
+---
+
+## 8. Onde isso está no código
+
+| Arquivo | O que faz |
+|---|---|
+| [`backend/ml/dataset.py`](../backend/ml/dataset.py) | Monta a tabela: features em `t`, alvo em `t+N`. Todas as guardas contra vazamento |
+| [`backend/ml/baseline.py`](../backend/ml/baseline.py) | As **duas** linhas de base, métricas diárias e por episódio, divisão *leave-year-out* |
+| [`backend/ml/modelo.py`](../backend/ml/modelo.py) | O modelo e a comparação ano a ano contra os dois pisos (`comparar_com_linhas_de_base`) |
+| [`backend/ml/niveis.py`](../backend/ml/niveis.py) | A escala de aviso: quatro degraus, com corte medido e ação esperada |
+| [`backend/ml/tests.py`](../backend/ml/tests.py) | Testes que travam cada regra acima |
+| [`backend/ml/gcbd.py`](../backend/ml/gcbd.py) | **Entrega 2:** conjunto de branqueamento observado, validação agrupada (§3.1), régua da NOAA |
+| [`backend/ml/gcbd_ambiental.py`](../backend/ml/gcbd_ambiental.py) | A janela ambiental antes de cada visita, com proveniência por valor |
+| [`backend/ml/persistencia.py`](../backend/ml/persistencia.py) | Grava e carrega o modelo treinado — com as guardas contra pickle de origem desconhecida |
+| [`backend/ml/calibracao.py`](../backend/ml/calibracao.py) | Curva de confiabilidade, ECE/MCE e decomposição de Murphy do Brier |
+| [`backend/ml/testes_gcbd.py`](../backend/ml/testes_gcbd.py) | 29 testes — inclusive o que garante que **nenhum sítio cai nos dois lados** da divisão |
+
+O modelo é encapsulado num `Pipeline` do sklearn que **seleciona features por
+nome**. Não é preciosismo: o modelo antigo do projeto predizia `0.0` para todos
+os registros porque a ordem das features na predição diferia da do treino, e um
+`except` sem tipo engolia o erro. Ordem de coluna deixa de ser contrato
+implícito.
+
+---
+
+## 9. Histórico
+
+| Data | Alteração |
+|---|---|
+| 31/07/2026 | **§2 vira "as réguas", no plural, e §2.1 registra a segunda.** A persistência era o único piso, e ela tem uma fraqueza como adversária: é uma **cópia** do dado de ontem. Faltava a régua que existe no mundo — a **regra publicada da NOAA**, que sai diariamente no site deles. Medida, ela é o piso **mais alto** (F1 0,779 e precisão 0,819, contra 0,671 e 0,560 do modelo), e o veredito do `treinar_modelo` passou a julgar contra a maior das duas. O modelo continua ganhando no critério declarado — 17/19 episódios contra 15 — e agora com o preço à vista: 11 alarmes falsos contra 6. A frase honesta deixa de ser *"o modelo é melhor que a regra"* e passa a ser *"o modelo é mais sensível que ela"*. §5 ganhou marcador de que a tabela de 25/07 é do limiar 0,50 e não se compara diretamente com a nova. §8 atualizada. |
+| 27/07/2026 | §8 atualizada com `ml/persistencia.py` e `ml/calibracao.py`. A calibração introduz uma distinção que a metodologia não fazia: **ordenar e calibrar são propriedades diferentes**, e só a primeira aparece no PR-AUC. Um modelo pode ordenar perfeitamente e ainda mentir no número exibido — foi o caso, com ECE de 0,081 sobre taxa base de 0,084. Ver [RESULTADOS.md](RESULTADOS.md) §22. |
+| 26/07/2026 | **§3.1 e §3.2 criadas — a validação da entrega 2.** O princípio de nunca testar no que o modelo já viu continua, mas numa base transversal ele se desdobra em **dois agrupamentos que discordam**: por sítio (recife novo) e por ano (evento novo). Registrado que a discordância é diagnóstico — no passo 1 foi 0,803 contra 0,614 —, e que **para um sistema de aviso vale o número do ano**. Também por que aqui as predições fora-da-dobra são reunidas numa métrica única em vez de promediadas: as dobras vão de 1 a 33 visitas, e a média daria peso igual às duas. §8 atualizada com os arquivos novos. |
+| 25/07/2026 | **§5 corrigida — os coeficientes não são interpretáveis neste projeto.** O argumento de que "a logística é interpretável" valia sob uma condição que o projeto não cumpre: features não correlacionadas. Cada variável entra junto com a própria trajetória, e a medição mostrou o coeficiente do `dhw` **negativo** — o que lido como mecanismo diria que calor acumulado protege o coral. Enquanto a colinearidade não for resolvida, a leitura defensável é a importância por grupo, que dá magnitude e não direção. Ver [RESULTADOS.md](RESULTADOS.md) §7. |
+| 25/07/2026 | **§5 criada — quais modelos e por que dois.** Registra que o `boosting` **é** baseado em árvores de decisão e a `logistica` não, e corrige uma inversão comum: variável que influencia "para mais e para menos" é argumento **a favor** de árvore, não contra — quem tem dificuldade com relação em U é o modelo linear. Também por que os dois convivem (interpretabilidade contra expressividade) e por que ambos ficam nos padrões. |
+| 25/07/2026 | Documento criado. Registra o desenho do experimento da entrega 1: alvo binário com horizonte de N dias, persistência como piso, validação *leave-year-out*, métricas de evento raro e por episódio, e as quatro limitações que decorrem de ~4 anos-evento de amostra efetiva. |
