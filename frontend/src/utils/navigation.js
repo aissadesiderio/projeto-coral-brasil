@@ -2,6 +2,9 @@ export const ROTAS_APP = {
   home: '/',
   banco: '/banco-de-dados',
   recifes: '/localizacoes',
+  login: '/login',
+  cadastro: '/cadastro',
+  minhasEspecies: '/minhas-especies',
 };
 
 function normalizarPathname(pathname = '/') {

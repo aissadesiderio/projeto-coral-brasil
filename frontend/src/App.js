@@ -6,13 +6,18 @@ import Header from './components/Header';
 import ModalEspecie from './components/ModalEspecie';
 import { FALLBACK_RECIFES } from './data/recifeData';
 import BancoDadosPage from './pages/BancoDadosPage';
+import CadastroPage from './pages/CadastroPage';
+import GerenciarEspeciesPage from './pages/GerenciarEspeciesPage';
 import HomePage from './pages/HomePage';
 import LocalRecifeRoutePage from './pages/LocalRecifeRoutePage';
+import LoginPage from './pages/LoginPage';
 import RecifesPage from './pages/RecifesPage';
-import { buscarJson } from './utils/api';
+import { buscarJson, enviarFormulario } from './utils/api';
 import { scrollToTopo } from './utils/formatters';
 import { obterPaginaAtual, ROTAS_APP } from './utils/navigation';
 import { combinarLocais } from './utils/recifes';
+
+const USUARIO_DESLOGADO = { autenticado: false, username: null, master: false, aprovado: false };
 
 export default function App() {
   const location = useLocation();
@@ -24,6 +29,7 @@ export default function App() {
   const [offlineMessage, setOfflineMessage] = useState('');
   const [carregandoLocais, setCarregandoLocais] = useState(true);
   const [erroCarregamentoLocais, setErroCarregamentoLocais] = useState(false);
+  const [usuario, setUsuario] = useState(USUARIO_DESLOGADO);
 
   useEffect(() => {
     scrollToTopo();
@@ -34,9 +40,12 @@ export default function App() {
     let ativo = true;
 
     async function carregarBase() {
-      const [statusPayload, locaisPayload] = await Promise.all([
+      const [statusPayload, locaisPayload, usuarioPayload] = await Promise.all([
         buscarJson('/api/status/'),
         buscarJson('/api/grafo/localizacoes/'),
+        // Tambem funciona como "primer" do cookie csrftoken (ver EuView no
+        // backend) — precisa rodar cedo, antes de qualquer escrita.
+        buscarJson('/api/auth/eu/'),
       ]);
 
       if (!ativo) {
@@ -52,6 +61,10 @@ export default function App() {
       setErroCarregamentoLocais(locaisNormalizados.length === 0);
       setLocais(locaisNormalizados.length > 0 ? locaisNormalizados : FALLBACK_RECIFES);
       setCarregandoLocais(false);
+
+      if (usuarioPayload) {
+        setUsuario(usuarioPayload);
+      }
     }
 
     carregarBase();
@@ -61,11 +74,36 @@ export default function App() {
     };
   }, []);
 
+  async function login(username, senha) {
+    const resposta = await enviarFormulario('/api/auth/login/', {
+      body: { username, password: senha },
+    });
+    if (resposta.ok) {
+      setUsuario(resposta.dados);
+    }
+    return resposta;
+  }
+
+  async function cadastrar(username, email, senha) {
+    const resposta = await enviarFormulario('/api/auth/cadastro/', {
+      body: { username, email, password: senha },
+    });
+    if (resposta.ok) {
+      setUsuario(resposta.dados);
+    }
+    return resposta;
+  }
+
+  async function logout() {
+    await enviarFormulario('/api/auth/logout/', { method: 'POST' });
+    setUsuario(USUARIO_DESLOGADO);
+  }
+
   return (
     <div className="app-layout min-h-screen overflow-x-hidden bg-sand-light text-gray-800">
-      <Header paginaAtual={paginaAtual} />
+      <Header paginaAtual={paginaAtual} usuario={usuario} onLogout={logout} />
 
-      <main className={`main-content flex-1 ${paginaAtual === 'recifes' ? 'bg-[#fff6f4]' : ''}`}>
+      <main className={`main-content flex-1 ${paginaAtual === 'recifes' ? 'bg-sand-lightest' : ''}`}>
         {siteOffline && paginaAtual !== 'home' && (
           <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
             <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
@@ -104,8 +142,18 @@ export default function App() {
                 siteOffline={siteOffline}
                 offlineMessage={offlineMessage}
                 onOpenEspecie={setEspecieSelecionada}
+                usuario={usuario}
               />
             }
+          />
+          <Route path={ROTAS_APP.login} element={<LoginPage onLogin={login} usuario={usuario} />} />
+          <Route
+            path={ROTAS_APP.cadastro}
+            element={<CadastroPage onCadastrar={cadastrar} usuario={usuario} />}
+          />
+          <Route
+            path={ROTAS_APP.minhasEspecies}
+            element={<GerenciarEspeciesPage usuario={usuario} />}
           />
           <Route path="*" element={<Navigate to={ROTAS_APP.home} replace />} />
         </Routes>

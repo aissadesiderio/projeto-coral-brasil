@@ -14,7 +14,7 @@ html {
 
 body {
   margin: 0;
-  background: #ffefeb;
+  background: theme('colors.sand.lightest');
   color: #1f2937;
   font-family: 'Inter', 'Segoe UI', sans-serif;
   -moz-osx-font-smoothing: grayscale;

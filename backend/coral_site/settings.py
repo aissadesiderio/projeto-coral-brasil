@@ -318,6 +318,18 @@ DRF_PAGE_SIZE = env.int('DRF_PAGE_SIZE', default=100)
 # `?page_size=999999` desfaz a paginacao a pedido do cliente.
 DRF_MAX_PAGE_SIZE = env.int('DRF_MAX_PAGE_SIZE', default=1000)
 
+# Primeira vez que o projeto declara REST_FRAMEWORK. So autenticacao — de
+# proposito **nao** mexe em paginacao nem em permissao padrao (continua
+# `AllowAny`), que e exatamente a mudanca que ja quebrou contrato uma vez
+# (ver o comentario acima). Sessao porque o frontend em dev fala com a API
+# via proxy do CRA (`frontend/package.json`, "proxy") — same-origin, sem o
+# atrito de CORS/cookie entre dominios que token exigiria contornar.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
+
 # ---------------------------------------------------------------------------
 # Painel de risco
 # ---------------------------------------------------------------------------

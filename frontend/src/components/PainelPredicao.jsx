@@ -104,16 +104,16 @@ function EscalaDeAviso({ escala, atual }) {
                 {nivel.rotulo}
               </span>
               {nivel.corte > 0 && (
-                <span className="text-[11px]">
+                <span className="text-2xs">
                   a partir de {formatarPercentual(nivel.corte)}
                 </span>
               )}
               {eOAtual && (
-                <span className="rounded-full bg-ocean-dark px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                <span className="rounded-full bg-ocean-dark px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-white">
                   hoje
                 </span>
               )}
-              <span className="w-full text-[11px]">{nivel.acao}</span>
+              <span className="w-full text-2xs">{nivel.acao}</span>
             </li>
           );
         })}
@@ -144,7 +144,7 @@ const CartaoEntrada = ({ entrada }) => {
 
   return (
     <div className="flex min-w-0 flex-col rounded-2xl border border-sand-dark/10 bg-sand-light/30 p-3 sm:p-4">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+      <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500">
         {entrada.rotulo}
       </span>
       <span className="mt-1 flex items-baseline gap-1.5">
@@ -155,7 +155,7 @@ const CartaoEntrada = ({ entrada }) => {
         />
         <span className="text-lg font-bold text-ocean-dark">{entrada.valor}</span>
       </span>
-      <span className="mt-1 text-[10px] font-medium text-gray-400">
+      <span className="mt-1 text-3xs font-medium text-gray-400">
         {entrada.periodo}
       </span>
     </div>
@@ -272,7 +272,7 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
           </p>
 
           {probabilidade?.explicacao && (
-            <p className="mt-3 rounded-xl bg-black/20 p-2.5 text-left text-[11px] leading-relaxed text-white/85">
+            <p className="mt-3 rounded-xl bg-black/20 p-2.5 text-left text-2xs leading-relaxed text-white/85">
               {probabilidade.explicacao}
             </p>
           )}
@@ -283,7 +283,7 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
               aqui em vez de ficar por conta da intuicao sobre a cor. */}
           {alerta.acao && (
             <div className="mt-5 rounded-xl bg-black/20 p-3 text-left">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+              <p className="text-3xs font-semibold uppercase tracking-[0.12em] text-white/70">
                 O que fazer
               </p>
               <p className="mt-1 text-xs leading-relaxed text-white/95">
@@ -298,12 +298,12 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
               reserva apagaria a frase inteira contra um servidor antigo. */}
           {alerta.slug
             ? alerta.corteTexto && alerta.slug !== 'sem_aviso' && (
-                <p className="mt-3 text-[11px] text-white/80">
+                <p className="mt-3 text-2xs text-white/80">
                   Este degrau comeca em {alerta.corteTexto}
                 </p>
               )
             : alerta.limiarTexto && (
-                <p className="mt-4 text-[11px] text-white/80">
+                <p className="mt-4 text-2xs text-white/80">
                   Aviso emitido a partir de {alerta.limiarTexto}
                 </p>
               )}
@@ -314,7 +314,7 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
             <CalendarClock size={20} className="text-terra" />
             Calculado sobre dados ate {formatarDataBr(item.data_base)}
             {atraso && (
-              <span className="rounded-full bg-sand-light px-2.5 py-0.5 text-[11px] font-semibold text-ocean-dark">
+              <span className="rounded-full bg-sand-light px-2.5 py-0.5 text-2xs font-semibold text-ocean-dark">
                 {atraso}
               </span>
             )}

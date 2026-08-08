@@ -1,7 +1,7 @@
-import homeCardBanco from '../assets/home/card-banco.png';
-import homeCardPainel from '../assets/home/card-painel.png';
-import homeCardRecifes from '../assets/home/card-recifes.png';
-import homeHeroCoral from '../assets/home/hero-coral.png';
+import homeCardBanco from '../assets/home/card-banco.webp';
+import homeCardPainel from '../assets/home/card-painel.webp';
+import homeCardRecifes from '../assets/home/card-recifes.webp';
+import homeHeroCoral from '../assets/home/hero-coral.webp';
 
 // Catalogo estatico mantido apenas como fallback transicional do frontend.
 export const DADOS_GERAIS = [

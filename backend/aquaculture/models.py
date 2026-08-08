@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.text import slugify
@@ -376,6 +378,26 @@ class Especie(models.Model):
     )
     locais = models.ManyToManyField(LocalRecife, related_name='especies', blank=True)
 
+    # --- autoria, so visivel para master ------------------------------------
+    # As 9 especies de antes desta funcionalidade ficam com os tres em branco
+    # — nunca foram atribuidas a ninguem, e isso e verdade, nao lacuna a
+    # esconder (mesmo raciocinio das especies sem `iucn_avaliado_em`).
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='especies_criadas',
+        verbose_name='Criada por',
+    )
+    editado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='especies_editadas',
+        verbose_name='Ultima edicao por',
+    )
+    editado_em = models.DateTimeField(null=True, blank=True, verbose_name='Ultima edicao em')
+
     # A partir de quantos dias uma conferencia deixa de valer.
     #
     # ⚠️ Nao ha nada de sagrado em 730. O raciocinio: a IUCN publica duas
@@ -508,3 +530,185 @@ class DatasetCatalogo(models.Model):
     def espelhado(self):
         """O projeto guarda este dado, ou so aponta para ele?"""
         return bool(self.fonte_medicao)
+
+
+class PerfilUsuario(models.Model):
+    """O que uma conta pode fazer alem de ler o site.
+
+    🚨 `usuario.is_active` (consegue logar) e `aprovado` (pode contribuir
+    especie e baixar dados) sao coisas **independentes**. Nao existe estado
+    do Django que signifique "cadastrado mas ainda nao aprovado" — por isso
+    este campo, e nao um `is_active=False` reaproveitado, que faria a conta
+    parecer banida em vez de pendente.
+
+    Todo `User` ganha um perfil automaticamente (sinal em `signals.py`), para
+    que "tem perfil" nunca precise ser tratado como caso especial: uma conta
+    sem perfil e a mesma coisa que uma conta nao aprovada.
+    """
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='perfil',
+    )
+    aprovado = models.BooleanField(default=False)
+    aprovado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+    aprovado_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.usuario} ({"aprovado" if self.aprovado else "pendente"})'
+
+
+def aprovado_para_contribuir(user):
+    """Esta conta pode enviar especie e baixar dados?
+
+    Master (superusuario) sempre pode, sem depender de ter perfil — e o
+    unico caso em que "sem perfil" nao deve significar "nao aprovado", porque
+    um superusuario criado direto pelo `createsuperuser` tambem ganha o
+    sinal, mas a checagem nao deve depender da ordem de criacao.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    perfil = getattr(user, 'perfil', None)
+    return bool(perfil and perfil.aprovado)
+
+
+class SolicitacaoEspecie(models.Model):
+    """Uma contribuicao de quem nao e master, esperando revisao.
+
+    🚨 **`Especie` nunca tem linha pendente.** Toda criacao/edicao/exclusao
+    feita por um usuario comum vira uma linha aqui, e so vira `Especie` de
+    verdade quando `aprovar()` roda. Isso evita duas coisas: um novo status
+    "publicada/pendente" em `Especie` (que teria que ser filtrado em todo
+    lugar que le a tabela) e a possibilidade de um GET publico vazar dado
+    ainda nao revisado por um bug de filtro esquecido em algum endpoint.
+
+    ⚠️ `especie` e `CASCADE`: se master apagar a especie direto enquanto
+    havia uma solicitacao pendente sobre ela, a solicitacao some junto, sem
+    aviso a quem propos. Aceito como limitacao conhecida — o projeto nao tem
+    sistema de notificacao para avisar quem propos de outro jeito, e escrever
+    um `pre_delete` so para preservar o registro de uma solicitacao sobre
+    algo que nao existe mais adicionaria complexidade sem uso real.
+    """
+
+    TIPO_CHOICES = [
+        ('CRIAR', 'Criar'),
+        ('EDITAR', 'Editar'),
+        ('EXCLUIR', 'Excluir'),
+    ]
+    STATUS_CHOICES = [
+        ('PENDENTE', 'Pendente'),
+        ('APROVADA', 'Aprovada'),
+        ('REJEITADA', 'Rejeitada'),
+    ]
+
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    especie = models.ForeignKey(
+        Especie, null=True, blank=True, on_delete=models.CASCADE,
+        related_name='solicitacoes',
+        help_text='Vazio somente para o tipo CRIAR.',
+    )
+    # DjangoJSONEncoder por seguranca futura (converte date/datetime), mesmo
+    # que os campos aceitos hoje (EspecieContribuicaoSerializer) sejam todos
+    # texto simples — evita que o proximo campo adicionado aqui vire um
+    # `TypeError` silencioso so descoberto em producao.
+    dados_propostos = models.JSONField(
+        default=dict, blank=True, encoder=DjangoJSONEncoder,
+        help_text='Valores propostos para CRIAR/EDITAR. Vazio em EXCLUIR.',
+    )
+    solicitante = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='solicitacoes_especie',
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDENTE')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    revisado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+    revisado_em = models.DateTimeField(null=True, blank=True)
+    motivo_rejeicao = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+        verbose_name = 'Solicitacao de especie'
+        verbose_name_plural = 'Solicitacoes de especie'
+
+    def __str__(self):
+        alvo = self.especie.nome_cientifico if self.especie else self.dados_propostos.get('nome_cientifico', '?')
+        return f'{self.get_tipo_display()} {alvo} — {self.get_status_display()}'
+
+    def _resolver_locais(self, slugs):
+        """Troca slugs de volta por LocalRecife, ou falha alto se um sumiu.
+
+        ⚠️ Entre o pedido e a aprovacao um recife pode ter sido renomeado ou
+        removido. Aplicar so os slugs que ainda existem seria aplicar uma
+        proposta diferente da que foi revisada, em silencio — por isso isto
+        levanta em vez de aplicar parcial.
+        """
+        locais = list(LocalRecife.objects.filter(slug__in=slugs))
+        encontrados = {local.slug for local in locais}
+        faltando = set(slugs) - encontrados
+        if faltando:
+            raise ValueError(
+                f'Local(is) nao encontrado(s) para aplicar a solicitacao: '
+                f'{", ".join(sorted(faltando))}. A especie pode ter mudado '
+                f'de recife entre o pedido e a revisao.'
+            )
+        return locais
+
+    def aprovar(self, por):
+        """Aplica a proposta em `Especie` e fecha a solicitacao como aprovada.
+
+        Levanta `ValueError` (locais sumidos) ou `IntegrityError` (nome
+        cientifico duplicado por uma aprovacao concorrente) sem gravar nada —
+        quem chama decide como transformar isso em resposta HTTP.
+        """
+        from django.utils import timezone
+
+        dados = dict(self.dados_propostos)
+        slugs_locais = dados.pop('locais', None)
+        # Resolvido ANTES de qualquer escrita: um slug sumido precisa
+        # impedir a criacao/edicao, e nao sobrar como um `Especie` ja gravado
+        # com `locais` pela metade.
+        locais_resolvidos = self._resolver_locais(slugs_locais) if slugs_locais is not None else None
+
+        if self.tipo == 'CRIAR':
+            especie = Especie.objects.create(**dados, criado_por=self.solicitante)
+            if locais_resolvidos is not None:
+                especie.locais.set(locais_resolvidos)
+        elif self.tipo == 'EDITAR':
+            especie = self.especie
+            for campo, valor in dados.items():
+                setattr(especie, campo, valor)
+            especie.editado_por = self.solicitante
+            especie.editado_em = timezone.now()
+            especie.save()
+            if locais_resolvidos is not None:
+                especie.locais.set(locais_resolvidos)
+        elif self.tipo == 'EXCLUIR':
+            self.especie.delete()
+        else:  # pragma: no cover - TIPO_CHOICES esgota os casos
+            raise ValueError(f'Tipo de solicitacao desconhecido: {self.tipo}')
+
+        self.status = 'APROVADA'
+        self.revisado_por = por
+        self.revisado_em = timezone.now()
+        self.save()
+
+    def rejeitar(self, por, motivo=''):
+        from django.utils import timezone
+
+        self.status = 'REJEITADA'
+        self.revisado_por = por
+        self.revisado_em = timezone.now()
+        self.motivo_rejeicao = motivo
+        self.save()

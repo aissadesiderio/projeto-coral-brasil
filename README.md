@@ -293,6 +293,11 @@ com `dumpdata`/`loaddata`.
 python backend\manage.py createsuperuser
 ```
 
+Esse usuário não serve só para `/admin/`: é também o **master** do site — a
+única conta que aplica edição de espécie na hora, aprova conta de visitante e
+enxerga quem criou ou editou cada espécie. Não há papel separado; ver
+[Contas e moderação de espécies](#contas-e-moderação-de-espécies).
+
 ⚠️ **O banco não vem no repositório.** Toda máquina que puxa código novo
 precisa rodar `migrate` — inclusive quando o projeto já funcionava ali. Os
 comandos de dados avisam se o banco está atrasado.
@@ -565,7 +570,7 @@ cd backend
 python manage.py test
 ```
 
-Termina em `OK (skipped=1)`, em ~100 s. Eram **679 testes** em 31/07/2026 — o
+Termina em `OK (skipped=1)`, em ~100 s. Eram **750 testes** em 05/08/2026 — o
 número cresce a cada mudança; o que importa é o `OK`.
 
 ```bash
@@ -933,6 +938,66 @@ legado, com 3 registros.
 O que o grafo responde e a tabela não responde bem: **a proveniência de cada
 valor exibido**, e a emenda entre produtos do Copernicus, numa travessia só.
 Ver [docs/arquitetura.md](docs/arquitetura.md).
+
+---
+
+## Contas e moderação de espécies
+
+Cadastro é aberto a qualquer visitante; **contribuir espécie e baixar o CSV
+exigem conta aprovada**. As duas coisas são independentes por desenho:
+`User.is_active` decide se a conta consegue logar, `PerfilUsuario.aprovado`
+decide se ela contribui — nenhuma mensagem de erro trata uma como sinônimo da
+outra.
+
+```
+POST /api/auth/cadastro/   {"username": "...", "senha": "...", "email": "..."}
+POST /api/auth/login/      {"username": "...", "senha": "..."}
+POST /api/auth/logout/
+GET  /api/auth/eu/         {"autenticado", "username", "master", "aprovado"}
+```
+
+Sessão do Django, não token: o `frontend/package.json` já aponta para o
+backend via `proxy`, então em `npm start` toda chamada é same-origin e o
+cookie de sessão viaja sozinho, inclusive no `<a href download>` do CSV.
+Escrita autenticada (contribuir espécie, logout) exige o cabeçalho
+`X-CSRFToken`; cadastro e login anônimos, não — `SessionAuthentication` do
+DRF só cobra CSRF de quem já está autenticado.
+
+### Master é o superusuário do Django, não um papel novo
+
+```bash
+python backend\manage.py createsuperuser
+```
+
+Quem já é superusuário já é master. Promover outra conta é marcar "Superuser
+status" nela — a mesma tela de sempre, sem tela nem campo adicional.
+
+### `POST`/`PUT`/`DELETE /api/especies/` — sempre a mesma lista branca
+
+`nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `credito_imagem`,
+`fonte_imagem_url`, `fonte_url` e `locais` — para master e conta comum igual.
+
+⚠️ **Categoria IUCN, taxonomia e foto ficam fora do formulário para todo
+mundo, master incluso.** São os campos que a migração `0022` passou a exigir
+com data e origem ([docs/FONTES.md](docs/FONTES.md) §6.22); abrir de novo por
+um formulário público — mesmo moderado — reabriria o problema que aquela
+migração fechou. Master edita esses campos pelo `/admin/`, nunca pelo site.
+
+| Quem escreve | O que acontece |
+|---|---|
+| Master (`is_superuser`) | aplica na hora — `201`/`200`/`204`, grava `criado_por`/`editado_por` |
+| Conta aprovada | vira `SolicitacaoEspecie` pendente — `202`, `/api/especies/` não muda até revisão |
+| Conta não aprovada | `403` |
+| Anônimo | `401` |
+
+Revisão é toda pelo Django admin: aprovar conta é marcar a caixa `aprovado`
+em `PerfilUsuarioAdmin` (`list_editable`); aprovar ou rejeitar solicitação de
+espécie é uma ação em lote em `SolicitacaoEspecieAdmin`, mesmo padrão do
+`sincronizar_codigo` já usado em `LocalRecifeAdmin`.
+
+⚠️ **`criado_por`/`editado_por` só aparecem no JSON para quem é master** — a
+chave some inteira para os demais, nunca vira `null`. É a mesma distinção que
+`iucn_categoria` já precisou fazer entre "sem dado" e "escondido de você".
 
 ---
 

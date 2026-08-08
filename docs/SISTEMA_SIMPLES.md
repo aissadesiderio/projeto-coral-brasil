@@ -26,6 +26,7 @@ Aqui a pergunta é outra: *o que essas pastas e comandos estão fazendo?*
 12. [Vocabulário](#12-vocabulário)
 13. [O endpoint que faz conta, e a escada escondida nele](#13-o-endpoint-que-faz-conta-e-a-escada-escondida-nele)
 14. [O que é *deploy*, e por que aqui ele dá trabalho](#14-o-que-é-deploy-e-por-que-aqui-ele-dá-trabalho)
+15. [Quem pode escrever, e por que existe uma fila](#15-quem-pode-escrever-e-por-que-existe-uma-fila)
 
 ---
 
@@ -137,19 +138,22 @@ diante"*.
 | `/api/locais/` | os três recifes | 3 |
 | `/api/locais/abrolhos-ba/` | um recife, com detalhes | 1 |
 | `/api/locais/abrolhos-ba/datasets/` | os conjuntos de dados do recife | — |
-| `/api/especies/` | as espécies catalogadas | 9 |
+| `/api/especies/` | as espécies catalogadas — 🆕 e desde 05/08/2026 aceita `POST`/`PUT`/`DELETE` de conta logada | 9 |
 | `/api/datasets/` | o catálogo de fontes | 9 |
 | `/api/grafo/localizacoes/` | os recifes, vindos do Neo4j | 3 |
 | **`/api/medicoes/`** | ✅ **a série ambiental** | **57.426** |
-| **`/api/medicoes/?formato=csv`** | 🆕 **a mesma série, para baixar** | o recorte inteiro |
+| **`/api/medicoes/?formato=csv`** | 🆕 **a mesma série, para baixar — exige conta aprovada** | o recorte inteiro |
 | **`/api/painel-risco/`** | **o risco calculado** | 3 |
+| 🆕 `/api/auth/cadastro/`, `login/`, `logout/`, `eu/` | criar conta, entrar, sair, saber quem está logado agora | — |
 
 Repare no contraste: tudo tem unidades ou dezenas de registros. **Só o
 `/api/medicoes/` tem dezenas de milhares.**
 
-E repare numa diferença maior, que não aparece na coluna dos números: **todos
-menos o último entregam algo que já estava guardado.** O `painel-risco` é o
-único que *faz uma conta* na hora em que alguém pergunta. Ver a seção 13.
+E repare numa diferença maior, que não aparece na coluna dos números: **quase
+todos entregam algo que já estava guardado, sem calcular nada.** O
+`painel-risco` é o único que *faz uma conta* na hora em que alguém pergunta —
+ver a seção 13. `/api/especies/` é o único que, desde 05/08/2026, também
+*aceita* dado de fora — ver a seção 15.
 
 ⚠️ **Havia um `/api/monitoramento/` nesta lista**, servindo 3 registros do
 modelo antigo. Ele saiu em 28/07/2026 — mas os mesmos números continuaram
@@ -769,6 +773,64 @@ errado, rodá-lo reconstrói tudo a partir do banco e diz o que não bate.
 
 ---
 
+## 15. Quem pode escrever, e por que existe uma fila
+
+Até 05/08/2026, a única forma de mudar uma espécie era o `/admin/`, com login
+de superusuário. Toda seção anterior deste documento descreve endpoints que
+só **leem** — o site inteiro era só vitrine.
+
+Isso mudou, mas não do jeito mais simples possível. O jeito mais simples seria
+"qualquer conta logada edita qualquer espécie". Não é o que existe, e a razão
+é a mesma da seção 6: **o texto digitado sem procedência já causou o pior
+defeito deste projeto** (uma espécie ameaçada de extinção aparecendo como
+segura, porque alguém digitou a categoria errada uma vez e ninguém mais
+conferiu). Abrir a edição para qualquer visitante recriaria esse risco na
+escala de "qualquer visitante".
+
+### Duas perguntas independentes, para toda conta
+
+| Pergunta | Campo | O que decide |
+|---|---|---|
+| Ela consegue entrar? | `is_active` (do Django) | login funciona |
+| Ela pode contribuir? | `PerfilUsuario.aprovado` | escrita é aceita |
+
+Uma conta pode logar e ainda não ter permissão nenhuma — é o estado normal de
+quem acabou de se cadastrar. As duas coisas **nunca são tratadas como a
+mesma**: um erro de "conta não aprovada" nunca é confundido com "usuário ou
+senha errados".
+
+### O que "master" quer dizer aqui
+
+Não é um cargo novo. É reaproveitar o **superusuário do Django** — o mesmo
+tipo de conta que já existia desde sempre para o `/admin/`. Só master:
+
+- edita ou apaga **qualquer** espécie na hora, sem fila;
+- aprova a conta de outra pessoa;
+- vê **quem** criou ou editou cada espécie (o campo some para os demais,
+  igual ao `iucn_categoria` da seção 6 — "não sei" e "não te mostro" não podem
+  ficar indistinguíveis).
+
+### O que acontece quando uma conta comum edita
+
+Não aplica na hora. Vira um pedido guardado — que espécie, quem pediu, o quê
+mudaria — e a espécie real **não muda em nada** até um master revisar. É a
+mesma lógica de uma edição de Wikipédia em página protegida: a proposta existe,
+mas o texto público só muda quando alguém com o selo aceita.
+
+Master revisa pelo próprio `/admin/`, marcando "aprovar" ou "rejeitar" numa
+lista — sem tela nova, porque master já usa aquela tela para tudo o mais.
+
+### O formulário não pergunta tudo que a espécie tem
+
+Mesmo master, ao usar o formulário do site (não o `/admin/`), só edita nome,
+descrição, tipo, crédito da foto e locais onde ocorre. **Categoria de
+conservação, taxonomia e foto ficam de fora do formulário — para todo
+mundo.** Não é limitação técnica: é a mesma decisão da seção 6, aplicada de
+novo. Esses campos só entram pelo `/admin/`, onde há mais cuidado e menos
+gente com acesso.
+
+---
+
 ## Onde ver mais
 
 | Documento | O que tem |
@@ -784,6 +846,7 @@ errado, rodá-lo reconstrói tudo a partir do banco e diz o que não bate.
 
 | Data | Alteração |
 |---|---|
+| 05/08/2026 | **Seção 15 acrescentada: quem pode escrever, e por que existe fila.** Até aqui o documento inteiro descrevia um site que só lê — agora `/api/especies/` aceita escrita de conta logada, e a seção explica por que não é "qualquer um edita qualquer coisa": as duas perguntas independentes que toda conta responde (consegue entrar? pode contribuir?), o que "master" significa (superusuário do Django reaproveitado, não papel novo), por que edição de conta comum vira pedido guardado em vez de mudar a espécie na hora, e por que o formulário do site — mesmo para master — não toca categoria de conservação, taxonomia nem foto. Endpoints de `/api/auth/` e a escrita em `/api/especies/` acrescentados à tabela da seção 3. |
 | 28/07/2026 | **Seção 14 acrescentada: o que é deploy.** Explica em linguagem comum a pergunta que a palavra esconde — *publicar o quê, exatamente?* — e por que aqui mandar o código não basta: três coisas que o site precisa **não estão no Git de propósito**, porque são os artefatos derivados da seção 7. Registrado o que aconteceria sem o passo: o site sobe, a página abre, e o painel de risco diz "serviço indisponível" nos três recifes — **parece que funcionou**, que é o que torna o erro perigoso. Explicadas as duas decisões dentro do comando: ele **para no primeiro erro** (site meio construído é pior que site que não sobe) e **confere se os arquivos existem** mesmo depois de os comandos terem dado certo (um comando pode terminar sem erro e gravar o modelo com nome que o painel não procura). E a lição que o passo ensinou ao ser executado pela primeira vez: a regra estava escrita corretamente em três lugares e garantia nada, porque **ninguém executa um aviso** — documentar um passo não é o mesmo que ter o passo. Vocabulário ganhou *deploy*, *migração* e *servidor*. |
 | 27/07/2026 | **Seção 13 acrescentada, sobre o `/api/painel-risco/`** — o primeiro endpoint que faz conta em vez de servir linha guardada. Três coisas ficaram explicadas em linguagem comum: a armadilha de recalcular a mesma variável de outro jeito (o modelo receberia **o nome certo com o conteúdo errado** e responderia sem erro nenhum), a diferença entre série que *termina* mais cedo e série *furada*, e 🚨 **a escada da calibração** — por que os três recifes voltaram com exatamente o mesmo número, e por que o degrau mais baixo valer 0,000 significa "nenhum alerta entre estes dias", e não "impossível". Daí sai um requisito de tela: **o site não pode exibir "0%" nem "100%"**. Registrado também o que decidimos **não** fazer: trocar o 0 por 0,001 para ficar apresentável seria inventar precisão inexistente. |
 | 27/07/2026 | Documento criado como par de software do [METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md), que cobre só a ciência. Reúne, em linguagem comum, as explicações que foram sendo pedidas ao longo da reconstrução: a separação entre backend e frontend e por que o navegador não acessa o banco, o que é JSON e por que a diferença entre lista e caixa quebrou três testes, os nove endpoints e por que só um precisa de paginação, os três lugares onde os dados moram, a distinção entre **dado** e **modelo**, a regra dos artefatos derivados (cópia guardada envelhece em silêncio), o que um teste realmente compra, por que há dois bancos e o segundo nunca recebe escrita direta, o papel do Docker e por que as credenciais ficam fora do projeto — sendo que essa última é irreversível, porque chave que entra no Git precisa ser revogada e não apagada. |

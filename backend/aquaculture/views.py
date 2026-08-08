@@ -1,8 +1,17 @@
 from django.conf import settings
+from django.contrib.auth import authenticate
+from django.contrib.auth import login as django_login
+from django.contrib.auth import logout as django_logout
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.text import slugify
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13,8 +22,11 @@ from .models import (
     Especie,
     LocalRecife,
     MedicaoAmbiental,
+    SolicitacaoEspecie,
+    aprovado_para_contribuir,
 )
 from .paginacao import PaginacaoPadrao
+from .permissions import PodeContribuir
 from .neo4j_service import (
     Neo4jServiceError,
     listar_localizacoes_grafo,
@@ -22,6 +34,7 @@ from .neo4j_service import (
 )
 from .serializers import (
     DatasetCatalogoSerializer,
+    EspecieContribuicaoSerializer,
     EspecieSerializer,
     LocalRecifeDetailSerializer,
     LocalRecifeListSerializer,
@@ -40,10 +53,16 @@ class OfflineModeMixin:
     antes de `finalize_response`, entao um Response do DRF sairia daqui sem
     `accepted_renderer` e estouraria um AssertionError (HTTP 500) em vez de
     devolver o 503 pretendido.
+
+    🚨 Bloqueia **qualquer** metodo, nao so GET. Ate a funcionalidade de
+    contribuicao de especie, todo uso deste mixin era GET-only, entao a
+    checagem nunca precisou olhar o metodo — mas cadastro de conta e envio de
+    especie sao POST, e nao faz sentido aceitar escrita enquanto o site se
+    declara offline.
     """
 
     def dispatch(self, request, *args, **kwargs):
-        if request.method.lower() == 'get' and getattr(settings, 'OFFLINE_MODE', False):
+        if getattr(settings, 'OFFLINE_MODE', False):
             return JsonResponse(
                 {'detail': MENSAGEM_OFFLINE},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -51,8 +70,23 @@ class OfflineModeMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
-class EspecieList(OfflineModeMixin, generics.ListAPIView):
-    serializer_class = EspecieSerializer
+def _montar_dados_propostos(validated_data):
+    """`validated_data` de `EspecieContribuicaoSerializer`, pronto para JSON.
+
+    🚨 So existe por causa de `locais`: o `SlugRelatedField` com `queryset`
+    resolve para instancias de `LocalRecife`, que `JSONField` nao aceita.
+    Guardar o slug em vez da instancia tambem e o que permite `aprovar()`
+    detectar um recife que sumiu entre o pedido e a revisao.
+    """
+    dados = dict(validated_data)
+    locais = dados.pop('locais', None)
+    if locais is not None:
+        dados['locais'] = [local.slug for local in locais]
+    return dados
+
+
+class EspecieList(OfflineModeMixin, generics.ListCreateAPIView):
+    permission_classes = [PodeContribuir]
 
     def get_queryset(self):
         queryset = Especie.objects.all().prefetch_related('locais')
@@ -61,10 +95,167 @@ class EspecieList(OfflineModeMixin, generics.ListAPIView):
             queryset = queryset.filter(locais__slug=local_slug).distinct()
         return queryset.order_by('nome_comum', 'nome_cientifico')
 
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return EspecieContribuicaoSerializer
+        return EspecieSerializer
 
-class EspecieDetail(OfflineModeMixin, generics.RetrieveAPIView):
+    def create(self, request, *args, **kwargs):
+        """Master cria na hora; qualquer outra conta aprovada vira pedido.
+
+        🚨 O `serializer` aqui e sempre `EspecieContribuicaoSerializer` — a
+        lista branca vale para master tambem. Categoria IUCN, taxonomia e
+        foto continuam so pelo Django admin, para quem quer que seja.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if request.user.is_superuser:
+            especie = serializer.save(criado_por=request.user)
+            saida = EspecieSerializer(especie, context=self.get_serializer_context())
+            return Response(saida.data, status=status.HTTP_201_CREATED)
+
+        SolicitacaoEspecie.objects.create(
+            tipo='CRIAR',
+            solicitante=request.user,
+            dados_propostos=_montar_dados_propostos(serializer.validated_data),
+        )
+        return Response(
+            {'detail': 'Enviado para revisao.'}, status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class EspecieDetail(OfflineModeMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = Especie.objects.all().prefetch_related('locais')
-    serializer_class = EspecieSerializer
+    permission_classes = [PodeContribuir]
+
+    def get_serializer_class(self):
+        if self.request.method in ('PUT', 'PATCH'):
+            return EspecieContribuicaoSerializer
+        return EspecieSerializer
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        if request.user.is_superuser:
+            especie = serializer.save(editado_por=request.user, editado_em=timezone.now())
+            saida = EspecieSerializer(especie, context=self.get_serializer_context())
+            return Response(saida.data)
+
+        SolicitacaoEspecie.objects.create(
+            tipo='EDITAR',
+            especie=instance,
+            solicitante=request.user,
+            dados_propostos=_montar_dados_propostos(serializer.validated_data),
+        )
+        return Response(
+            {'detail': 'Enviado para revisao.'}, status=status.HTTP_202_ACCEPTED,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if request.user.is_superuser:
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        SolicitacaoEspecie.objects.create(
+            tipo='EXCLUIR', especie=instance, solicitante=request.user,
+        )
+        return Response(
+            {'detail': 'Enviado para revisao.'}, status=status.HTTP_202_ACCEPTED,
+        )
+
+
+def _dados_da_sessao(usuario):
+    if not usuario or not usuario.is_authenticated:
+        return {'autenticado': False, 'username': None, 'master': False, 'aprovado': False}
+    return {
+        'autenticado': True,
+        'username': usuario.username,
+        'master': usuario.is_superuser,
+        'aprovado': aprovado_para_contribuir(usuario),
+    }
+
+
+class CadastroView(APIView):
+    """Cadastro aberto — qualquer visitante pode criar conta.
+
+    ⚠️ A conta comeca logada, mas **sem** poder contribuir nem baixar dado:
+    o sinal em `signals.py` cria o `PerfilUsuario` com `aprovado=False`.
+    Aprovar e acao de master, feita no Django admin — devolver a sessao ja
+    logada aqui e o que permite a tela mostrar "aguardando aprovacao" em vez
+    de mandar logar de novo depois de um cadastro que acabou de funcionar.
+    """
+
+    permission_classes = []
+
+    def post(self, request):
+        username = (request.data.get('username') or '').strip()
+        email = (request.data.get('email') or '').strip()
+        senha = request.data.get('password') or ''
+
+        if not username or not senha:
+            return Response(
+                {'detail': 'Usuario e senha sao obrigatorios.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'detail': 'Este nome de usuario ja existe.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_password(senha)
+        except DjangoValidationError as erro:
+            return Response({'detail': ' '.join(erro.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        usuario = User.objects.create_user(username=username, email=email, password=senha)
+        django_login(request._request, usuario)
+        return Response(_dados_da_sessao(usuario), status=status.HTTP_201_CREATED)
+
+
+class LoginView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        username = request.data.get('username') or ''
+        senha = request.data.get('password') or ''
+        usuario = authenticate(request, username=username, password=senha)
+        if usuario is None:
+            return Response(
+                {'detail': 'Usuario ou senha invalidos.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        django_login(request._request, usuario)
+        return Response(_dados_da_sessao(usuario))
+
+
+class LogoutView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        django_logout(request._request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EuView(APIView):
+    """Estado da sessao — tambem funciona deslogado (autenticado: false).
+
+    `ensure_csrf_cookie` garante que o cookie `csrftoken` exista assim que o
+    site carrega, mesmo antes de qualquer login: sem ele, a primeira escrita
+    autenticada (cadastro nao precisa, mas editar/logout precisam) nao teria
+    de onde ler o token para o cabecalho `X-CSRFToken`.
+    """
+
+    permission_classes = []
+
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request):
+        return Response(_dados_da_sessao(request.user))
 
 
 class LocaisDoModeloNoContextoMixin:
@@ -330,6 +521,22 @@ class MedicaoAmbientalList(OfflineModeMixin, generics.ListAPIView):
 
         try:
             if request.query_params.get('formato') == 'csv':
+                # 🚨 O bloqueio mora **so** aqui dentro, e nao em
+                # `permission_classes` da view — as duas saidas de `list()`
+                # compartilham o mesmo metodo, e um `permission_classes`
+                # travaria tambem o JSON que alimenta o grafico publico do
+                # recife. Ver PLANEJAMENTO.md sobre baixar dados exigir conta
+                # aprovada.
+                if not aprovado_para_contribuir(request.user):
+                    codigo = (
+                        status.HTTP_401_UNAUTHORIZED
+                        if not request.user.is_authenticated
+                        else status.HTTP_403_FORBIDDEN
+                    )
+                    return Response(
+                        {'detail': 'Faca login com uma conta aprovada para baixar dados.'},
+                        status=codigo,
+                    )
                 return self._csv(self.get_queryset())
             return super().list(request, *args, **kwargs)
         except (ValidationError, ValueError) as erro:

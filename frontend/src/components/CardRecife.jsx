@@ -74,7 +74,7 @@ export default function CardRecife({ local, predicao = null }) {
   return (
     <Link
       to={obterRotaLocalizacao(local.slug)}
-      className="group flex h-full flex-col text-left transition duration-300 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b6978] focus-visible:ring-offset-4 focus-visible:ring-offset-[#fff6f4]"
+      className="group flex h-full flex-col text-left transition duration-300 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-dark focus-visible:ring-offset-4 focus-visible:ring-offset-sand-lightest"
     >
       <div className="overflow-hidden rounded-[22px] bg-white shadow-[0_18px_45px_rgba(43,105,120,0.12)]">
         <ImagemRecife
@@ -85,12 +85,12 @@ export default function CardRecife({ local, predicao = null }) {
       </div>
 
       <div className="flex flex-1 flex-col px-1 pb-1 pt-5">
-        <h3 className="text-[1.6rem] font-bold leading-[1.15] tracking-[-0.025em] text-[#2b6978]">
+        <h3 className="text-card-title font-bold leading-[1.15] tracking-[-0.025em] text-ocean-dark">
           {local.nome}
         </h3>
 
         <p className="mt-5 inline-flex items-center gap-2 text-sm text-slate-500">
-          <MapPin size={16} className="text-[#2b6978]" />
+          <MapPin size={16} className="text-ocean-dark" />
           {local.estado} - {local.cidade}
         </p>
 
@@ -111,7 +111,7 @@ export default function CardRecife({ local, predicao = null }) {
 
         <div className="mt-5 inline-flex items-center gap-3">
           <BadgeAlerta alerta={alerta} />
-          <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#2b6978]">
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-ocean-dark">
             Abrir
             <ExternalLink
               size={15}

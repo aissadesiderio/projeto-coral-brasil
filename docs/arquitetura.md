@@ -75,7 +75,7 @@ Duas perguntas que a tabela responde mal, e que sao contribuicao real do trabalh
 
 ### PostgreSQL — fonte unica da verdade
 - autenticacao, admin e configuracoes operacionais;
-- `LocalRecife`, `Especie`, `MedicaoAmbiental`, `ExecucaoIngestao` e `DatasetCatalogo`;
+- `LocalRecife`, `Especie`, `MedicaoAmbiental`, `ExecucaoIngestao`, `DatasetCatalogo`, `PerfilUsuario` e `SolicitacaoEspecie` (fila de moderação, desde 05/08/2026);
 - integridade relacional e operacao normal dos endpoints REST;
 - **origem de tudo o que o modelo treina** e de tudo o que o grafo projeta.
 

@@ -1,9 +1,11 @@
 from django.conf import settings
 from django.contrib import admin, messages
+from django.db import transaction
+from django.utils import timezone
 from django.utils.html import format_html
 
 from .code_sync import sync_project_code_from_db
-from .models import DatasetCatalogo, Especie, LocalRecife
+from .models import DatasetCatalogo, Especie, LocalRecife, PerfilUsuario, SolicitacaoEspecie
 
 
 class SyncToCodeAdminMixin:
@@ -163,7 +165,10 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
     list_filter = ('tipo', 'iucn_categoria', 'locais')
     search_fields = ('nome_cientifico', 'nome_comum', 'credito_imagem')
     filter_horizontal = ('locais',)
-    readonly_fields = ('mostrar_foto_grande', 'link_imagem', 'link_fonte_imagem', 'link_fonte_info')
+    readonly_fields = (
+        'mostrar_foto_grande', 'link_imagem', 'link_fonte_imagem', 'link_fonte_info',
+        'criado_por', 'editado_por', 'editado_em',
+    )
     save_on_top = True
 
     fieldsets = (
@@ -227,6 +232,19 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
             'Conteudo',
             {
                 'fields': ('descricao', 'fonte_url', 'link_fonte_info'),
+            },
+        ),
+        (
+            'Autoria (so leitura)',
+            {
+                'fields': ('criado_por', 'editado_por', 'editado_em'),
+                'description': (
+                    'Preenchido quando a especie chega por contribuicao no '
+                    'site (criacao/edicao direta de master, ou solicitacao '
+                    'aprovada de conta comum). Em branco = nunca passou por '
+                    'esse caminho, o que inclui as 9 especies de antes desta '
+                    'funcionalidade.'
+                ),
             },
         ),
     )
@@ -315,3 +333,83 @@ class DatasetCatalogoAdmin(admin.ModelAdmin):
     ordering = ('ordem_exibicao', 'titulo')
     list_editable = ('ativo',)
     save_on_top = True
+
+
+@admin.register(PerfilUsuario)
+class PerfilUsuarioAdmin(admin.ModelAdmin):
+    """Aprovar conta e marcar uma caixa numa lista — nada mais que isso.
+
+    Sem tela nova, sem endpoint novo: master ja loga como superusuario, e
+    aprovar uma conta e exatamente o tipo de acao que `list_editable` resolve
+    sem nenhum codigo de fluxo.
+    """
+
+    list_display = ('usuario', 'aprovado', 'aprovado_por', 'aprovado_em', 'criado_em')
+    list_filter = ('aprovado',)
+    list_editable = ('aprovado',)
+    search_fields = ('usuario__username', 'usuario__email')
+    readonly_fields = ('aprovado_por', 'aprovado_em', 'criado_em')
+    autocomplete_fields = ('usuario',)
+
+    def save_model(self, request, obj, form, change):
+        # 🚨 So grava quem aprovou/quando se `aprovado` de fato mudou nesta
+        # edicao — senão salvar o registro por qualquer outro motivo (ou
+        # desaprovar) reescreveria "aprovado por" com o nome de quem so
+        # passou por aqui, inclusive na hora de reverter uma aprovacao.
+        if 'aprovado' in form.changed_data:
+            if obj.aprovado:
+                obj.aprovado_por = request.user
+                obj.aprovado_em = timezone.now()
+            else:
+                obj.aprovado_por = None
+                obj.aprovado_em = None
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(SolicitacaoEspecie)
+class SolicitacaoEspecieAdmin(admin.ModelAdmin):
+    """A fila de moderacao. `dados_propostos` e so leitura de proposito —
+    revisar e decidir aprovar/rejeitar, nao editar a proposta por cima.
+    """
+
+    list_display = ('tipo', 'especie', 'solicitante', 'status', 'criado_em', 'revisado_por')
+    list_filter = ('tipo', 'status')
+    search_fields = ('solicitante__username', 'especie__nome_cientifico')
+    readonly_fields = (
+        'tipo', 'especie', 'dados_propostos', 'solicitante', 'criado_em',
+        'status', 'revisado_por', 'revisado_em', 'motivo_rejeicao',
+    )
+    actions = ['aprovar_selecionadas', 'rejeitar_selecionadas']
+
+    def has_add_permission(self, request):
+        # So nasce por contribuicao via API — criar direto no admin não faz
+        # sentido (não existiria conta solicitante de verdade por tras).
+        return False
+
+    @admin.action(description='Aprovar selecionadas')
+    def aprovar_selecionadas(self, request, queryset):
+        aprovadas, falhas = 0, []
+        for solicitacao in queryset.filter(status='PENDENTE'):
+            try:
+                # 🚨 Savepoint proprio por item: sem isto, um IntegrityError
+                # (duas solicitacoes de CRIAR aprovadas com o mesmo nome
+                # cientifico) deixaria a transacao inteira do lote imprestavel
+                # para os itens seguintes, nao so para este.
+                with transaction.atomic():
+                    solicitacao.aprovar(request.user)
+                aprovadas += 1
+            except Exception as exc:
+                falhas.append(f'#{solicitacao.pk}: {exc}')
+
+        if aprovadas:
+            self.message_user(request, f'{aprovadas} solicitacao(oes) aprovada(s).', level=messages.SUCCESS)
+        for falha in falhas:
+            self.message_user(request, f'Falha ao aprovar {falha}', level=messages.ERROR)
+
+    @admin.action(description='Rejeitar selecionadas')
+    def rejeitar_selecionadas(self, request, queryset):
+        total = 0
+        for solicitacao in queryset.filter(status='PENDENTE'):
+            solicitacao.rejeitar(request.user, motivo='Rejeitada em lote pelo admin.')
+            total += 1
+        self.message_user(request, f'{total} solicitacao(oes) rejeitada(s).', level=messages.INFO)
