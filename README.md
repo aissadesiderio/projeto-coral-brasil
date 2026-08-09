@@ -570,7 +570,7 @@ cd backend
 python manage.py test
 ```
 
-Termina em `OK (skipped=1)`, em ~100 s. Eram **750 testes** em 05/08/2026 — o
+Termina em `OK (skipped=1)`, em ~100 s. Eram **754 testes** em 08/08/2026 — o
 número cresce a cada mudança; o que importa é o `OK`.
 
 ```bash

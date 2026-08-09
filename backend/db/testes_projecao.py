@@ -114,6 +114,72 @@ class ProjecaoTests(TestCase):
     def test_fonte_sem_dataset_nao_vira_id_com_dois_pontos_solto(self):
         self.assertEqual(projecao._slug_fonte('noaa_crw', ''), 'noaa_crw')
 
+    # --- especies -------------------------------------------------------
+
+    def test_projeta_os_campos_que_a_modal_do_site_precisa(self):
+        """🚨 Ate 08/08/2026 so nome_cientifico, nome_comum, iucn_categoria,
+        iucn_avaliado_em e aphia_id eram gravados. `tipo`, `descricao`,
+        credito e as fontes nunca chegavam ao grafo — e a modal de especie da
+        pagina do recife, que le daqui, sempre mostrava "sem procedencia
+        registrada", mesmo para uma especie com categoria e ano cadastrados no
+        Postgres. Ver docs/FONTES.md secao 2.4.
+        """
+        self.especie.tipo = 'CORAL'
+        self.especie.descricao = 'Endemica do Brasil.'
+        self.especie.iucn_categoria = 'CR'
+        self.especie.iucn_avaliado_em = 2022
+        self.especie.credito_imagem = 'Foto: fulano'
+        self.especie.fonte_imagem_url = 'https://exemplo.org/foto'
+        self.especie.fonte_url = 'https://exemplo.org/especie'
+        self.especie.save()
+        conexao = ConexaoFalsa()
+
+        projecao.projetar_especies(conexao)
+
+        linha = conexao.linhas_de('MERGE (n:Especie')[0]
+        self.assertEqual(linha['tipo'], 'CORAL')
+        self.assertEqual(linha['descricao'], 'Endemica do Brasil.')
+        self.assertEqual(linha['iucn_categoria'], 'CR')
+        self.assertEqual(linha['iucn_categoria_rotulo'], 'Criticamente ameacada')
+        self.assertEqual(linha['iucn_avaliado_em'], 2022)
+        self.assertIs(linha['iucn_tem_procedencia'], True)
+        self.assertEqual(linha['credito_imagem'], 'Foto: fulano')
+        self.assertEqual(linha['fonte_imagem_url'], 'https://exemplo.org/foto')
+        self.assertEqual(linha['fonte_url'], 'https://exemplo.org/especie')
+
+    def test_sem_categoria_e_ano_a_procedencia_sai_falsa(self):
+        """A especie da fixture nao tem IUCN cadastrada, igual ao acervo real
+        antes de uma conferencia — `iucn_tem_procedencia` precisa acompanhar,
+        e nao ficar True so porque o campo existe no schema."""
+        conexao = ConexaoFalsa()
+
+        projecao.projetar_especies(conexao)
+
+        linha = conexao.linhas_de('MERGE (n:Especie')[0]
+        self.assertIs(linha['iucn_tem_procedencia'], False)
+
+    def test_nao_escreve_mais_o_campo_removido_na_migracao_0022(self):
+        """Regressao: `status_conservacao` nao existe mais no modelo Django,
+        e escreve-lo de novo no grafo seria reintroduzir o campo de texto
+        livre que a migracao 0022 fechou."""
+        conexao = ConexaoFalsa()
+
+        projecao.projetar_especies(conexao)
+
+        linha = conexao.linhas_de('MERGE (n:Especie')[0]
+        self.assertNotIn('status_conservacao', linha)
+
+    def test_a_projecao_remove_a_propriedade_legada_de_nos_ja_existentes(self):
+        """`SET n += linha` so adiciona ou sobrescreve chaves — sem um REMOVE
+        explicito, um no projetado antes desta correcao ficaria com
+        `status_conservacao` orfa e nula para sempre."""
+        conexao = ConexaoFalsa()
+
+        projecao.projetar_especies(conexao)
+
+        cypher = next(c for c, _ in conexao.chamadas if 'MERGE (n:Especie' in c)
+        self.assertIn('REMOVE n.status_conservacao', cypher)
+
     # --- proveniencia -------------------------------------------------------
 
     def test_toda_medicao_aponta_para_uma_fonte(self):

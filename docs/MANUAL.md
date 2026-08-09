@@ -507,7 +507,7 @@ senha não aparece enquanto você digita — nem asteriscos. Isso é normal.
 Esse usuário serve para entrar em `http://localhost:8000/admin/`, o painel onde
 se cadastram recifes, espécies e fotos.
 
-🆕 **Desde 05/08/2026, é também o usuário "master" do próprio site** — a
+🆕 **Desde 08/08/2026, é também o usuário "master" do próprio site** — a
 mesma conta e a mesma senha logam em `http://localhost:3000/login`, e lá ela
 aprova conta de visitante e edita espécie na hora, sem passar por moderação.
 Não existe cadastro separado para isso: quem é superusuário aqui já é master

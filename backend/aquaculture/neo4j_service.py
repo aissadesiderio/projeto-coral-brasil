@@ -88,7 +88,12 @@ RETURN
     e.nome_comum AS nome_comum,
     e.tipo AS tipo,
     e.descricao AS descricao,
-    e.status_conservacao AS status_conservacao,
+    e.iucn_categoria AS iucn_categoria,
+    e.iucn_categoria_rotulo AS iucn_categoria_rotulo,
+    e.iucn_avaliado_em AS iucn_avaliado_em,
+    e.iucn_versao AS iucn_versao,
+    e.fonte_iucn_url AS fonte_iucn_url,
+    e.iucn_tem_procedencia AS iucn_tem_procedencia,
     e.credito_imagem AS credito_imagem,
     e.fonte_imagem_url AS fonte_imagem_url,
     e.fonte_url AS fonte_url

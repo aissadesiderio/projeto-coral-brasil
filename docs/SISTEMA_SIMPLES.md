@@ -138,7 +138,7 @@ diante"*.
 | `/api/locais/` | os três recifes | 3 |
 | `/api/locais/abrolhos-ba/` | um recife, com detalhes | 1 |
 | `/api/locais/abrolhos-ba/datasets/` | os conjuntos de dados do recife | — |
-| `/api/especies/` | as espécies catalogadas — 🆕 e desde 05/08/2026 aceita `POST`/`PUT`/`DELETE` de conta logada | 9 |
+| `/api/especies/` | as espécies catalogadas — 🆕 e desde 08/08/2026 aceita `POST`/`PUT`/`DELETE` de conta logada | 9 |
 | `/api/datasets/` | o catálogo de fontes | 9 |
 | `/api/grafo/localizacoes/` | os recifes, vindos do Neo4j | 3 |
 | **`/api/medicoes/`** | ✅ **a série ambiental** | **57.426** |
@@ -152,7 +152,7 @@ Repare no contraste: tudo tem unidades ou dezenas de registros. **Só o
 E repare numa diferença maior, que não aparece na coluna dos números: **quase
 todos entregam algo que já estava guardado, sem calcular nada.** O
 `painel-risco` é o único que *faz uma conta* na hora em que alguém pergunta —
-ver a seção 13. `/api/especies/` é o único que, desde 05/08/2026, também
+ver a seção 13. `/api/especies/` é o único que, desde 08/08/2026, também
 *aceita* dado de fora — ver a seção 15.
 
 ⚠️ **Havia um `/api/monitoramento/` nesta lista**, servindo 3 registros do
@@ -775,7 +775,7 @@ errado, rodá-lo reconstrói tudo a partir do banco e diz o que não bate.
 
 ## 15. Quem pode escrever, e por que existe uma fila
 
-Até 05/08/2026, a única forma de mudar uma espécie era o `/admin/`, com login
+Até 08/08/2026, a única forma de mudar uma espécie era o `/admin/`, com login
 de superusuário. Toda seção anterior deste documento descreve endpoints que
 só **leem** — o site inteiro era só vitrine.
 
@@ -846,7 +846,7 @@ gente com acesso.
 
 | Data | Alteração |
 |---|---|
-| 05/08/2026 | **Seção 15 acrescentada: quem pode escrever, e por que existe fila.** Até aqui o documento inteiro descrevia um site que só lê — agora `/api/especies/` aceita escrita de conta logada, e a seção explica por que não é "qualquer um edita qualquer coisa": as duas perguntas independentes que toda conta responde (consegue entrar? pode contribuir?), o que "master" significa (superusuário do Django reaproveitado, não papel novo), por que edição de conta comum vira pedido guardado em vez de mudar a espécie na hora, e por que o formulário do site — mesmo para master — não toca categoria de conservação, taxonomia nem foto. Endpoints de `/api/auth/` e a escrita em `/api/especies/` acrescentados à tabela da seção 3. |
+| 08/08/2026 | **Seção 15 acrescentada: quem pode escrever, e por que existe fila.** Até aqui o documento inteiro descrevia um site que só lê — agora `/api/especies/` aceita escrita de conta logada, e a seção explica por que não é "qualquer um edita qualquer coisa": as duas perguntas independentes que toda conta responde (consegue entrar? pode contribuir?), o que "master" significa (superusuário do Django reaproveitado, não papel novo), por que edição de conta comum vira pedido guardado em vez de mudar a espécie na hora, e por que o formulário do site — mesmo para master — não toca categoria de conservação, taxonomia nem foto. Endpoints de `/api/auth/` e a escrita em `/api/especies/` acrescentados à tabela da seção 3. |
 | 28/07/2026 | **Seção 14 acrescentada: o que é deploy.** Explica em linguagem comum a pergunta que a palavra esconde — *publicar o quê, exatamente?* — e por que aqui mandar o código não basta: três coisas que o site precisa **não estão no Git de propósito**, porque são os artefatos derivados da seção 7. Registrado o que aconteceria sem o passo: o site sobe, a página abre, e o painel de risco diz "serviço indisponível" nos três recifes — **parece que funcionou**, que é o que torna o erro perigoso. Explicadas as duas decisões dentro do comando: ele **para no primeiro erro** (site meio construído é pior que site que não sobe) e **confere se os arquivos existem** mesmo depois de os comandos terem dado certo (um comando pode terminar sem erro e gravar o modelo com nome que o painel não procura). E a lição que o passo ensinou ao ser executado pela primeira vez: a regra estava escrita corretamente em três lugares e garantia nada, porque **ninguém executa um aviso** — documentar um passo não é o mesmo que ter o passo. Vocabulário ganhou *deploy*, *migração* e *servidor*. |
 | 27/07/2026 | **Seção 13 acrescentada, sobre o `/api/painel-risco/`** — o primeiro endpoint que faz conta em vez de servir linha guardada. Três coisas ficaram explicadas em linguagem comum: a armadilha de recalcular a mesma variável de outro jeito (o modelo receberia **o nome certo com o conteúdo errado** e responderia sem erro nenhum), a diferença entre série que *termina* mais cedo e série *furada*, e 🚨 **a escada da calibração** — por que os três recifes voltaram com exatamente o mesmo número, e por que o degrau mais baixo valer 0,000 significa "nenhum alerta entre estes dias", e não "impossível". Daí sai um requisito de tela: **o site não pode exibir "0%" nem "100%"**. Registrado também o que decidimos **não** fazer: trocar o 0 por 0,001 para ficar apresentável seria inventar precisão inexistente. |
 | 27/07/2026 | Documento criado como par de software do [METODOLOGIA_SIMPLES.md](METODOLOGIA_SIMPLES.md), que cobre só a ciência. Reúne, em linguagem comum, as explicações que foram sendo pedidas ao longo da reconstrução: a separação entre backend e frontend e por que o navegador não acessa o banco, o que é JSON e por que a diferença entre lista e caixa quebrou três testes, os nove endpoints e por que só um precisa de paginação, os três lugares onde os dados moram, a distinção entre **dado** e **modelo**, a regra dos artefatos derivados (cópia guardada envelhece em silêncio), o que um teste realmente compra, por que há dois bancos e o segundo nunca recebe escrita direta, o papel do Docker e por que as credenciais ficam fora do projeto — sendo que essa última é irreversível, porque chave que entra no Git precisa ser revogada e não apagada. |
