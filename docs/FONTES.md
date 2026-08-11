@@ -326,6 +326,22 @@ As duas afirmações estão certas — em anos diferentes. Sem o ano, a tela nã
 
 📌 **Próximo passo sobre a API em si:** contestar direto por `conservation.informatics@iucn.org`, explicando tratar-se de projeto acadêmico não-comercial (TCC) e que não é IBAT — em vez de reenviar o mesmo formulário.
 
+📬 **Atualização de 05/08/2026:** contato com o IBAT-Alliance (parceiro oficial da IUCN, citado na recusa-padrão) obteve resposta humana de Mark Leckie (IBAT Programme Officer) — não mais o texto-modelo. Oferece conta gratuita não-comercial com acesso a mapas, KBAs, PCAs e dados da IUCN Red List, com resumo de biodiversidade num raio de 50 km por site cadastrado. ⚠️ **Isso parece ser busca por local (desenhar/subir um site → resumo num raio), não busca por nome de espécie** — precisa confirmar se serve para o caso de uso do projeto (categoria de uma espécie nomeada) ou só para o caso de uso deles (triagem de risco por área, típico de EIA). Se for por local, ainda é uma fonte candidata legítima para quando as ocorrências vierem do OBIS/GBIF por bbox do recife (§2.4.1) — daria espécie **e** categoria de conservação na mesma consulta.
+
+#### 📬 Investigação do IBAT, 11/08/2026 — schema certo, cobertura da amostra errada
+
+Conta criada como **Organisation** (não Personal), vinculada à UFF, com e-mail institucional — segue a mesma linha de argumento da contestação à IUCN. Testes feitos num site de exemplo (`abrolhos-ba`, buffer de 10 km, tipo "Direct Operations", já que nenhum "site type" da lista — todos de indústria extrativa/infraestrutura — descreve monitoramento acadêmico):
+
+1. **A contagem por site é gratuita, mas só agregada.** O site de teste devolveu 7 PAs, 1.816 espécies, 0 KBAs — sem lista nomeada. Pela dica de UI do próprio KBA, esse raio é **fixo em 50 km**, independente do buffer escolhido ao criar o site.
+2. **A lista nomeada é paga.** `Reports → New report → Disclosure Preparation Report` cobra **US$ 1.000** — não seguido adiante. `GIS Downloads → New GIS Download` calcula custo por área (PAYG) — não testado, pra não gerar cobrança.
+3. **Existe uma amostra gratuita** (`Download GIS Sample`) — arquivo Esri File Geodatabase (`.gdb`), a camada `redlist` sozinha com ~2,7 GB, contendo três camadas: `IUCN_RL_Species_List` (tabela sem geometria), `IUCN_RL_Species_Points` e `IUCN_RL_Species_Ranges` (`MultiPolygon`).
+4. ✅ **`IUCN_RL_Species_List` tem exatamente o schema que o projeto precisa**: `scientific_name`, `category`, `common_name`, `criteria`, `publication_yr`, `assessment_date`, `authority`, mais taxonomia completa — dá pra montar a citação inteira só com essa tabela, sem tocar nos polígonos.
+5. 🚨 **Mas o conteúdo da amostra não cobre o projeto.** 1.207 linhas, span de vários táxons (peixe, ave, fungo, planta, molusco...) como demonstração de formato — **zero registros de `ANTHOZOA`** (a classe dos corais) e **nenhuma das nove espécies do projeto** está presente. É recorte de demonstração, não recorte por região/grupo.
+
+**Como abrir um `.gdb` sem ArcGIS** (registrado porque não é óbvio): `pip install geopandas pyogrio`, depois `pyogrio.list_layers(caminho)` lista as camadas, e `pyogrio.read_dataframe(caminho, layer=nome)` lê uma camada sem geometria direto — mais robusto que `geopandas.read_file` pra tabelas não-espaciais, e evita depender do `fiona`.
+
+📌 **Pendência real, não a de antes:** confirmar com o Mark Leckie se o dataset completo (não-amostra) cobre Anthozoa/Brasil com essa mesma estrutura de tabela, e se existe caminho não-comercial pra acessar só a tabela de atributos (sem os polígonos multi-GB, sem o relatório de US$1.000, sem o PAYG por área). Pergunta enviada em 11/08/2026; resposta ainda pendente.
+
 ✅ **As 9 espécies foram preenchidas em 04/08/2026 pelo caminho `ficha`** (migração `0024_conferencia_iucn_agosto_2026.py`), sem precisar da API — confirmando que a recusa não bloqueava o que havia de mais urgente. Cada uma foi aberta individualmente em `iucnredlist.org` (busca manual, não scraping em lote):
 
 | Espécie | Categoria | Publicado em | Versão | Observação |
