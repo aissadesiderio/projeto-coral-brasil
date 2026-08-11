@@ -14,6 +14,10 @@ urlpatterns = [
     ),
     path('especies/', views.EspecieList.as_view(), name='especie_list'),
     path('especies/<int:pk>/', views.EspecieDetail.as_view(), name='especie_detail'),
+    path('auth/cadastro/', views.CadastroView.as_view(), name='auth_cadastro'),
+    path('auth/login/', views.LoginView.as_view(), name='auth_login'),
+    path('auth/logout/', views.LogoutView.as_view(), name='auth_logout'),
+    path('auth/eu/', views.EuView.as_view(), name='auth_eu'),
     # A serie ambiental. Substituiu o `monitoramento/`, removido em
     # 28/07/2026: aquele devolvia `StatusPredicao`, o modelo legado com 3
     # registros de demonstracao.

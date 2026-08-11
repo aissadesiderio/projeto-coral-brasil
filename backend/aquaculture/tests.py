@@ -29,7 +29,7 @@ from .inventario_datasets import (
     EXCLUIDOS,
     construir_inventario,
 )
-from .models import DatasetCatalogo, Especie, LocalRecife
+from .models import DatasetCatalogo, Especie, LocalRecife, PerfilUsuario, SolicitacaoEspecie
 from .neo4j_schema import SCHEMA_QUERIES
 from .neo4j_service import Neo4jServiceError, listar_localizacoes_grafo, obter_localizacao_grafo
 
@@ -566,6 +566,77 @@ class DjangoAdminTests(TestCase):
         )
         self.assertEqual(antes_frontend, depois_frontend, 'recifeData.js foi reescrito')
         self.assertEqual(antes_backend, depois_backend, 'generated_admin_sync.py foi reescrito')
+
+    def test_aprovar_conta_pelo_admin_grava_quem_e_quando(self):
+        """`list_editable` no changelist de `PerfilUsuario` — aprovar e marcar
+        uma caixa, e o admin registra quem marcou."""
+        User = get_user_model()
+        visitante = User.objects.create_user(username='visitante', password='senha-forte-123')
+        self.assertFalse(visitante.perfil.aprovado)
+
+        self.client.login(username='admin', password='senha-forte-123')
+        resposta = self.client.post(
+            '/admin/aquaculture/perfilusuario/',
+            {
+                'form-TOTAL_FORMS': '1',
+                'form-INITIAL_FORMS': '1',
+                'form-MIN_NUM_FORMS': '0',
+                'form-MAX_NUM_FORMS': '1000',
+                'form-0-id': str(visitante.perfil.pk),
+                'form-0-aprovado': 'on',
+                '_save': 'Salvar',
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        visitante.perfil.refresh_from_db()
+        self.assertTrue(visitante.perfil.aprovado)
+        self.assertEqual(visitante.perfil.aprovado_por, self.user)
+        self.assertIsNotNone(visitante.perfil.aprovado_em)
+
+    def test_aprovar_solicitacao_pelo_admin_aplica_a_especie(self):
+        User = get_user_model()
+        comum = User.objects.create_user(username='comum', password='senha-forte-123')
+        solicitacao = SolicitacaoEspecie.objects.create(
+            tipo='CRIAR', solicitante=comum,
+            dados_propostos={'nome_cientifico': 'Aprovadus admin', 'tipo': 'CORAL'},
+        )
+
+        self.client.login(username='admin', password='senha-forte-123')
+        resposta = self.client.post(
+            '/admin/aquaculture/solicitacaoespecie/',
+            {
+                'action': 'aprovar_selecionadas',
+                '_selected_action': [str(solicitacao.pk)],
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        solicitacao.refresh_from_db()
+        self.assertEqual(solicitacao.status, 'APROVADA')
+        self.assertTrue(Especie.objects.filter(nome_cientifico='Aprovadus admin').exists())
+
+    def test_rejeitar_solicitacao_pelo_admin_nao_toca_a_especie(self):
+        User = get_user_model()
+        comum = User.objects.create_user(username='comum', password='senha-forte-123')
+        solicitacao = SolicitacaoEspecie.objects.create(
+            tipo='CRIAR', solicitante=comum,
+            dados_propostos={'nome_cientifico': 'Rejeitadus admin', 'tipo': 'CORAL'},
+        )
+
+        self.client.login(username='admin', password='senha-forte-123')
+        resposta = self.client.post(
+            '/admin/aquaculture/solicitacaoespecie/',
+            {
+                'action': 'rejeitar_selecionadas',
+                '_selected_action': [str(solicitacao.pk)],
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        solicitacao.refresh_from_db()
+        self.assertEqual(solicitacao.status, 'REJEITADA')
+        self.assertFalse(Especie.objects.filter(nome_cientifico='Rejeitadus admin').exists())
 
 
 @override_settings(OFFLINE_MODE=False)

@@ -5,7 +5,7 @@ import { obterRotaPorPagina } from '../utils/navigation';
 
 export default function HomePage({ siteOffline, offlineMessage }) {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-[#2b6978] via-[#b0d7d4] via-[40%] to-[#ffefeb]">
+    <section className="relative overflow-hidden bg-gradient-to-b from-ocean-dark via-[#b0d7d4] via-[40%] to-sand-lightest">
       <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
 
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pb-20 pt-4 sm:px-6 sm:pb-24 lg:px-8">
@@ -20,12 +20,15 @@ export default function HomePage({ siteOffline, offlineMessage }) {
           <img
             src={HOME_HERO_IMAGE}
             alt="Coral em destaque na pagina inicial"
+            width={1920}
+            height={1080}
+            fetchPriority="high"
             className="w-full max-w-[980px] object-contain drop-shadow-[0_32px_48px_rgba(19,74,87,0.18)]"
           />
         </div>
 
         <div className="max-w-3xl pb-4 sm:pb-10">
-          <h1 className="text-[1.9rem] font-bold leading-[1.15] tracking-[-0.02em] text-[#2b6978] sm:text-[2.4rem] lg:text-[2.75rem]">
+          <h1 className="text-heading-sm font-bold leading-[1.15] tracking-[-0.02em] text-ocean-dark sm:text-heading lg:text-heading-lg">
             Mergulhe na biodiversidade coralina brasileira.
           </h1>
           <p className="mt-4 max-w-2xl text-base font-medium leading-[1.55] text-black/60 sm:text-lg">
@@ -36,13 +39,13 @@ export default function HomePage({ siteOffline, offlineMessage }) {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               to={obterRotaPorPagina('recifes')}
-              className="rounded-[10px] bg-[#2b6978] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#245766] sm:w-auto"
+              className="rounded-[10px] bg-ocean-dark px-5 py-3 text-sm font-medium text-white transition hover:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-dark focus-visible:ring-offset-2 focus-visible:ring-offset-sand-lightest sm:w-auto"
             >
               Explorar recifes
             </Link>
             <Link
               to={obterRotaPorPagina('banco')}
-              className="rounded-[10px] border border-[#2b6978]/20 bg-white/70 px-5 py-3 text-sm font-medium text-[#2b6978] transition hover:bg-white"
+              className="rounded-[10px] border border-ocean-dark/20 bg-white/70 px-5 py-3 text-sm font-medium text-ocean-dark transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-dark focus-visible:ring-offset-2 focus-visible:ring-offset-sand-lightest"
             >
               Banco de dados geral
             </Link>
@@ -57,12 +60,14 @@ export default function HomePage({ siteOffline, offlineMessage }) {
                   <img
                     src={item.imagem}
                     alt={item.titulo}
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </div>
 
                 <div className="pt-6">
-                  <h2 className="text-2xl font-semibold leading-[1.2] tracking-[-0.02em] text-[#2b6978]">
+                  <h2 className="text-2xl font-semibold leading-[1.2] tracking-[-0.02em] text-ocean-dark">
                     {item.titulo}
                   </h2>
                   <p className="mt-2 text-base leading-[1.55] text-black/60 sm:text-lg">

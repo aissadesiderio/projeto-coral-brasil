@@ -97,7 +97,7 @@ export default function ModalEspecie({ especie, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-full bg-sand-light px-3 py-1 text-sm font-semibold text-ocean-dark"
+            className="absolute right-4 top-4 rounded-full bg-sand-light px-3 py-1 text-sm font-semibold text-ocean-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-dark focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
             Fechar
           </button>

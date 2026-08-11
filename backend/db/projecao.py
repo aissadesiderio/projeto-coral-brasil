@@ -180,9 +180,25 @@ def projetar_especies(conexao=Neo4jConnection):
             'id': identificador,
             'nome_cientifico': e.nome_cientifico,
             'nome_comum': e.nome_comum,
-            'iucn_categoria': getattr(e, 'iucn_categoria', ''),
-            'iucn_avaliado_em': getattr(e, 'iucn_avaliado_em', None),
-            'aphia_id': getattr(e, 'aphia_id', None),
+            'tipo': e.tipo,
+            'descricao': e.descricao,
+            # 🚨 `status_conservacao` foi removido do modelo pela migracao 0022
+            # (docs/FONTES.md secao 2.4) e nunca deveria ter sido escrito de
+            # novo aqui. `iucn_tem_procedencia` e `iucn_categoria_rotulo` sao
+            # derivados no Django (Especie.iucn_tem_procedencia,
+            # get_iucn_categoria_display) e gravados ja calculados: e a mesma
+            # razao pela qual EspecieSerializer os manda no payload em vez de
+            # deixar quem consome reinventar a regra — ver serializers.py.
+            'iucn_categoria': e.iucn_categoria,
+            'iucn_categoria_rotulo': e.get_iucn_categoria_display(),
+            'iucn_avaliado_em': e.iucn_avaliado_em,
+            'iucn_versao': e.iucn_versao,
+            'fonte_iucn_url': e.fonte_iucn_url,
+            'iucn_tem_procedencia': e.iucn_tem_procedencia,
+            'aphia_id': e.aphia_id,
+            'credito_imagem': e.credito_imagem,
+            'fonte_imagem_url': e.fonte_imagem_url,
+            'fonte_url': e.fonte_url,
             'django_pk': e.pk,
             'origem_registro': ORIGEM,
         })
@@ -193,7 +209,13 @@ def projetar_especies(conexao=Neo4jConnection):
     if registros:
         conexao.run(
             'UNWIND $linhas AS linha '
-            'MERGE (n:Especie {id: linha.id}) SET n += linha',
+            'MERGE (n:Especie {id: linha.id}) '
+            'SET n += linha '
+            # Remove a propriedade legada de nos projetados antes desta
+            # correcao — sem isto ela ficaria orfa e nula para sempre, porque
+            # `SET n += linha` so adiciona/sobrescreve chaves, nunca apaga as
+            # que o dicionario novo nao tem.
+            'REMOVE n.status_conservacao',
             {'linhas': registros},
         )
     if vinculos:

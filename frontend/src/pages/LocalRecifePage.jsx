@@ -15,6 +15,7 @@ export default function LocalRecifePage({
   siteOffline,
   offlineMessage,
   onOpenEspecie,
+  usuario,
   carregandoDetalhe = false,
   erroDetalhe = false,
   datasetsRelacionados = [],
@@ -91,7 +92,7 @@ export default function LocalRecifePage({
           descricao={`O que o satelite registrou em ${recife.nome}, com a proveniencia de cada valor. E a entrada da previsao acima — nao a previsao.`}
         />
 
-        <SerieAmbiental slug={recife.slug} publicOffline={siteOffline} />
+        <SerieAmbiental slug={recife.slug} publicOffline={siteOffline} usuario={usuario} />
       </section>
 
       <section className="space-y-4">

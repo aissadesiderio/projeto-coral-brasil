@@ -75,7 +75,7 @@ export default function GraficoSerie({
   rotulo,
   unidade,
   casas = 1,
-  cor = '#0369a1',
+  cor = '#2b6978', // ocean-dark — mantém em sync com tailwind.config.js
   linhaDeCorte = null,
   rotuloDoCorte = null,
 }) {

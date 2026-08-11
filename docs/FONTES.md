@@ -2,7 +2,7 @@
 
 > **Status:** documento vivo — obrigatório manter atualizado.
 > **Regra:** nenhum dado entra no projeto sem uma linha correspondente neste documento.
-> **Última revisão:** 24/07/2026
+> **Última revisão:** 08/08/2026
 
 Este documento registra **toda** fonte de informação usada na construção do Coral Brasil: de onde veio cada dado, como foi obtido, onde é usado no código, sob qual licença e como deve ser citado. Serve tanto para reprodutibilidade acadêmica quanto para atribuição legal.
 
@@ -292,7 +292,7 @@ Nenhuma das três veio de uma fonte oficial citável. Antes do go-live devem ser
 
 `profundidade_media_m` foi preenchida apenas para Abrolhos (10,0 m, também do seed original). `area_km2` ficou nula em todos — deliberadamente, para não inventar número sem fonte.
 
-### 2.4 Status de conservação — 🚨 esquema corrigido em 31/07/2026, dados ainda pendentes
+### 2.4 Status de conservação — ✅ esquema corrigido em 31/07/2026, dados preenchidos em 04/08/2026
 
 Os valores do antigo campo `status_conservacao` ("Vulnerável", "Criticamente ameaçado", "Pouco preocupante", "Não avaliado") seguiam a nomenclatura da **IUCN Red List** — https://www.iucnredlist.org — mas **sem registro de qual avaliação, de que ano**. `fonte_url` estava vazio nas **nove** espécies.
 
@@ -322,7 +322,45 @@ As duas afirmações estão certas — em anos diferentes. Sem o ano, a tela nã
 
 📌 **Pendência que fica: preencher os anos.** São 9 espécies. O GBIF devolve a categoria **sem o ano**, e por isso não substitui a consulta — reproduziria o defeito com aparência de fonte.
 
-🚨 **O pedido de acesso à API da IUCN foi RECUSADO em 31/07/2026**, com e-mail institucional (`@id.uff.br`) e sem motivo declarado — o texto da recusa é o modelo padrão, com um parágrafo enlatado sobre uso comercial e o IBAT. Há canal de contestação (`conservation.informatics@iucn.org`).
+🚨 **O pedido de acesso à API da IUCN foi RECUSADO em 31/07/2026** (e-mail institucional, `@id.uff.br`) **e novamente em 04/08/2026** (e-mail pessoal) — as duas vezes sem motivo declarado, com o mesmo texto-modelo padrão, parágrafo enlatado sobre uso comercial e o IBAT. Duas tentativas com e-mails diferentes caindo na mesma recusa-padrão sugerem que o formulário está classificando o pedido como comercial, não que o e-mail usado seja o problema.
+
+📌 **Próximo passo sobre a API em si:** contestar direto por `conservation.informatics@iucn.org`, explicando tratar-se de projeto acadêmico não-comercial (TCC) e que não é IBAT — em vez de reenviar o mesmo formulário.
+
+📬 **Atualização de 05/08/2026:** contato com o IBAT-Alliance (parceiro oficial da IUCN, citado na recusa-padrão) obteve resposta humana de Mark Leckie (IBAT Programme Officer) — não mais o texto-modelo. Oferece conta gratuita não-comercial com acesso a mapas, KBAs, PCAs e dados da IUCN Red List, com resumo de biodiversidade num raio de 50 km por site cadastrado. ⚠️ **Isso parece ser busca por local (desenhar/subir um site → resumo num raio), não busca por nome de espécie** — precisa confirmar se serve para o caso de uso do projeto (categoria de uma espécie nomeada) ou só para o caso de uso deles (triagem de risco por área, típico de EIA). Se for por local, ainda é uma fonte candidata legítima para quando as ocorrências vierem do OBIS/GBIF por bbox do recife (§2.4.1) — daria espécie **e** categoria de conservação na mesma consulta.
+
+#### 📬 Investigação do IBAT, 11/08/2026 — schema certo, cobertura da amostra errada
+
+Conta criada como **Organisation** (não Personal), vinculada à UFF, com e-mail institucional — segue a mesma linha de argumento da contestação à IUCN. Testes feitos num site de exemplo (`abrolhos-ba`, buffer de 10 km, tipo "Direct Operations", já que nenhum "site type" da lista — todos de indústria extrativa/infraestrutura — descreve monitoramento acadêmico):
+
+1. **A contagem por site é gratuita, mas só agregada.** O site de teste devolveu 7 PAs, 1.816 espécies, 0 KBAs — sem lista nomeada. Pela dica de UI do próprio KBA, esse raio é **fixo em 50 km**, independente do buffer escolhido ao criar o site.
+2. **A lista nomeada é paga.** `Reports → New report → Disclosure Preparation Report` cobra **US$ 1.000** — não seguido adiante. `GIS Downloads → New GIS Download` calcula custo por área (PAYG) — não testado, pra não gerar cobrança.
+3. **Existe uma amostra gratuita** (`Download GIS Sample`) — arquivo Esri File Geodatabase (`.gdb`), a camada `redlist` sozinha com ~2,7 GB, contendo três camadas: `IUCN_RL_Species_List` (tabela sem geometria), `IUCN_RL_Species_Points` e `IUCN_RL_Species_Ranges` (`MultiPolygon`).
+4. ✅ **`IUCN_RL_Species_List` tem exatamente o schema que o projeto precisa**: `scientific_name`, `category`, `common_name`, `criteria`, `publication_yr`, `assessment_date`, `authority`, mais taxonomia completa — dá pra montar a citação inteira só com essa tabela, sem tocar nos polígonos.
+5. 🚨 **Mas o conteúdo da amostra não cobre o projeto.** 1.207 linhas, span de vários táxons (peixe, ave, fungo, planta, molusco...) como demonstração de formato — **zero registros de `ANTHOZOA`** (a classe dos corais) e **nenhuma das nove espécies do projeto** está presente. É recorte de demonstração, não recorte por região/grupo.
+
+**Como abrir um `.gdb` sem ArcGIS** (registrado porque não é óbvio): `pip install geopandas pyogrio`, depois `pyogrio.list_layers(caminho)` lista as camadas, e `pyogrio.read_dataframe(caminho, layer=nome)` lê uma camada sem geometria direto — mais robusto que `geopandas.read_file` pra tabelas não-espaciais, e evita depender do `fiona`.
+
+📌 **Pendência real, não a de antes:** confirmar com o Mark Leckie se o dataset completo (não-amostra) cobre Anthozoa/Brasil com essa mesma estrutura de tabela, e se existe caminho não-comercial pra acessar só a tabela de atributos (sem os polígonos multi-GB, sem o relatório de US$1.000, sem o PAYG por área). Pergunta enviada em 11/08/2026; resposta ainda pendente.
+
+✅ **As 9 espécies foram preenchidas em 04/08/2026 pelo caminho `ficha`** (migração `0024_conferencia_iucn_agosto_2026.py`), sem precisar da API — confirmando que a recusa não bloqueava o que havia de mais urgente. Cada uma foi aberta individualmente em `iucnredlist.org` (busca manual, não scraping em lote):
+
+| Espécie | Categoria | Publicado em | Versão | Observação |
+|---|---|---|---|---|
+| `Mussismilia braziliensis` | **CR** (A3c) | 2022 | 2022 | confirma o erro achado em §2.4.2 |
+| `Montastraea cavernosa` | LC | 2022 | 2022 | |
+| `Dendrogyra cylindrus` | **CR** (A2bce) | 2022 | 2022-2 | |
+| `Holacanthus ciliaris` | LC | 2010 | 2010 | ⚠️ ficha marcada "Needs updating" pela própria IUCN |
+| `Sparisoma axillare` | **DD** | 2012 | 2012 | ⚠️ "Needs updating"; resolve o "❓ a confirmar" de §2.4.2 — **não é NT** |
+| `Ocyurus chrysurus` | **DD** | 2016 | 2016-1 | ⚠️ "Needs updating" |
+| `Muricea flamma` | **NE** | — | — | 🔎 busca em iucnredlist.org devolveu **zero resultados** em 04/08/2026 — não é lacuna de conferência, é conferência com resposta negativa |
+| `Phyllogorgia dilatata` | **NE** | — | — | idem — zero resultados |
+| `Condylactis gigantea` | **NE** | — | — | idem — zero resultados |
+
+`iucn_origem='ficha'` e `iucn_consultado_em=04/08/2026` em todas. As três `NE` ficam sem `iucn_avaliado_em` (não existe ano de uma avaliação que não existe) e por isso continuam com `iucn_tem_procedencia=False` — o site não exibe nada nelas, o que é correto: não há categoria de risco a afirmar. As outras seis passam a exibir categoria.
+
+⚠️ **Convenção usada para `iucn_avaliado_em`**: o ano **publicado** ("YEAR PUBLISHED" na ficha, o que aparece na citação formal), não o ano em que o assessment foi assinado ("DATE ASSESSED", tipicamente um ano antes — ex.: `Dendrogyra cylindrus` foi assinado em 2021 mas publicado em 2022). É a mesma convenção que o exemplo do próprio `Dendrogyra cylindrus` em §2.4 já usa.
+
+Ainda pendente, e não coberto por este preenchimento: os dois caminhos que **não dependem da API** continuam valendo para quando o catálogo escalar — `iucn_origem='ficha'` não escala manualmente além de dezenas de espécies (§2.4.1), e `iucn_origem='terceiro'` (Wikidata/GBIF) é o que assume a partir daí.
 
 ### 2.4.1 Isto não escala como tarefa, e por isso virou relatório
 
@@ -355,9 +393,9 @@ A segunda é a que pegaria o defeito real. `Mussismilia braziliensis` não mudou
 
 ### 2.4.2 🚨 E um dos quatro valores estava simplesmente errado
 
-Conferido em 31/07/2026, ao coletar a procedência:
+Conferido em 31/07/2026, ao coletar a procedência (via Wikidata, ver ressalva original abaixo):
 
-| Espécie | No banco | Na IUCN | |
+| Espécie | No banco (pré-migração) | Na IUCN | |
 |---|---|---|---|
 | **`Mussismilia braziliensis`** | **VU** | **CR** *(2022-2, táxon 133586)* | ❌ **errada** |
 | `Sparisoma axillare` | NT | DD? | ❓ a confirmar |
@@ -370,7 +408,9 @@ Isso muda a natureza do problema: não era só *falta de lastro*, era **dado err
 
 ⚠️ **Consequência para a decisão de esconder tudo.** A alternativa "menos destrutiva" — manter as categorias exibíveis enquanto a procedência não chega — deixaria essa afirmação errada no ar, agora com aparência de dado revisado.
 
-⚠️ **Esta conferência foi feita em Wikidata e busca**, não na ficha da IUCN, que recusa acesso automatizado (403). É forte mas é cópia, e **nada foi gravado no banco com essa procedência** — seria repetir o defeito com outra fonte.
+⚠️ **Esta conferência foi feita em Wikidata e busca**, não na ficha da IUCN, que recusa acesso automatizado (403) — scraping em lote, não navegação normal. É forte mas é cópia, e **nada foi gravado no banco com essa procedência** — seria repetir o defeito com outra fonte.
+
+✅ **Confirmado direto na ficha da IUCN em 04/08/2026** (não mais Wikidata) — ver a tabela completa em §2.4. As quatro linhas acima batem: `Mussismilia braziliensis` é CR de fato, e `Sparisoma axillare` é **DD**, resolvendo o "❓ a confirmar".
 
 ---
 
@@ -1122,6 +1162,35 @@ ninguém a tente de novo daqui a alguns meses achando que é atalho. A decisão 
 **usar o CDS oficial**, cuja fila foi medida em ~35 s para pedido pequeno
 ([ERA5.md](ERA5.md) Etapa 2).
 
+### 6.22 Contribuição pública de espécie não pode tocar proveniência — decisão de 08/08/2026
+
+O site ganhou login e um formulário para visitantes aprovados proporem
+espécie nova ou edição (fica pendente até um master aceitar — nunca aplica na
+hora). A pergunta que isso levanta para este documento: **quais campos esse
+formulário aceita?**
+
+Resposta: `nome_cientifico`, `nome_comum`, `tipo`, `descricao`,
+`credito_imagem`, `fonte_imagem_url`, `fonte_url` e `locais`. **Nunca**
+`iucn_categoria`, `iucn_avaliado_em`, `iucn_versao`, `iucn_taxon_id`,
+`fonte_iucn_url`, `aphia_id` ou `gbif_key` — os mesmos campos que a migração
+`0022` (§2.4, acima) passou a exigir com data e origem depois do episódio de
+`Mussismilia braziliensis` aparecer como VU no banco e CR na IUCN desde
+2022-2. A lista
+branca vale **igual para master**: quem quiser mudar categoria IUCN,
+taxonomia ou foto continua indo pelo Django admin, nunca pelo formulário do
+site.
+
+O motivo de fechar isso mesmo para conta aprovada, e não só para conta
+comum: um formulário público — ainda que moderado — é exatamente o tipo de
+porta por onde entra uma categoria digitada de memória, sem data e sem link
+para a ficha. Era isso que a migração `0022` fechou. Reabrir a mesma porta com
+aprovação no meio ainda seria reabri-la — a aprovação audita *quem* editou,
+não *se o dado tem procedência*.
+
+Tentar mandar um desses campos no corpo da requisição não falha em silêncio:
+`EspecieContribuicaoSerializer.to_internal_value` recusa com `400`, nomeando o
+campo recusado. Coberto por teste (`CampoRecusadoTests`).
+
 ---
 
 ## 7. Como citar, e onde cada fonte entra
@@ -1319,6 +1388,7 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 08/08/2026 | **§6.22 — a nova contribuição pública de espécie não pode tocar proveniência.** O site ganhou login e um formulário para conta aprovada propor espécie nova ou edição (fica pendente até um master aceitar). A lista branca de campos aceitos — `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`, `locais` — **exclui `iucn_categoria`, `iucn_avaliado_em`, `iucn_versao`, `iucn_taxon_id`, `fonte_iucn_url`, `aphia_id` e `gbif_key` para todo mundo, master incluso**: são os mesmos campos que a migração `0022` (§2.4, abaixo) passou a exigir com data e origem depois do episódio de `Mussismilia braziliensis`. Um formulário público moderado ainda é uma porta para categoria digitada sem procedência — a aprovação audita quem editou, não se o dado tem lastro. Enviar um desses campos recusa com `400` nomeando o campo, não ignora em silêncio. |
 | 31/07/2026 | 🚨 **§2.4.2 — um dos quatro valores estava ERRADO, não só sem lastro.** `Mussismilia braziliensis` estava gravada como **VU** e a IUCN a registra como **CR** desde 2022-2. É o coral-cérebro brasileiro, endêmico, a espécie que abre a página de Abrolhos. Não era falta de procedência: era **dado errado**, do tipo que a ausência de ano esconde perfeitamente — alguém digitou uma categoria que já foi verdadeira, a IUCN reavaliou, e nada tinha como perceber. Isso decide a favor de esconder tudo até haver ano: a alternativa "menos destrutiva" deixaria a afirmação errada no ar com aparência de dado revisado. ⚠️ Conferido em Wikidata e busca, **não** na ficha da IUCN (403 para acesso automatizado), e por isso **nada foi gravado** com essa procedência. §2.4.1 registra o que muda no desenho para isso escalar: `iucn_origem` (por qual via o dado veio, incluindo `terceiro` — Wikidata é fonte legítima **se declarada**), e o vencimento virando **recado diário** em `db/atualizacao.py` em vez de tarefa que alguém lembra. 🚨 **O pedido de API à IUCN foi recusado**, com e-mail institucional e sem motivo declarado. |
 | 31/07/2026 | 🚨 **§2.4 — a metade sem procedência do projeto começou a ser corrigida.** Cada valor de `MedicaoAmbiental` grava fonte, dataset e flag de qualidade; as espécies vieram de lista digitada à mão, e a conservação era **texto livre** — sem id de táxon, sem ano e sem ficha, com `fonte_url` vazio nas **nove**. Era o campo mais grave para estar sem procedência, porque é **o único do banco que alguém vai citar**. Migração `0022`: o texto virou código oficial da Lista Vermelha, com `iucn_avaliado_em`, `iucn_versao`, `iucn_taxon_id` e `fonte_iucn_url`, mais `aphia_id` e `gbif_key` para o táxon. **Consequência deliberada: o site parou de exibir categoria nas nove**, porque nenhuma tem ano — a tela diz "sem procedência registrada" em vez de afirmar. ⚠️ Decisão travada por teste: **"Não avaliado" virou vazio, e não `NE`** — as duas leituras são indistinguíveis, `NE` é categoria real, e afirmá-la seria provavelmente falso para `Holacanthus ciliaris` e `Ocyurus chrysurus`, que têm avaliação publicada. O exemplo que motiva tudo está no acervo: `Dendrogyra cylindrus` foi VU de 2008 a 2022 e hoje é CR. |
 | 31/07/2026 | ✅ **§6.15 resolvida — os cinco DOIs coletados.** Era o único item marcado como bloqueante para submissão. Quatro produtos CMEMS (10.48670/moi-00021, -00016, -00019, -00015) e o ERA5 (10.24381/cds.adbb2d47), todos conferidos na página oficial. **Dois achados que mudam a lista de referências:** são **quatro** produtos CMEMS e não dois, porque cada série emenda reanálise e análise — citar só a reanálise omitiria a fonte justamente dos dias que o painel usa; e o **ERA5 continua precisando de citação apesar de o conector ter sido cancelado**, porque os dados baixados sustentam o resultado de RESULTADOS §20. Fonte descartada como insumo não é fonte descartada como evidência. 📌 O mapeamento dataset → produto foi conferido por **duas vias independentes** (página do produto e `copernicusmarine.describe()`) em vez de deduzido do nome do dataset. |

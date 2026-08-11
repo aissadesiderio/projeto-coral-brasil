@@ -1,7 +1,16 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 import GraficoSerie, { montarCaminho } from './GraficoSerie';
 import SerieAmbiental from './SerieAmbiental';
+
+function renderSerie(props) {
+  return render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <SerieAmbiental {...props} />
+    </MemoryRouter>,
+  );
+}
 
 function serie(valores) {
   return valores.map((valor, i) => ({
@@ -115,19 +124,19 @@ describe('SerieAmbiental', () => {
       Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(RESPOSTA) })
     );
 
-    render(<SerieAmbiental slug="abrolhos-ba" />);
+    renderSerie({ slug: 'abrolhos-ba' });
 
     await waitFor(() =>
       expect(screen.getByText(/Isto e medicao, nao previsao/)).toBeInTheDocument()
     );
   });
 
-  test('mostra proveniencia e o link de download', async () => {
+  test('mostra proveniencia e o link de download, para quem esta aprovado', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(RESPOSTA) })
     );
 
-    render(<SerieAmbiental slug="abrolhos-ba" />);
+    renderSerie({ slug: 'abrolhos-ba', usuario: { autenticado: true, aprovado: true } });
 
     await waitFor(() => expect(screen.getByText(/noaa_crw/)).toBeInTheDocument());
 
@@ -136,10 +145,36 @@ describe('SerieAmbiental', () => {
     expect(link).toHaveAttribute('href', expect.stringContaining('local=abrolhos-ba'));
   });
 
+  test('master baixa mesmo sem o proprio perfil marcar aprovado', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(RESPOSTA) })
+    );
+
+    renderSerie({ slug: 'abrolhos-ba', usuario: { autenticado: true, master: true, aprovado: false } });
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Baixar a serie completa/ })).toBeInTheDocument()
+    );
+  });
+
+  test('🚨 sem conta aprovada, o download vira um convite para logar — nao um link morto', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(RESPOSTA) })
+    );
+
+    renderSerie({ slug: 'abrolhos-ba' });
+
+    await waitFor(() => expect(screen.getByText(/noaa_crw/)).toBeInTheDocument());
+
+    expect(screen.queryByRole('link', { name: /Baixar a serie completa/ })).toBeNull();
+    const convite = screen.getByRole('link', { name: /Faca login e aguarde aprovacao/ });
+    expect(convite).toHaveAttribute('href', '/login');
+  });
+
   test('em modo manutencao nem chama a API', async () => {
     global.fetch = jest.fn();
 
-    render(<SerieAmbiental slug="abrolhos-ba" publicOffline />);
+    renderSerie({ slug: 'abrolhos-ba', publicOffline: true });
 
     await waitFor(() =>
       expect(screen.getByText(/nao e exibida em modo manutencao/)).toBeInTheDocument()
@@ -152,7 +187,7 @@ describe('SerieAmbiental', () => {
       Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ count: 0, results: [] }) })
     );
 
-    render(<SerieAmbiental slug="recife-novo" />);
+    renderSerie({ slug: 'recife-novo' });
 
     await waitFor(() =>
       expect(screen.getByText(/Ainda nao ha medicoes ingeridas/)).toBeInTheDocument()

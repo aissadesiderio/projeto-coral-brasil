@@ -44,7 +44,7 @@ function EstadoLocalizacaoNaoEncontrada() {
         </p>
         <Link
           to={ROTAS_APP.recifes}
-          className="mt-6 w-fit rounded-[10px] bg-[#2b6978] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#245766]"
+          className="mt-6 w-fit rounded-[10px] bg-ocean-dark px-5 py-3 text-sm font-medium text-white transition hover:brightness-90"
         >
           Voltar para localizacoes
         </Link>
@@ -61,6 +61,7 @@ export default function LocalRecifeRoutePage({
   siteOffline,
   offlineMessage,
   onOpenEspecie,
+  usuario,
 }) {
   const { slug } = useParams();
   const detalheCache = slug ? detalhesPorSlug[slug] : null;
@@ -183,6 +184,7 @@ export default function LocalRecifeRoutePage({
       siteOffline={siteOffline}
       offlineMessage={offlineMessage}
       onOpenEspecie={onOpenEspecie}
+      usuario={usuario}
       carregandoDetalhe={carregandoDetalhe}
       erroDetalhe={erroDetalhe}
       datasetsRelacionados={datasetsRelacionados}

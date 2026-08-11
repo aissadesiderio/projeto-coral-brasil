@@ -62,6 +62,75 @@ class EspecieSerializer(serializers.ModelSerializer):
         url = obj.foto.url
         return request.build_absolute_uri(url) if request else url
 
+    def to_representation(self, instance):
+        """Acrescenta `autor` — mas so para quem pode ver.
+
+        🚨 A chave **some** para quem nao e master, em vez de sair como
+        `null`. Nulo aqui teria dois significados possiveis ("ninguem
+        registrado" e "escondido de voce"), e essa e exatamente a ambiguidade
+        que o bug do "Nao avaliado" na migracao 0022 ja ensinou a evitar.
+
+        Reaproveitado nos tres lugares que usam este serializer
+        (`/api/especies/`, `/api/especies/<id>/` e
+        `LocalRecifeDetailSerializer.get_especies`), porque a checagem mora
+        aqui, nao em cada view.
+        """
+        dados = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user and request.user.is_superuser:
+            dados['autor'] = {
+                'criado_por': instance.criado_por.username if instance.criado_por else None,
+                'editado_por': instance.editado_por.username if instance.editado_por else None,
+                'editado_em': instance.editado_em,
+            }
+        return dados
+
+
+class EspecieContribuicaoSerializer(serializers.ModelSerializer):
+    """A lista branca do que uma conta aprovada pode propor por API.
+
+    🚨 **Lista branca por construcao, nao filtro depois do fato.** E por
+    isso que categoria IUCN, taxonomia e foto nunca aparecem aqui — nem para
+    master, que ja tem o Django admin com esses campos. A alternativa
+    ("aceitar tudo e remover os sensiveis antes de salvar") regride sozinha
+    toda vez que alguem acrescenta um campo a `Especie` e esquece de
+    bloquea-lo aqui; esta lista so cresce por decisao explicita.
+
+    Uma tentativa de mandar `iucn_categoria` ou `foto` no corpo nao e
+    ignorada em silencio — `to_internal_value` recusa com 400 nomeando o
+    campo, para quem estiver testando a API direto perceber que e regra, nao
+    bug.
+    """
+
+    locais = serializers.SlugRelatedField(
+        many=True, slug_field='slug', queryset=LocalRecife.objects.all(), required=False,
+    )
+
+    class Meta:
+        model = Especie
+        fields = [
+            'id',
+            'nome_cientifico',
+            'nome_comum',
+            'tipo',
+            'descricao',
+            'credito_imagem',
+            'fonte_imagem_url',
+            'fonte_url',
+            'locais',
+        ]
+        read_only_fields = ['id']
+
+    def to_internal_value(self, data):
+        campos_aceitos = set(self.fields) - set(self.Meta.read_only_fields)
+        campos_recusados = set(data.keys()) - campos_aceitos
+        if campos_recusados:
+            raise serializers.ValidationError({
+                campo: 'Campo nao aceito em contribuicoes publicas.'
+                for campo in campos_recusados
+            })
+        return super().to_internal_value(data)
+
 
 class LocalRecifeListSerializer(serializers.ModelSerializer):
     imagem_url = serializers.SerializerMethodField()

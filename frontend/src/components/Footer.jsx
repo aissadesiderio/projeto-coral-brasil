@@ -38,7 +38,7 @@ function XIcon() {
 
 export default function Footer() {
   return (
-    <footer className="bg-[#ffefeb]">
+    <footer className="bg-sand-lightest">
       <div className="mx-auto flex max-w-7xl flex-col gap-12 border-t border-black/10 px-4 py-14 sm:px-6 lg:flex-row lg:justify-between lg:px-8 lg:py-16">
         <div>
           <h2 className="text-2xl font-semibold tracking-[-0.02em] text-black">

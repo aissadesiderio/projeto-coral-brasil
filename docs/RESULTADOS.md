@@ -231,6 +231,13 @@ calibração por faixa de probabilidade, que ainda não foi feita.
 | 2026 | 0,607 | 0,548 | 0,471 |
 | **2022** | **0,371** | **0,476** | 0,636 |
 
+⚠️ **Remedido em 09/08/2026, ao investigar (§6.1): PR-AUC 0,359, F1 modelo
+0,432, F1 persistência 0,636 — a persistência bateu igual, o modelo caiu um
+pouco.** A diferença vem de mais dado ingerido desde 25/07/2026 (a janela dos
+episódios de Picãozinho mudou de composição); a ordem de grandeza e a
+conclusão — pior ano, por larga margem — não mudam. Tabela acima mantida como
+registro da medição original.
+
 **2022 é o pior ano do modelo por larga margem**, e é o único em que a
 persistência ganha na detecção de episódios (4/4 contra 3/4).
 
@@ -247,6 +254,93 @@ quatro. Isso estreita a hipótese: se um critério puramente térmico, publicado
 independente deste projeto tropeça no mesmo ano, o problema tem menos cara de
 "o modelo aprendeu errado" e mais de "2022 teve episódio que o sinal térmico
 agregado não descreve bem".
+
+### 6.1 ✅ MEDIDO em 09/08/2026 — a causa é um artefato de agregação, na forma mais extrema do dataset
+
+Fase 4.3 do [PLANEJAMENTO.md](../PLANEJAMENTO.md). Reaproveita só código já
+testado — `ml/dataset.py`, `ml/modelo.py`, `ml/importancia.py` e
+`ml/baseline.py::prever_regra_noaa` — nenhuma métrica nova foi inventada para
+esta investigação.
+
+**Os quatro episódios reais de 2022, por recife, e quem os detectou:**
+
+| Recife | Período | Dias | Modelo | Persistência | Regra NOAA |
+|---|---|---|---|---|---|
+| Abrolhos | 02/04–16/04 | 15 | detectado (9/15) | detectado (8/15) | detectado (10/15) |
+| Picãozinho | **26/02–06/03** | **9** | **perdido (0/9)** | detectado (2/9) | **perdido (0/9)** |
+| Picãozinho | 12/03–04/04 | 24 | detectado (11/24) | detectado (19/24) | detectado (10/24) |
+| Picãozinho | 09/04–27/04 | 18 | detectado (15/18) | detectado (13/18) | detectado (10/18) |
+
+**A hipótese geográfica (§6) é confirmada como fato — e refutada como
+explicação.** 2022 é mesmo o único ano completo (2020, 2022, 2024, 2025 —
+2026 é o ano corrente, ainda parcial) em que Porto de Galinhas não teve
+nenhum dia de alerta enquanto os outros dois recifes tiveram. Mas a hipótese
+original suspeitava de um padrão *aprendido* de evento sincronizado entre os
+três recifes — e isso não sobrevive à leitura do código: `dataset.montar_todos`
+monta cada recife **em separado**, e cada linha de treino só carrega a
+trajetória daquele recife. Não existe feature que atravesse recifes, então o
+modelo não tem como ter aprendido sincronia nem como se confundir com a falta
+dela. O padrão geográfico é real; a causa está em outro lugar.
+
+**A causa real: um dos quatro episódios não tem sinal térmico nenhum na
+média regional.** Nos nove dias perdidos de Picãozinho (26/02–06/03), o BAA
+gravado no banco diz alerta (nível 3) **todo santo dia** — mas DHW nunca
+passa de 0,71 °C-semana e HotSpot nunca passa de 0,90 °C, os dois **abaixo
+até do corte reduzido de DHW ≥ 1,0** que esta dobra do leave-year-out
+escolheu para 2022, e muito abaixo do corte oficial da NOAA (DHW ≥ 4, HotSpot
+≥ 1). Nem o modelo nem a regra publicada enxergam isso: os dois dependem da
+média regional das duas variáveis, e a média está baixa o episódio inteiro.
+
+Isto **não é achado novo, é achado localizado**. `ml/baseline.py::prever_regra_noaa`
+já documentava, desde 30/07/2026, que o BAA gravado é agregado por **máximo**
+dos ~121 pixels da bbox enquanto DHW e HotSpot são agregados por **média** —
+"um pixel quente sozinho levanta o BAA do recife sem levantar a média de
+nenhum dos dois", com **261 dias assim** no dataset inteiro (corte oficial).
+Faltava saber **onde** esses 261 dias se concentram:
+
+| Ano | Dias com BAA em alerta (3 recifes) | Dias em que a regra oficial erra | % |
+|---|---|---|---|
+| 2020 | 117 | 38 | 32,5% |
+| **2022** | **66** | **60** | **90,9%** |
+| 2024 | 267 | 76 | 28,5% |
+| 2025 | 131 | 70 | 53,4% |
+| 2026 * | 17 | 17 | 100% |
+
+<small>\* 2026 é o ano corrente, com poucos dias de teste ainda — a
+porcentagem não é comparável à dos anos completos.</small>
+
+**2022 tem a maior fração de dias-alerta "invisíveis" à regra oficial entre
+os anos completos** — 90,9%, contra 28,5–53,4% dos outros três. E no critério
+mais estrito — DHW **e** HotSpot os dois abaixo de 1,0, o corte que esta
+dobra escolheu para 2022 — o dataset inteiro tem só **17 dias assim**, e
+**15 deles (88%)** são exatamente os nove dias perdidos de Picãozinho mais os
+seis dias seguintes do próximo episódio, antes de o DHW cruzar 1,0 em
+18/03. Não sobra quase nada desse padrão em nenhum outro recife-ano da série
+inteira (a única exceção: 2 dias soltos em Abrolhos-2024, de 71).
+
+**Isto explica a pista do DHW também (§24.4).** A importância por permutação
+do DHW em 2022 (0,296) é medida sobre **todos** os dias de teste do ano,
+inclusive esse trecho de 15 dias em que o DHW não carrega nenhuma relação com
+o alerta — embaralhá-lo ali não piora nada, porque ali ele já não estava
+dizendo nada. Isso dilui a queda média medida para o ano inteiro, contra
+0,72–0,84 nos anos em que o alerta é genuinamente térmico do início ao fim.
+
+**O que isto NÃO explica.** Os outros três episódios de 2022 foram
+**majoritariamente detectados** (9/15, 11/24, 15/18) — o modelo não erra 2022
+inteiro, erra **exatamente** o episódio sem sinal térmico regional e não erra
+nenhum outro. E explica por que a persistência pega 2 dos 9 dias perdidos
+enquanto modelo e regra pegam zero: ela não precisa entender *por que* o BAA
+está alto, só copia o valor de sete dias atrás — nesses dois dias o valor
+copiado ainda carregava o mesmo artefato.
+
+**Conclusão.** 2022 não é o ano em que o modelo "aprendeu errado". É o ano em
+que o produto que sustenta o alvo (BAA do CRW, agregado por **máximo** de
+pixel) e os produtos que sustentam a previsão (DHW e HotSpot, agregados por
+**média** de pixel) discordam com mais frequência — um problema de **desenho
+do produto de satélite**, que modelo e regra publicada herdam por igual. É
+consistente com a regra da NOAA também errar 2022 (§24.4) sem precisar supor
+nada sobre o que o modelo aprendeu, e fecha a pendência declarada em §10 e
+§23.
 
 ---
 
@@ -534,7 +628,7 @@ Estes números orientam decisão de projeto. Não sustentam afirmação científ
 | ✅ feito | ~~Aplicar a versão D ao código~~ | Aplicada em 25/07/2026: 4 entradas, coeficientes íntegros, teste travando a regra |
 | ✅ feito | ~~GCBD, passo 1~~ | Feito em 26/07/2026 (§11 e §12): o sinal térmico sozinho **não** explica o branqueamento observado no Brasil |
 | **Alta** | **GCBD, passo 2 — ingerir salinidade e O₂** | §11 mudou a resposta: com rótulo observado, sobra o que explicar. Ver [GCBD.md](GCBD.md) |
-| Alta | Investigar 2022 | É o único ano em que o modelo perde claramente |
+| ✅ feito | ~~Investigar 2022~~ | Feito em 09/08/2026 (§6.1): um dos quatro episódios não tem sinal térmico regional nenhum — artefato de agregação (BAA por máximo, DHW/HotSpot por média) na sua forma mais extrema do dataset |
 | Média | Curva de calibração | Brier bom não basta para exibir porcentagem num site |
 | Média | Testar horizontes entre 7 e 21 dias | A vantagem cresce com o horizonte; achar onde ela vira |
 | Baixa | Ajuste de hiperparâmetro | Só faz sentido depois de ampliar a base com o GCBD |
@@ -1789,7 +1883,7 @@ A versão sem jargão desta seção inteira está em
 | **Alta** | **A interface não pode exibir "0%" nem "100%"** | §22.8 — a isotônica devolve 0 e 1 exatos por construção (12,2% e 1,7% das amostras). A API sinaliza com `no_extremo`; traduzir isso em impossibilidade ou certeza é decisão de exibição, e seria errada |
 | ✅ feito | ~~Curva de calibração~~ | Feito em 27/07/2026 (§22): o modelo prometia **o dobro** do que acontecia. Corrigido com recalibração isotônica, ECE de 0,081 para **0,0039** |
 | **Alta** | **Declarar §24 junto de qualquer número de desempenho** | O modelo pega 2 episódios a mais que a regra publicada da NOAA e cobra 5 a 7 alarmes falsos a mais. Relatar 17/19 sem esse contraste afirma demais |
-| Média | Investigar 2022 (entrega 1) | Único ano em que o modelo perde claramente. Duas pistas agora: menor dependência do DHW (§7) e **a regra da NOAA também erra o ano** (§24.4) |
+| ✅ feito | ~~Investigar 2022 (entrega 1)~~ | Feito em 09/08/2026 (§6.1): o episódio perdido de Picãozinho (26/02–06/03) tem BAA em alerta com DHW e HotSpot os dois abaixo de 1,0 — 15 dos 17 dias assim em todo o dataset. Explica a hipótese geográfica de §6 (fato, mas não causa — o modelo não tem feature cross-recife) e a baixa dependência do DHW de §7/§24.4 (medida sobre dias sem sinal térmico) |
 | Baixa | Dado *in situ* | Resolveria §18 e §21.5, mas não existe para estes sítios |
 | ⛔ | **Conector do ERA5** | §20 — o vento medido piora o modelo. Ver [ERA5.md](ERA5.md) |
 | ⛔ | ~~Qualidade da água~~ | §21 — feita, e nenhuma combinação melhora |
@@ -2000,6 +2094,7 @@ python backend\manage.py treinar_gcbd --so-ambiental --importancia
 
 | Data | Alteração |
 |---|---|
+| 09/08/2026 | ✅ **§6.1 — fase 4.3 fechada: 2022 tem um episódio sem sinal térmico regional, e é um artefato de agregação já documentado.** Dos quatro episódios reais de 2022, três foram majoritariamente detectados pelo modelo (9/15, 11/24, 15/18 dias); o quarto — Picãozinho, 26/02–06/03 — foi perdido por **modelo e regra publicada igualmente** (0/9). Medido por quê: nesses nove dias o BAA gravado diz alerta todo dia, mas DHW nunca passa de 0,71 e HotSpot nunca passa de 0,90 — os dois abaixo até do corte reduzido de 1,0 que a dobra escolheu para o ano, e muito abaixo do corte oficial (DHW≥4, HotSpot≥1). `ml/baseline.py::prever_regra_noaa` já registrava, desde 30/07, que o BAA é agregado por **máximo** de pixel e DHW/HotSpot por **média** — um pixel quente sozinho levanta o BAA sem levantar a média —, com 261 dias assim no dataset inteiro. **O que faltava era localizar onde**: 2022 concentra 90,9% dos seus 66 dias de alerta nesse padrão (contra 28,5–53,4% nos outros anos completos), e no critério mais estrito (DHW **e** HotSpot abaixo de 1,0) o dataset inteiro tem só 17 dias assim — **15 deles (88%) são o episódio perdido de Picãozinho**. 🚨 **A hipótese geográfica de §6 (só Abrolhos e Picãozinho tiveram evento em 2022) se confirmou como fato e caiu como explicação**: `dataset.montar_todos` monta cada recife em separado e não existe feature que atravesse recifes, então o modelo não tinha como aprender nem se confundir com sincronia entre eles — a causa real é o artefato de agregação, não um padrão espacial aprendido. Isso também explica a baixa importância do DHW em 2022 medida em §7/§24.4 (0,296 contra 0,72–0,84): a permutação é medida sobre o ano inteiro, incluindo os 15 dias em que o DHW já não carregava relação nenhuma com o alerta. Remedido no processo: PR-AUC de 2022 caiu de 0,371 para 0,359 com o dado ingerido desde 25/07 — conclusão não muda. Investigação em [PLANEJAMENTO.md](../PLANEJAMENTO.md) fase 4.3. |
 | 30/07/2026 | 🚨 **§24 criada — o piso era o adversário errado.** A entrega 1 tinha **uma** linha de base, a persistência, que copia o BAA de hoje. Faltava a que qualquer gestor já tem de graça: **a regra publicada da NOAA** (`HotSpot ≥ 1` e `DHW ≥ 4`), que sai diariamente no site deles. Medida agora, ela é o **piso mais alto**: F1 0,779 e precisão 0,819 contra 0,671 e 0,560 do modelo, com os mesmos 15/19 episódios da persistência. **O modelo ganha no critério declarado e perde nos outros dois** — pega 2 episódios a mais e cobra 5 a 7 alarmes falsos a mais. Isso não reverte §22.9, que escolheu antecedência sabendo o preço, mas muda o que se pode afirmar: o modelo não é melhor que a regra, é **mais sensível** que ela. Dois achados laterais: **o corte publicado de 4 é alto demais nesta escala** (10/19 episódios; remedido dá `DHW ≥ 1`, 15/19 com precisão 0,880), porque o BAA é agregado por máximo e o DHW por média — quantificado em [FONTES.md](FONTES.md) §6.16, raciocinado em [VARIAVEIS.md](VARIAVEIS.md) §4.6 —, e **a regra também erra 2022** (3/4), o que estreita a pendência de §6. §24.5 registra a hipótese que a própria medição derrubou: *"o alvo é função do DHW, logo o modelo só extrapola DHW"* — falso, porque a regra tem duas metades e só com DHW ela faz F1 0,480 contra 0,671 do modelo. O corte da regra é escolhido **dentro da dobra de treino**, com teste que refaz a escolha à mão. 11 testes novos. |
 | 27/07/2026 | **§22.9.3 corrigida no mesmo dia — eu havia concluído domínio onde não havia.** A primeira versão dizia que *"0,20 é dominado por 0,30"*, olhando só episódios detectados e alarme falso. Ao medir **quando** o aviso chega, o suposto domínio some: entre 0,20 e 0,30 os episódios pegos são os mesmos, mas os avisados já no 1º dia caem de **16/20 para 13/20** e o atraso médio sobe de **1,50 para 2,60 dias**. O evento continua detectado — mais tarde. Fica o aviso de método: um patamar numa métrica agregada quase sempre esconde movimento em algo que ela não mede. Com a dimensão nova, **0,10 vira candidato sério** (recupera o episódio de nove dias de 2022, mantém aviso no 1º dia em 18/20). |
 | 27/07/2026 | **§22.9 criada — a troca do limiar, medida e traduzida.** `manage.py limiar` varre 19 cortes sobre as predições fora da dobra e converte tudo para *dias de alarme falso por ano e por recife*, porque "precisão 0,719" não é uma frase sobre a qual alguém consiga formar opinião. 🚨 **O achado principal não é sobre o limiar:** nenhum dos 19 cortes detecta os 19 episódios — **Picãozinho, 21–23/04/2026, escapa em todos**. Baixar o corte não o recupera, então o teto é do modelo e não da escolha. Medido também que **entre 0,15 e 0,40 a contagem de episódios não se move** (sempre 16/19): nessa faixa apertar o limiar é de graça em termos de evento, e só reduz alarme falso (12,4 → 6,2 dias/ano/recife). Disso sai que **0,20 é dominado por 0,30** — mesma cobertura, 20% menos alarme falso. Os dois episódios que 0,20 perde e 0,05 recupera custam quase o triplo de alarme falso, e um deles dura um dia. ⚠️ O de 2022 (nove dias, Picãozinho) conecta com a pendência já aberta de investigar 2022. Viés de seleção declarado: os limiares são comparados sobre as mesmas predições que os avaliam. 19 testes. |

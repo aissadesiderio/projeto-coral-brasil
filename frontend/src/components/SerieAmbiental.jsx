@@ -1,7 +1,9 @@
-import { Download } from 'lucide-react';
+import { Download, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import GraficoSerie from './GraficoSerie';
+import { ROTAS_APP } from '../utils/navigation';
 import {
   CORTE_ALERTA_DHW,
   DIAS_EXIBIDOS,
@@ -25,9 +27,11 @@ import {
  * escrita na tela, e nao so aqui no comentario, porque foi ela que as figuras
  * do TCC precisaram tornar explicita para o publico.
  */
-const CORES = { sst: '#0369a1', dhw: '#c2410c' };
+// ocean-dark e terra do tailwind.config.js — SVG não lê classes Tailwind,
+// então os hex ficam literais aqui, mantidos em sync com o config.
+const CORES = { sst: '#2b6978', dhw: '#D47046' };
 
-export default function SerieAmbiental({ slug, publicOffline = false }) {
+export default function SerieAmbiental({ slug, publicOffline = false, usuario }) {
   const [resultado, setResultado] = useState({ estado: 'carregando' });
 
   useEffect(() => {
@@ -123,15 +127,29 @@ export default function SerieAmbiental({ slug, publicOffline = false }) {
 
         {/* O download existe para o site ser citavel. Sai com as colunas de
             proveniencia junto, e cobre a serie inteira do recife — nao so o
-            periodo desenhado acima. */}
-        <a
-          href={urlDeDownload(slug)}
-          className="inline-flex items-center gap-2 rounded-full bg-ocean-dark px-3 py-1.5 font-semibold text-white transition hover:bg-ocean-light"
-          download
-        >
-          <Download size={14} />
-          Baixar a serie completa (CSV)
-        </a>
+            periodo desenhado acima.
+
+            ⚠️ O mecanismo do link **nao muda** quando aprovado: e sessao do
+            Django, e o cookie viaja sozinho no clique do `<a>` — nada de
+            fetch+blob, que so seria necessario com token em cabecalho. */}
+        {usuario?.aprovado || usuario?.master ? (
+          <a
+            href={urlDeDownload(slug)}
+            className="inline-flex items-center gap-2 rounded-full bg-ocean-dark px-3 py-1.5 font-semibold text-white transition hover:bg-ocean-light"
+            download
+          >
+            <Download size={14} />
+            Baixar a serie completa (CSV)
+          </a>
+        ) : (
+          <Link
+            to={ROTAS_APP.login}
+            className="inline-flex items-center gap-2 rounded-full border border-ocean-dark/30 px-3 py-1.5 font-semibold text-ocean-dark transition hover:bg-ocean-dark hover:text-white"
+          >
+            <Lock size={14} />
+            Faca login e aguarde aprovacao para baixar
+          </Link>
+        )}
       </div>
 
       {truncada && (

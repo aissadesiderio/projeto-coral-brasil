@@ -15,10 +15,13 @@ O que protegem, em ordem de gravidade:
 
 from datetime import date
 
+from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from aquaculture.models import LocalRecife, MedicaoAmbiental
+
+SENHA_FORTE = 'uma-senha-bem-forte-2026'
 
 
 @override_settings(OFFLINE_MODE=False)
@@ -216,7 +219,20 @@ class DownloadCsvTests(MedicaoAmbientalApiTests):
     Herda o mesmo cenario da suite acima de proposito: o CSV precisa responder
     aos **mesmos filtros** que o JSON, e testa-lo sobre outros dados esconderia
     justamente a divergencia que importa.
+
+    🚨 **Todo teste aqui roda logado como conta aprovada.** Ate a
+    funcionalidade de contas, baixar o CSV era anonimo — agora exige conta
+    aprovada (ver `GateDoDownloadTests` para quem **nao** e). O `setUp` faz
+    isso uma vez para a classe inteira, para os testes que ja existiam
+    continuarem exercitando exatamente o que exerciam antes: forma do CSV,
+    filtros, nulo, nome do arquivo — nao a permissao, que tem suite propria.
     """
+
+    def setUp(self):
+        usuario = User.objects.create_user(username='baixador', password=SENHA_FORTE)
+        usuario.perfil.aprovado = True
+        usuario.perfil.save()
+        self.client.login(username='baixador', password=SENHA_FORTE)
 
     def baixar(self, consulta=''):
         resposta = self.buscar(f'?formato=csv{consulta}')
@@ -319,3 +335,52 @@ class DownloadCsvTests(MedicaoAmbientalApiTests):
     @override_settings(OFFLINE_MODE=True)
     def test_o_csv_tambem_respeita_o_modo_offline(self):
         self.assertEqual(self.buscar('?formato=csv').status_code, 503)
+
+
+@override_settings(OFFLINE_MODE=False)
+class GateDoDownloadTests(MedicaoAmbientalApiTests):
+    """Quem pode baixar o CSV, e o que continua igual para quem so le.
+
+    🚨 O bloqueio mora **so** dentro do ramo `formato=csv` de `list()` — este
+    teste e o que prova que o JSON (o que alimenta o grafico publico de cada
+    recife) nunca foi tocado.
+    """
+
+    def test_anonimo_nao_baixa(self):
+        resposta = self.buscar('?formato=csv')
+
+        self.assertEqual(resposta.status_code, 401)
+
+    def test_autenticado_sem_aprovacao_nao_baixa(self):
+        usuario = User.objects.create_user(username='pendente', password=SENHA_FORTE)
+        self.assertFalse(usuario.perfil.aprovado)
+        self.client.login(username='pendente', password=SENHA_FORTE)
+
+        resposta = self.buscar('?formato=csv')
+
+        self.assertEqual(resposta.status_code, 403)
+
+    def test_aprovado_baixa(self):
+        usuario = User.objects.create_user(username='aprovado', password=SENHA_FORTE)
+        usuario.perfil.aprovado = True
+        usuario.perfil.save()
+        self.client.login(username='aprovado', password=SENHA_FORTE)
+
+        self.assertEqual(self.buscar('?formato=csv').status_code, 200)
+
+    def test_master_baixa_sem_precisar_de_perfil_aprovado(self):
+        master = User.objects.create_superuser(
+            username='master', email='m@example.com', password=SENHA_FORTE,
+        )
+        self.assertFalse(master.perfil.aprovado)
+        self.client.login(username='master', password=SENHA_FORTE)
+
+        self.assertEqual(self.buscar('?formato=csv').status_code, 200)
+
+    def test_json_continua_publico_para_quem_nao_esta_logado(self):
+        """🚨 A regressao que mais importa: ninguem precisa de conta so para
+        ver a serie no grafico do site."""
+        resposta = self.buscar()
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()['count'], 5)
