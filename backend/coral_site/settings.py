@@ -264,18 +264,28 @@ if env.bool('DJANGO_BEHIND_PROXY', default=False):
 # sumiam sob cron, que e justamente onde `manage.py atualizar` roda.
 #
 # O detalhe de cada decisao esta em `observabilidade/config.py`.
+_RODANDO_TESTE = observabilidade_config.rodando_teste()
+
 LOG_PASTA = Path(env('LOG_PASTA', default=str(BASE_DIR / 'logs')))
 LOG_NIVEL = env('LOG_NIVEL', default='DEBUG' if DEBUG else 'INFO').upper()
-LOG_NIVEL_CONSOLE = env('LOG_NIVEL_CONSOLE', default=LOG_NIVEL).upper()
+
+# ⚠️ Na suite, o console cai para WARNING. Nao e cosmetica: os testes de
+# ingestao exercitam de proposito os caminhos de falha, e em INFO cada um
+# imprime as linhas do fluxo inteiro no meio do relatorio do runner. Saida de
+# teste que ninguem consegue ler e saida de teste que ninguem le - e ai o
+# proximo erro real passa despercebido entre centenas de linhas esperadas.
+# WARNING mantem visivel o que nao era esperado.
+LOG_NIVEL_CONSOLE = env(
+    'LOG_NIVEL_CONSOLE',
+    default='WARNING' if _RODANDO_TESTE else LOG_NIVEL,
+).upper()
 
 # ⚠️ Desligado durante a suite de testes por padrao. Sem isto, rodar os testes
 # passaria a escrever em `backend/logs/`, e um clone recem-clonado deixaria de
 # ser identico a um clone que ja rodou a suite — a mesma classe de defeito que
 # derrubou o CI em 30/07, quando dois testes so passavam em maquina que ja
 # tinha feito a ingestao.
-LOG_EM_ARQUIVO = env.bool(
-    'LOG_EM_ARQUIVO', default=not observabilidade_config.rodando_teste()
-)
+LOG_EM_ARQUIVO = env.bool('LOG_EM_ARQUIVO', default=not _RODANDO_TESTE)
 
 # Nivel por dominio: LOG_NIVEL_INGESTAO=DEBUG deixa so a ingestao falante.
 _NIVEIS_POR_DOMINIO = {
