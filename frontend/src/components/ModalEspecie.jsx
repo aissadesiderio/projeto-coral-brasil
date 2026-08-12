@@ -133,6 +133,11 @@ export default function ModalEspecie({ especie, onClose }) {
                 Credito da imagem
               </p>
               <p>{creditoImagem || 'Sem credito informado'}</p>
+              {especie.local_captura_foto && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Foto tirada em {especie.local_captura_foto}
+                </p>
+              )}
             </div>
 
             {linkImagem && (

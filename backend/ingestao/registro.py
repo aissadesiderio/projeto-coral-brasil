@@ -18,6 +18,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from aquaculture.models import ExecucaoIngestao
+from observabilidade import contexto
 
 from .base import ResultadoColeta
 from .conectores.copernicus import ConectorCopernicus
@@ -109,6 +110,42 @@ def ingerir(local, inicio, fim, conector, incremental=True, janela_dias=None,
     serie inteira. `progresso` e chamado com uma linha de texto ao fim de cada
     bloco - um backfill de anos leva minutos, e silencio nesse tempo parece
     travamento. Retorna o `ExecucaoIngestao` correspondente.
+
+    🚨 **A correlacao e aberta aqui, no par (fonte, local), e nao no comando.**
+    Uma execucao de `manage.py atualizar` percorre 2 fontes x 10 locais; um id
+    unico para tudo tornaria impossivel separar qual par produziu qual linha,
+    que e a primeira pergunta de qualquer diagnostico. O comando abre o seu
+    proprio contexto por cima, e os dois aparecem na mesma linha.
+
+    O id gravado em `ExecucaoIngestao.correlacao` e o que liga a **linha do
+    banco** ao **rastro no log**: a tabela diz que 406 medicoes foram
+    rejeitadas, e o id diz onde ler por que cada uma foi.
+    """
+    with contexto(
+        fluxo='ingestao', fonte=conector.slug, local=local.slug
+    ) as correlacao:
+        execucao = _executar(
+            local, inicio, fim, conector, incremental, janela_dias, progresso,
+            correlacao,
+        )
+        logger.info(
+            'Ingestao concluida',
+            extra={
+                'status': execucao.status,
+                'gravados': execucao.registros_gravados,
+                'rejeitados': execucao.registros_rejeitados,
+                'periodo': f'{execucao.inicio_periodo} a {execucao.fim_periodo}',
+            },
+        )
+        return execucao
+
+
+def _executar(local, inicio, fim, conector, incremental, janela_dias,
+              progresso, correlacao):
+    """O corpo da ingestao, ja dentro do contexto de log.
+
+    Separado de `ingerir` so para nao aninhar cem linhas dentro de um `with` -
+    o comportamento e o mesmo.
     """
     if incremental:
         ultima = ultima_data_ingerida(local, conector.slug)
@@ -121,6 +158,7 @@ def ingerir(local, inicio, fim, conector, incremental=True, janela_dias=None,
         inicio_periodo=inicio,
         fim_periodo=fim,
         status='falha',
+        correlacao=correlacao,
     )
 
     if inicio > fim:
@@ -143,41 +181,59 @@ def ingerir(local, inicio, fim, conector, incremental=True, janela_dias=None,
 
     for numero, (bloco_inicio, bloco_fim) in enumerate(blocos, start=1):
         rotulo = f'{bloco_inicio} a {bloco_fim}'
-        resultado = _coletar_bloco(conector, local, bloco_inicio, bloco_fim)
+        # ⚠️ Contexto por bloco: e o que faz a linha escrita la dentro de
+        # `qualidade.py` ou de `persistencia.py` — modulos que nao conhecem
+        # esta camada — sair dizendo de qual bloco ela fala.
+        with contexto(bloco=rotulo, bloco_numero=numero, blocos=len(blocos)):
+            resultado = _coletar_bloco(conector, local, bloco_inicio, bloco_fim)
 
-        if resultado.houve_falha:
-            falhas_seguidas += 1
-            erros.append(f'[{rotulo}] {resultado.erro}')
-            logger.warning(
-                'Ingestao %s/%s falhou no bloco %s: %s',
-                conector.slug, local.slug, rotulo, resultado.erro,
+            if resultado.houve_falha:
+                falhas_seguidas += 1
+                erros.append(f'[{rotulo}] {resultado.erro}')
+                logger.warning(
+                    'Bloco falhou', extra={'erro': resultado.erro},
+                )
+                if progresso:
+                    progresso(f'bloco {numero}/{len(blocos)} ({rotulo}): falhou')
+
+                if falhas_seguidas >= LIMITE_FALHAS_SEGUIDAS:
+                    nao_tentados = len(blocos) - numero
+                    logger.error(
+                        'Ingestao interrompida por falhas seguidas',
+                        extra={
+                            'falhas_seguidas': falhas_seguidas,
+                            'nao_tentados': nao_tentados,
+                        },
+                    )
+                    break
+                continue
+
+            falhas_seguidas = 0
+            medicoes, rejeitadas, recusas = preparar_medicoes(
+                local, resultado, conector.slug
             )
+            # Gravar por bloco, e nao no fim: um backfill longo interrompido no
+            # meio preserva o que ja chegou, e a proxima execucao incremental
+            # retoma dali.
+            gravadas = gravar(medicoes)
+
+            total_gravado += gravadas
+            total_rejeitado += rejeitadas
+            notas.append(resultado.nota)
+            recusas_totais.extend(recusas)
+
+            # 🚨 Numeros em `extra=`, e nao embutidos na frase. E o que permite
+            # somar depois quantas medicoes uma execucao inteira rejeitou sem
+            # reprocessar prosa - a diferenca entre log e registro auditavel.
+            logger.info(
+                'Bloco gravado',
+                extra={'gravadas': gravadas, 'rejeitadas': rejeitadas},
+            )
+
             if progresso:
-                progresso(f'bloco {numero}/{len(blocos)} ({rotulo}): falhou')
-
-            if falhas_seguidas >= LIMITE_FALHAS_SEGUIDAS:
-                nao_tentados = len(blocos) - numero
-                break
-            continue
-
-        falhas_seguidas = 0
-        medicoes, rejeitadas, recusas = preparar_medicoes(
-            local, resultado, conector.slug
-        )
-        # Gravar por bloco, e nao no fim: um backfill longo interrompido no
-        # meio preserva o que ja chegou, e a proxima execucao incremental
-        # retoma dali.
-        gravadas = gravar(medicoes)
-
-        total_gravado += gravadas
-        total_rejeitado += rejeitadas
-        notas.append(resultado.nota)
-        recusas_totais.extend(recusas)
-
-        if progresso:
-            progresso(
-                f'bloco {numero}/{len(blocos)} ({rotulo}): {gravadas} medicoes'
-            )
+                progresso(
+                    f'bloco {numero}/{len(blocos)} ({rotulo}): {gravadas} medicoes'
+                )
 
     if nao_tentados:
         erros.append(

@@ -96,6 +96,7 @@ RETURN
     e.iucn_tem_procedencia AS iucn_tem_procedencia,
     e.credito_imagem AS credito_imagem,
     e.fonte_imagem_url AS fonte_imagem_url,
+    e.local_captura_foto AS local_captura_foto,
     e.fonte_url AS fonte_url
 ORDER BY coalesce(e.nome_comum, ''), e.nome_cientifico
 """.format(

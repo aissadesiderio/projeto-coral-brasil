@@ -80,6 +80,39 @@ test('🚨 campo vazio nao vira "Nao avaliado"', () => {
   expect(screen.getByText(/sem procedencia registrada/i)).toBeInTheDocument();
 });
 
+test('mostra o local de captura da foto quando informado', () => {
+  render(
+    <ModalEspecie
+      especie={especie({ credito_imagem: 'Laura Proenca', local_captura_foto: 'Bahia, BR' })}
+      onClose={() => {}}
+    />
+  );
+
+  expect(screen.getByText(/Foto tirada em Bahia, BR/i)).toBeInTheDocument();
+});
+
+test('sem local de captura registrado, nao inventa nem mostra a linha', () => {
+  render(<ModalEspecie especie={especie({ credito_imagem: 'Laura Proenca' })} onClose={() => {}} />);
+
+  expect(screen.queryByText(/Foto tirada em/i)).not.toBeInTheDocument();
+});
+
+test('🚨 foto sem credito nao vira "Acervo local do projeto"', () => {
+  // `resolverCreditoImagem` afirmava esse credito para qualquer especie que
+  // tivesse arquivo de foto e nenhum credito — a mesma mentira que estava
+  // gravada nas nove especies do banco ate a migracao 0026. Ter arquivo nao e
+  // ter procedencia. Ver docs/FONTES.md secao 2.1.
+  render(
+    <ModalEspecie
+      especie={especie({ foto_url: '/media/especies/Dendrogyra_cylindrus.jpeg' })}
+      onClose={() => {}}
+    />
+  );
+
+  expect(screen.queryByText(/Acervo local do projeto/i)).not.toBeInTheDocument();
+  expect(screen.getByText(/Sem credito informado/i)).toBeInTheDocument();
+});
+
 test('⚠️ resposta antiga da API, sem o campo, tambem nao afirma', () => {
   // Um cliente contra servidor antigo nao recebe `iucn_tem_procedencia`. O
   // padrao precisa ser nao afirmar, e nao afirmar por omissao.

@@ -150,6 +150,16 @@ def projetar_localizacoes(conexao=Neo4jConnection):
             'nome': l.nome,
             'estado': l.estado,
             'cidade': l.cidade,
+            # 🚨 Faltavam aqui - a query de leitura (`neo4j_service.
+            # LISTAR_LOCALIZACOES_GRAFO_QUERY`/`OBTER_LOCALIZACAO_GRAFO_QUERY`)
+            # sempre pediu `l.descricao` e `l.ultima_atualizacao`, e a projecao
+            # nunca os escrevia: todo local saia com descricao nula na API,
+            # os tres originais inclusive. Achado ao conferir a descricao dos
+            # locais novos da migration 0025.
+            'descricao': l.descricao,
+            'ultima_atualizacao': (
+                l.ultima_atualizacao.isoformat() if l.ultima_atualizacao else None
+            ),
             'latitude': l.latitude,
             'longitude': l.longitude,
             'ativo': l.ativo,
@@ -198,6 +208,7 @@ def projetar_especies(conexao=Neo4jConnection):
             'aphia_id': e.aphia_id,
             'credito_imagem': e.credito_imagem,
             'fonte_imagem_url': e.fonte_imagem_url,
+            'local_captura_foto': e.local_captura_foto,
             'fonte_url': e.fonte_url,
             'django_pk': e.pk,
             'origem_registro': ORIGEM,

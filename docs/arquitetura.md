@@ -200,7 +200,7 @@ pelos proprios testes — saiu em 30/07/2026 junto com o `StatusPredicao`.
 `Especie`
 - id canonico: `slugify(nome_cientifico)`
 - origem atual: `Especie`
-- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `iucn_categoria`, `iucn_categoria_rotulo`, `iucn_avaliado_em`, `iucn_versao`, `fonte_iucn_url`, `iucn_tem_procedencia`, `aphia_id`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`
+- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `iucn_categoria`, `iucn_categoria_rotulo`, `iucn_avaliado_em`, `iucn_versao`, `fonte_iucn_url`, `iucn_tem_procedencia`, `aphia_id`, `credito_imagem`, `fonte_imagem_url`, `local_captura_foto`, `fonte_url`
   - ⚠️ **Esta lista descrevia a intencao, nao o que `projetar_especies` gravava, ate 08/08/2026.** `tipo`, `descricao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url` e os campos de proveniencia IUCN nunca eram escritos — so `nome_cientifico`, `nome_comum`, `iucn_categoria`, `iucn_avaliado_em` e `aphia_id` chegavam ao no. Corrigido; ver Historico de decisoes.
 
 `MedicaoAmbiental`
@@ -554,6 +554,31 @@ reconstroi os tres em ordem e para no primeiro erro.
   `quality_flag`, `data_coleta`) — concluida em 25/07/2026;
 - PostgreSQL como fonte unica, com os dois bancos subindo por
   `docker-compose.yml`.
+
+## ✅ Observabilidade — a camada de log, construida em 12/08/2026
+
+Pacote `backend/observabilidade/`, no mesmo formato dos outros pacotes simples do backend (`db/`, `ingestao/`, `ml/`) — nao e um app Django.
+
+| Modulo | Papel |
+|---|---|
+| `correlacao.py` | o id que liga as linhas de um mesmo fluxo; mascaramento de credencial |
+| `formatadores.py` | o mesmo registro em texto (console) e em JSON Lines (arquivo) |
+| `config.py` | monta o `LOGGING` a partir do ambiente |
+| `middleware.py` | abre um fluxo por requisicao HTTP e devolve o id no cabecalho `X-Correlacao` |
+
+🚨 **Ate aqui nao havia `LOGGING` em `settings.py` — e o efeito nao era "log feio", era log invisivel.** As chamadas de `logger.warning` ja existentes em `ingestao/`, `ml/` e `db/` caiam na configuracao implicita do Django: apareciam no `runserver` e sumiam sob cron. `manage.py atualizar` e justamente a rotina que roda sem ninguem olhando, e era a que menos deixava rastro.
+
+**Decisao 1 — um arquivo unico, nao um por dominio.** A alternativa (`ingestao.log`, `ml.log`) parece mais organizada e quebra o que se quer: um fluxo real **atravessa** dominios (`atualizar` chama `ingestao`, depois `db.projecao`, e erro de projecao muitas vezes tem causa na ingestao). Em arquivos separados, reconstruir isso volta a ser juntar arquivos por horario. A granularidade por classe/arquivo ja existe **dentro** do registro: `logger`, `arquivo:linha`, `funcao`. O que e por dominio e o **nivel** (`LOG_NIVEL_INGESTAO=DEBUG`), nao o destino.
+
+**Decisao 2 — `contextvars`, e o contexto herda.** `qualidade.py` e `persistencia.py` nao importam `observabilidade` e mesmo assim saem carimbados com a fonte, o local e o bloco que os chamou. Variavel de modulo vazaria entre execucoes concorrentes; `ContextVar` isola por contexto e por thread, com teste travando isso.
+
+**Decisao 3 — JSON Lines, nao array JSON.** Um array precisa ser fechado para ser valido, e log e arquivo que nunca fecha. Truncado no meio, JSON Lines perde a ultima linha; array perde o arquivo. E permite `grep` antes de `json.loads`.
+
+**Decisao 4 — console em `stderr`.** `conferir_especies`, `limiar` e o CSV de `exportar_docs` escrevem resultado em `stdout` e sao lidos por redirecionamento. Log misturado ali corromperia o arquivo de saida.
+
+⚠️ **Arquivo desligado durante a suite** (`LOG_EM_ARQUIVO`), e console rebaixado a `WARNING`. Sem o primeiro, um clone recem-clonado deixaria de ser identico a um clone que ja rodou os testes — a mesma classe de defeito que derrubou o CI em 30/07. Sem o segundo, os testes que exercitam caminhos de falha imprimem o fluxo inteiro no meio do relatorio do runner.
+
+🚨 **`ExecucaoIngestao.correlacao` (migracao `0027`) e a ponte entre o banco e o log.** A tabela diz **que** 406 medicoes foram rejeitadas; o log diz **por que** cada uma foi. Sem o campo, ligar as duas coisas dependia de horario aproximado — que falha justamente quando ha varias execucoes proximas, o caso normal da rotina diaria com 2 fontes x 10 locais. Fica em branco nas execucoes anteriores a 12/08/2026: preencher retroativamente seria inventar rastro, mesma regra ja aplicada a `iucn_avaliado_em`.
 
 ## Regras operacionais
 

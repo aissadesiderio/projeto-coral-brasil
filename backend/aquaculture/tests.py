@@ -22,6 +22,7 @@ from .management.utils import exigir_migrations_aplicadas, migrations_pendentes
 from .code_sync import (
     BACKEND_SYNC_PATH,
     FRONTEND_SYNC_PATH,
+    build_sync_payload,
     sync_project_code_from_db,
 )
 from .inventario_datasets import (
@@ -709,6 +710,87 @@ class SyncCodeTests(TestCase):
             'risco_atual', 'possui_painel_risco',
         ):
             self.assertNotIn(campo, texto)
+
+
+@override_settings(OFFLINE_MODE=False)
+class ProcedenciaDeImagemNaCopiaVersionadaTests(TestCase):
+    """🚨 O exportador inventava procedencia de imagem — ate 11/08/2026.
+
+    Sem credito no banco, `_credito_imagem` gravava `'Acervo local do
+    projeto'` no `.js`; sem fonte, `_fonte_imagem_url` gravava a URL do
+    proprio arquivo local. As nove especies sairam assim, e uma delas
+    (`Dendrogyra cylindrus`) nao tem licenca nenhuma do fotografo — a copia
+    versionada continuava servindo a foto mesmo depois da migracao 0026
+    limpar o banco, porque o fallback e o que o site mostra quando a API cai.
+
+    Ver docs/FONTES.md secao 2.1.
+    """
+
+    def _especie_exportada(self, **campos):
+        local = LocalRecife.objects.create(
+            slug='recife-procedencia-rj', nome='Recife Procedencia',
+            estado='Rio de Janeiro', cidade='Arraial do Cabo',
+        )
+        especie = Especie.objects.create(
+            nome_cientifico='Procedencia testus', tipo='CORAL', **campos,
+        )
+        especie.locais.add(local)
+
+        exportadas = build_sync_payload()['detalhes'][local.slug]['especies']
+        return exportadas[0]
+
+    def test_foto_sem_credito_nao_ganha_credito_inventado(self):
+        exportada = self._especie_exportada(foto='especies/sem_credito.jpg')
+
+        self.assertEqual(exportada['credito_imagem'], '')
+
+    def test_foto_sem_credito_nao_entra_na_copia_versionada(self):
+        """Mesmo criterio de `iucn_categoria` sem ano: o que nao tem lastro
+        nao vai para um arquivo que sobrevive a limpeza do banco. A API
+        continua servindo a foto do banco — so a copia versionada e estrita."""
+        exportada = self._especie_exportada(foto='especies/sem_credito.jpg')
+
+        self.assertEqual(exportada['foto_url'], '')
+
+    def test_fonte_da_imagem_nunca_aponta_para_a_copia_local(self):
+        """Sem `fonte_imagem_url` no banco, o campo fica vazio. Apontar para
+        `/media/...` fazia a copia local se passar por fonte externa."""
+        exportada = self._especie_exportada(
+            foto='especies/com_credito.jpg', credito_imagem='Equipe local',
+        )
+
+        self.assertEqual(exportada['fonte_imagem_url'], '')
+        self.assertNotIn('/media/', exportada['fonte_imagem_url'])
+
+    def test_com_credito_a_foto_e_a_fonte_reais_passam_inteiras(self):
+        exportada = self._especie_exportada(
+            foto='especies/com_credito.jpg',
+            credito_imagem='Kai Lima (iNaturalist, CC BY-NC)',
+            fonte_imagem_url='https://www.inaturalist.org/observations/326387144',
+            local_captura_foto='Caravelas, BA',
+        )
+
+        self.assertIn('com_credito.jpg', exportada['foto_url'])
+        self.assertEqual(exportada['credito_imagem'], 'Kai Lima (iNaturalist, CC BY-NC)')
+        self.assertEqual(
+            exportada['fonte_imagem_url'],
+            'https://www.inaturalist.org/observations/326387144',
+        )
+
+    def test_local_de_captura_chega_ao_fallback_offline(self):
+        """A modal mostra "Foto tirada em ..." — sem este campo no payload, a
+        linha ficaria morta justamente quando a API esta fora do ar."""
+        exportada = self._especie_exportada(
+            credito_imagem='Kai Lima (iNaturalist, CC BY-NC)',
+            local_captura_foto='Caravelas, BA',
+        )
+
+        self.assertEqual(exportada['local_captura_foto'], 'Caravelas, BA')
+
+    def test_sem_credito_o_local_de_captura_tambem_nao_e_afirmado(self):
+        exportada = self._especie_exportada(local_captura_foto='Caravelas, BA')
+
+        self.assertEqual(exportada['local_captura_foto'], '')
 
 
 class AdminCodeSyncFlagTests(TestCase):

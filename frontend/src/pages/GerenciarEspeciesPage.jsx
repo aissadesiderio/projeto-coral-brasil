@@ -13,6 +13,7 @@ const CAMPOS_VAZIOS = {
   descricao: '',
   credito_imagem: '',
   fonte_imagem_url: '',
+  local_captura_foto: '',
   fonte_url: '',
 };
 
@@ -109,6 +110,7 @@ export default function GerenciarEspeciesPage({ usuario }) {
       descricao: especie.descricao || '',
       credito_imagem: especie.credito_imagem || '',
       fonte_imagem_url: especie.fonte_imagem_url || '',
+      local_captura_foto: especie.local_captura_foto || '',
       fonte_url: especie.fonte_url || '',
     });
     setMensagem(null);
@@ -281,6 +283,20 @@ export default function GerenciarEspeciesPage({ usuario }) {
             onChange={(event) =>
               setFormulario({ ...formulario, fonte_imagem_url: event.target.value })
             }
+            className={CAMPO_CLASSNAME}
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-semibold text-ocean-dark">
+            Local de captura da foto
+          </span>
+          <input
+            value={formulario.local_captura_foto}
+            onChange={(event) =>
+              setFormulario({ ...formulario, local_captura_foto: event.target.value })
+            }
+            placeholder="Onde a foto foi tirada, ex: Caravelas, BA"
             className={CAMPO_CLASSNAME}
           />
         </label>

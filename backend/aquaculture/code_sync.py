@@ -16,38 +16,46 @@ def _arquivo_url(field_file) -> str:
     return field_file.url if field_file else ''
 
 
-def _credito_imagem(especie) -> str:
-    if especie.credito_imagem:
-        return especie.credito_imagem
-    if especie.foto:
-        return 'Acervo local do projeto'
-    return ''
+def _tem_procedencia_de_imagem(especie) -> bool:
+    """🚨 Ate 11/08/2026 este modulo *fabricava* procedencia de imagem.
 
+    `_credito_imagem` devolvia a string `'Acervo local do projeto'` sempre que
+    havia foto sem credito, e `_fonte_imagem_url` caia para a URL do proprio
+    arquivo local quando nao havia fonte — ou seja, o campo "fonte da imagem"
+    apontava para a copia, nao para uma fonte. As duas invencoes foram parar
+    em `recifeData.js` para as nove especies, uma delas (`Dendrogyra
+    cylindrus`) sem licenca nenhuma do fotografo. Ver docs/FONTES.md secao 2.1
+    e a migracao 0026.
 
-def _fonte_imagem_url(especie) -> str:
-    if especie.fonte_imagem_url:
-        return especie.fonte_imagem_url
-    return _arquivo_url(especie.foto)
+    O criterio agora e o mesmo ja aplicado a `iucn_categoria`: sem credito nao
+    ha procedencia, e sem procedencia nada entra na copia versionada — nem o
+    credito, nem a fonte, nem o arquivo.
+    """
+    return bool(especie.credito_imagem)
 
 
 def _serialize_especie(especie) -> dict:
+    # ⚠️ So o que tem procedencia entra na copia versionada. Um dado sem
+    # lastro dentro de um .js e a pior combinacao possivel: ele sobrevive a
+    # limpeza do banco e reaparece quando a API cai. Vale para a categoria
+    # IUCN sem ano e — desde 11/08/2026 — para a foto sem credito.
+    tem_imagem = _tem_procedencia_de_imagem(especie)
+
     return {
         'id': especie.id,
         'nome_comum': especie.nome_comum,
         'nome_cientifico': especie.nome_cientifico,
         'tipo': especie.tipo,
         'descricao': especie.descricao,
-        # ⚠️ So o que tem procedencia entra na copia versionada. Uma categoria
-        # sem ano dentro de um .js e a pior combinacao possivel: ela sobrevive
-        # a limpeza do banco e reaparece quando a API cai.
         'iucn_categoria': especie.iucn_categoria if especie.iucn_tem_procedencia else '',
         'iucn_avaliado_em': especie.iucn_avaliado_em,
         'iucn_versao': especie.iucn_versao,
         'fonte_iucn_url': especie.fonte_iucn_url,
         'iucn_tem_procedencia': especie.iucn_tem_procedencia,
-        'foto_url': _arquivo_url(especie.foto),
-        'credito_imagem': _credito_imagem(especie),
-        'fonte_imagem_url': _fonte_imagem_url(especie),
+        'foto_url': _arquivo_url(especie.foto) if tem_imagem else '',
+        'credito_imagem': especie.credito_imagem if tem_imagem else '',
+        'fonte_imagem_url': especie.fonte_imagem_url if tem_imagem else '',
+        'local_captura_foto': especie.local_captura_foto if tem_imagem else '',
         'fonte_url': especie.fonte_url or '',
     }
 

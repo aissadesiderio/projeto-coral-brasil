@@ -223,6 +223,7 @@ class EspecieAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
                     'mostrar_foto_grande',
                     'credito_imagem',
                     'fonte_imagem_url',
+                    'local_captura_foto',
                     'link_imagem',
                     'link_fonte_imagem',
                 ),

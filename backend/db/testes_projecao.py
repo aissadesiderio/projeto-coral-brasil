@@ -130,6 +130,7 @@ class ProjecaoTests(TestCase):
         self.especie.iucn_avaliado_em = 2022
         self.especie.credito_imagem = 'Foto: fulano'
         self.especie.fonte_imagem_url = 'https://exemplo.org/foto'
+        self.especie.local_captura_foto = 'Caravelas, BA'
         self.especie.fonte_url = 'https://exemplo.org/especie'
         self.especie.save()
         conexao = ConexaoFalsa()
@@ -145,6 +146,7 @@ class ProjecaoTests(TestCase):
         self.assertIs(linha['iucn_tem_procedencia'], True)
         self.assertEqual(linha['credito_imagem'], 'Foto: fulano')
         self.assertEqual(linha['fonte_imagem_url'], 'https://exemplo.org/foto')
+        self.assertEqual(linha['local_captura_foto'], 'Caravelas, BA')
         self.assertEqual(linha['fonte_url'], 'https://exemplo.org/especie')
 
     def test_sem_categoria_e_ano_a_procedencia_sai_falsa(self):

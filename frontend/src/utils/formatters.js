@@ -50,6 +50,12 @@ export function resolverRotuloLinkImagem(especie) {
   return especie?.fonte_imagem_url ? 'Ver fonte da imagem' : 'Abrir imagem';
 }
 
+// 🚨 Ate 11/08/2026 esta funcao inventava o credito: sem `credito_imagem`,
+// mas com foto, ela afirmava "Acervo local do projeto" — a mesma mentira que
+// o exportador `backend/aquaculture/code_sync.py` gravava no fallback e que a
+// migracao 0026 tirou do banco das nove especies. Ter arquivo nao e ter
+// procedencia: quem nao tem credito nao ganha um, e a modal ja sabe dizer
+// "Sem credito informado" sozinha. Ver docs/FONTES.md secao 2.1.
 export function resolverCreditoImagem(especie) {
-  return especie?.credito_imagem || (especie?.foto_url ? 'Acervo local do projeto' : '');
+  return especie?.credito_imagem || '';
 }

@@ -215,12 +215,33 @@ class ExecucaoIngestao(models.Model):
     registros_rejeitados = models.PositiveIntegerField(default=0)
     mensagem_erro = models.TextField(blank=True)
 
+    # 🚨 A ponte entre esta linha e o log. Sem ela, a tabela diz **que** 406
+    # medicoes foram rejeitadas e o log diz **por que** cada uma foi, e ninguem
+    # consegue ligar as duas coisas senao por horario aproximado - que falha
+    # justamente quando ha varias execucoes proximas, o caso normal da rotina
+    # diaria com 2 fontes x 10 locais.
+    #
+    # ⚠️ `blank=True` porque as execucoes gravadas antes de 12/08/2026 nao tem
+    # id nenhum. Preencher retroativamente seria inventar um rastro que nao
+    # existe - mesma regra ja aplicada a `iucn_avaliado_em`.
+    correlacao = models.CharField(
+        max_length=32, blank=True,
+        verbose_name='Correlacao no log',
+        help_text=(
+            'Identificador do fluxo no arquivo de log. Procure por ele em '
+            'backend/logs/coral.jsonl para ver o rastro completo.'
+        ),
+    )
+
     class Meta:
         ordering = ['-iniciado_em']
         verbose_name = 'Execucao de ingestao'
         verbose_name_plural = 'Execucoes de ingestao'
         indexes = [
             models.Index(fields=['fonte', '-iniciado_em']),
+            # Buscar pelo id vindo do log e o caminho inverso do diagnostico:
+            # achei a linha, quero a execucao.
+            models.Index(fields=['correlacao']),
         ]
 
     def __str__(self):
@@ -365,11 +386,24 @@ class Especie(models.Model):
         max_length=200,
         blank=True,
         verbose_name='Credito da imagem',
+        help_text='Site, instituicao ou nome de quem tirou/cedeu a foto.',
     )
     fonte_imagem_url = models.URLField(
         max_length=500,
         blank=True,
         verbose_name='Link da fonte da imagem',
+    )
+    # 🚨 Ate 11/08/2026 nao existia campo para isto, e as 9 especies tinham o
+    # mesmo credito generico ("Acervo local do projeto") mesmo vindo de fora
+    # do projeto. Ver docs/FONTES.md secao 2.1: quatro tem fonte iNaturalist
+    # verificada (com local da observacao lido da API), as outras cinco nao
+    # tem procedencia confirmavel e ficam sem afirmar local nenhum — mesmo
+    # principio ja usado para `iucn_categoria` sem ano.
+    local_captura_foto = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Local de captura da foto',
+        help_text='Onde a foto foi tirada, nao onde a especie ocorre.',
     )
     fonte_url = models.URLField(
         max_length=500,

@@ -23,6 +23,12 @@ staticfiles/
 db.sqlite3
 *.sqlite3
 
+# --- Log ---
+# A pasta inteira, e nao `*.jsonl`: a rotacao gera `coral.jsonl.1`, `.2`, ...,
+# que nenhum padrao por extensao alcanca. Mesma licao do `.gitignore` das
+# figuras em 30/07 — `*` nao atravessa barra nem sufixo numerico.
+backend/logs/
+
 # --- Node / frontend ---
 node_modules/
 frontend/node_modules/
