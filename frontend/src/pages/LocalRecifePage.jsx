@@ -1,8 +1,11 @@
 import { Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import AcervoDoLocal from '../components/AcervoDoLocal';
+import AvisoSemSerie from '../components/AvisoSemSerie';
 import CardEspecie from '../components/CardEspecie';
 import DatasetCard from '../components/DatasetCard';
+import FichaDoLocal from '../components/FichaDoLocal';
 import ImagemRecife from '../components/ImagemRecife';
 import PainelPredicao from '../components/PainelPredicao';
 import SectionTitle from '../components/SectionTitle';
@@ -24,6 +27,11 @@ export default function LocalRecifePage({
   usandoFallbackDatasets = false,
 }) {
   const especiesAssociadas = recife.especies || [];
+
+  // Um recife sem coordenada nao tem serie, e sem serie nao tem previsao nem
+  // dataset. Em vez de tres blocos vazios com tres frases diferentes, uma
+  // explicacao no lugar dos dois primeiros. Ver AvisoSemSerie.
+  const motivoSemSerie = recife.motivo_sem_serie || null;
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -48,6 +56,9 @@ export default function LocalRecifePage({
         <ImagemRecife
           nome={recife.nome}
           imagem={recife.imagem_url}
+          credito={recife.credito_imagem}
+          fonteUrl={recife.fonte_imagem_url}
+          localCaptura={recife.local_captura_foto}
           className="h-56 w-full object-cover sm:h-72"
         />
 
@@ -71,29 +82,67 @@ export default function LocalRecifePage({
         </div>
       )}
 
+      {/* ⚠️ Vem antes da previsao de proposito. A ficha descreve **o lugar** e
+          continua valendo mesmo quando nao ha serie nenhuma — e nos dois locais
+          sem coordenada ela e, junto com o aviso, a unica coisa concreta que a
+          pagina tem a dizer. */}
       <section className="space-y-4">
         <SectionTitle
-          titulo="Previsao de estresse termico"
-          descricao={`Probabilidade de alerta termico em ${recife.nome} nos proximos 7 dias, calculada a partir da serie do satelite.`}
+          titulo="Ficha do local"
+          descricao={`O que esta cadastrado sobre ${recife.nome} como lugar, com a origem das coordenadas.`}
         />
 
-        {/* O proprio painel decide o que mostrar em cada estado — inclusive
-            quando falta dado. O portao anterior exigia sete campos do modelo
-            legado, dois deles de variaveis que o projeto nem coleta (`par` e
-            `kd490`), e por isso nunca liberava com dado real. Aquela funcao
-            (`possuiPainelCompleto`) foi removida em 28/07/2026 junto com o
-            resto da camada legada. */}
-        <PainelPredicao slug={recife.slug} publicOffline={siteOffline} />
+        <FichaDoLocal local={recife} />
       </section>
 
-      <section className="space-y-4">
-        <SectionTitle
-          titulo="A serie medida"
-          descricao={`O que o satelite registrou em ${recife.nome}, com a proveniencia de cada valor. E a entrada da previsao acima — nao a previsao.`}
-        />
+      {motivoSemSerie ? (
+        <section className="space-y-4">
+          <SectionTitle
+            titulo="Previsao e serie medida"
+            descricao={`Nao ha serie de satelite para ${recife.nome}, e por isso nao ha previsao de estresse termico.`}
+          />
 
-        <SerieAmbiental slug={recife.slug} publicOffline={siteOffline} usuario={usuario} />
-      </section>
+          <AvisoSemSerie motivo={motivoSemSerie} />
+        </section>
+      ) : (
+        <>
+          <section className="space-y-4">
+            <SectionTitle
+              titulo="Previsao de estresse termico"
+              descricao={`Probabilidade de alerta termico em ${recife.nome} nos proximos 7 dias, calculada a partir da serie do satelite.`}
+            />
+
+            {/* O proprio painel decide o que mostrar em cada estado — inclusive
+                quando falta dado. O portao anterior exigia sete campos do modelo
+                legado, dois deles de variaveis que o projeto nem coleta (`par` e
+                `kd490`), e por isso nunca liberava com dado real. Aquela funcao
+                (`possuiPainelCompleto`) foi removida em 28/07/2026 junto com o
+                resto da camada legada. */}
+            <PainelPredicao slug={recife.slug} publicOffline={siteOffline} />
+          </section>
+
+          <section className="space-y-4">
+            <SectionTitle
+              titulo="A serie medida"
+              descricao={`O que o satelite registrou em ${recife.nome}, com a proveniencia de cada valor. E a entrada da previsao acima — nao a previsao.`}
+            />
+
+            <SerieAmbiental slug={recife.slug} publicOffline={siteOffline} usuario={usuario} />
+          </section>
+
+          {/* 🚨 O grafico acima mostra duas variaveis; o projeto guarda oito
+              deste recife. Ate 12/08/2026 as outras seis nao apareciam em
+              numero nenhum do site. Ver AcervoDoLocal. */}
+          <section className="space-y-4">
+            <SectionTitle
+              titulo="Tudo o que o projeto mede aqui"
+              descricao={`Todas as variaveis ingeridas para ${recife.nome}, e nao so as que a previsao usa. O CSV da serie acima baixa todas elas.`}
+            />
+
+            <AcervoDoLocal acervo={recife.acervo} />
+          </section>
+        </>
+      )}
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -142,14 +191,20 @@ export default function LocalRecifePage({
         ) : datasetsRelacionados.length > 0 ? (
           <div className="grid gap-5 lg:grid-cols-2">
             {datasetsRelacionados.map((dataset) => (
-              <DatasetCard key={dataset.id} item={dataset} compact />
+              <DatasetCard key={dataset.id} item={dataset} compact usuario={usuario} />
             ))}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500">
             {erroDatasetsRelacionados
               ? 'Nao foi possivel carregar datasets relacionados no momento e nenhuma referencia local estava disponivel.'
-              : 'Ainda nao ha datasets relacionados diretamente a esta localizacao.'}
+              : motivoSemSerie
+                ? // ⚠️ "Ainda nao ha" promete que um dia havera, e aqui isso
+                  // seria falso: sem coordenada nao ha ingestao, e sem ingestao
+                  // o catalogo nao tem o que registrar. O motivo ja esta dito
+                  // por extenso acima, entao esta linha so faz a ligacao.
+                  'Sem serie ingerida nao ha dataset a oferecer para esta localizacao - ver o motivo acima.'
+                : 'Ainda nao ha datasets relacionados diretamente a esta localizacao.'}
           </div>
         )}
       </section>

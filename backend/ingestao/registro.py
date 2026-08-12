@@ -17,6 +17,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 
+import checkpoints
 from aquaculture.models import ExecucaoIngestao
 from observabilidade import contexto
 
@@ -46,6 +47,22 @@ LIMITE_FALHAS_SEGUIDAS = 3
 # Quantos erros distintos guardar na mensagem da execucao. O resto vira
 # contagem: uma mensagem com dezenas de blocos nao ajuda a diagnosticar.
 LIMITE_ERROS_REGISTRADOS = 5
+
+
+def tarefa_de(fonte, local_slug):
+    """O nome da tarefa de checkpoint para um par (fonte, local).
+
+    Um nome por par, e nao um unico `'ingestao'`, porque a unidade e o bloco de
+    datas: dois locais tem os **mesmos** rotulos de bloco, e uma tarefa so
+    faria o bloco de Abrolhos marcar como concluido o bloco homonimo de
+    Picaozinho.
+
+    ⚠️ **Trocar `janela_dias` invalida os checkpoints existentes** - os rotulos
+    passam a ser outros e nenhum casa. Nao corrompe nada (a ingestao apenas
+    refaz, e `ultima_data_ingerida` continua evitando duplicata), mas custa uma
+    coleta completa. Por isso a janela mora em `settings`, e nao no comando.
+    """
+    return f'ingestao.{fonte}.{local_slug}'
 
 
 def obter_conector(slug):
@@ -173,31 +190,57 @@ def _executar(local, inicio, fim, conector, incremental, janela_dias,
     )
     blocos = list(dividir_periodo(inicio, fim, janela))
 
+    # 🚨 **O checkpoint so filtra em modo incremental.** `--completo` existe
+    # para refazer tudo — de proposito, quando se desconfia do que ha no banco.
+    # Se o checkpoint pulasse blocos ali, `--completo` viraria um sinonimo caro
+    # de "nao faz nada", e o pior tipo de defeito: a bandeira continuaria
+    # existindo, documentada, sem efeito nenhum.
+    tarefa = tarefa_de(conector.slug, local.slug)
+    unidades = [(f'{i} a {f}', i, f) for i, f in blocos]
+    ja_feitos = 0
+
+    if incremental:
+        restantes = set(
+            checkpoints.pendentes(tarefa, [rotulo for rotulo, _, _ in unidades])
+        )
+        ja_feitos = len(unidades) - len(restantes)
+        unidades = [u for u in unidades if u[0] in restantes]
+
+    if ja_feitos:
+        logger.info(
+            'Blocos pulados por checkpoint',
+            extra={'pulados': ja_feitos, 'restantes': len(unidades)},
+        )
+
     total_gravado = 0
     total_rejeitado = 0
     notas, recusas_totais, erros = [], [], []
     falhas_seguidas = 0
     nao_tentados = 0
 
-    for numero, (bloco_inicio, bloco_fim) in enumerate(blocos, start=1):
-        rotulo = f'{bloco_inicio} a {bloco_fim}'
+    for numero, (rotulo, bloco_inicio, bloco_fim) in enumerate(unidades, start=1):
         # ⚠️ Contexto por bloco: e o que faz a linha escrita la dentro de
         # `qualidade.py` ou de `persistencia.py` — modulos que nao conhecem
         # esta camada — sair dizendo de qual bloco ela fala.
-        with contexto(bloco=rotulo, bloco_numero=numero, blocos=len(blocos)):
+        with contexto(bloco=rotulo, bloco_numero=numero, blocos=len(unidades)):
             resultado = _coletar_bloco(conector, local, bloco_inicio, bloco_fim)
 
             if resultado.houve_falha:
                 falhas_seguidas += 1
                 erros.append(f'[{rotulo}] {resultado.erro}')
+                # ⚠️ `marcar_falha`, e nao o `with registrar`: o contrato do
+                # conector e devolver `ResultadoColeta(erro=...)` em vez de
+                # levantar. Forcar uma excecao aqui so para alimentar o
+                # gerenciador de contexto inverteria o desenho.
+                checkpoints.marcar_falha(tarefa, rotulo, resultado.erro)
                 logger.warning(
                     'Bloco falhou', extra={'erro': resultado.erro},
                 )
                 if progresso:
-                    progresso(f'bloco {numero}/{len(blocos)} ({rotulo}): falhou')
+                    progresso(f'bloco {numero}/{len(unidades)} ({rotulo}): falhou')
 
                 if falhas_seguidas >= LIMITE_FALHAS_SEGUIDAS:
-                    nao_tentados = len(blocos) - numero
+                    nao_tentados = len(unidades) - numero
                     logger.error(
                         'Ingestao interrompida por falhas seguidas',
                         extra={
@@ -209,13 +252,21 @@ def _executar(local, inicio, fim, conector, incremental, janela_dias,
                 continue
 
             falhas_seguidas = 0
-            medicoes, rejeitadas, recusas = preparar_medicoes(
-                local, resultado, conector.slug
-            )
-            # Gravar por bloco, e nao no fim: um backfill longo interrompido no
-            # meio preserva o que ja chegou, e a proxima execucao incremental
-            # retoma dali.
-            gravadas = gravar(medicoes)
+            with checkpoints.registrar(tarefa, rotulo) as ponto:
+                medicoes, rejeitadas, recusas = preparar_medicoes(
+                    local, resultado, conector.slug
+                )
+                # Gravar por bloco, e nao no fim: um backfill longo interrompido
+                # no meio preserva o que ja chegou, e a proxima execucao
+                # incremental retoma dali.
+                gravadas = gravar(medicoes)
+
+                # 🚨 A evidencia e o que `conferir()` cruza com a realidade
+                # depois. Sem ela, o checkpoint diria apenas "fiz", e um banco
+                # restaurado de backup antigo passaria a ter blocos pulados
+                # para sempre, sem nada apontando o buraco.
+                ponto.evidencia['gravadas'] = gravadas
+                ponto.evidencia['rejeitadas'] = rejeitadas
 
             total_gravado += gravadas
             total_rejeitado += rejeitadas
@@ -232,7 +283,7 @@ def _executar(local, inicio, fim, conector, incremental, janela_dias,
 
             if progresso:
                 progresso(
-                    f'bloco {numero}/{len(blocos)} ({rotulo}): {gravadas} medicoes'
+                    f'bloco {numero}/{len(unidades)} ({rotulo}): {gravadas} medicoes'
                 )
 
     if nao_tentados:

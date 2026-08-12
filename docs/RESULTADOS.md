@@ -2047,6 +2047,116 @@ inteira.
 
 ---
 
+## 25. 🚨 O modelo servido passou de 3 para 8 recifes — remedido em 12/08/2026
+
+Até aqui todo número deste documento vem de **três** recifes (Abrolhos-BA,
+Picãozinho-PB, Porto de Galinhas-PE). Em 11/08/2026 sete locais novos foram
+cadastrados ([FONTES.md](FONTES.md) §2.3.1) e cinco deles receberam ingestão
+completa — 2020-01-01 a 2026-08-11, as mesmas 8 variáveis por local. Com isso o
+conjunto de treino tem **8 recifes**.
+
+⚠️ **Ingerir não retreina, e essa separação é o motivo desta seção existir.** O
+artefato em `dados/modelos/` continuou declarando três locais nos metadados até
+12/08, e `PainelRiscoDetail` responde **404 com motivo** para todo local fora
+dessa lista — ou seja, os cinco recifes com série completa apareciam no site
+sem previsão nenhuma, corretamente, porque o modelo servido nunca os tinha
+visto. É a regra de §23 funcionando: *retreinar sem medir é errado, e medir é
+ato deliberado*.
+
+### 25.1 A medição, antes de gravar o artefato
+
+`treinar_modelo --horizonte 7`, leave-year-out, limiar de operação do painel
+(0,20). **19.056 amostras** de 19.320 dias, contra 7.095 do conjunto de três
+locais.
+
+| | F1 | episódios | alarmes falsos |
+|---|---|---|---|
+| modelo | 0,603 | **44/50** | 35 |
+| persistência | 0,695 | 40/50 | **13** |
+| regra NOAA | **0,739** | 39/50 | 21 |
+
+PR-AUC médio **0,746**, Brier **0,041**, sobre os 6 anos com evento.
+
+Por ano:
+
+| ano | n | PR-AUC | modelo | persistência | regra NOAA |
+|---|---|---|---|---|---|
+| 2020 | 2.816 | 0,935 | **13/13** | 11/13 | 10/13 |
+| 2021 | 2.920 | — | *sem evento no ano* | | |
+| 2022 | 2.920 | 0,390 | 6/8 | **7/8** | 6/8 |
+| 2023 | 2.920 | 0,555 | **3/3** | 1/3 | **3/3** |
+| 2024 | 2.808 | 0,967 | 8/8 | 8/8 | 8/8 |
+| 2025 | 2.920 | 0,816 | **9/9** | 8/9 | 7/9 |
+| 2026 | 1.752 | 0,810 | 5/9 | 5/9 | 5/9 |
+
+**A conclusão de §24.3 se mantém em outra escala:** o modelo ganha no critério
+declarado (4 episódios a mais que o piso mais forte, que aqui volta a ser a
+persistência) e paga em alarme falso e em F1 diário. O veredito do comando
+autoriza gravar; o artefato foi regravado com `treinar_final` — **19.056
+amostras, 1.643 positivas (8,6%)**, mesmas 4 colunas de trajetória, mesma
+recalibração isotônica.
+
+### 25.1.1 As figuras foram refeitas junto
+
+`manage.py graficos --pdf` regerou as 12 figuras de `relatorios_gerados/graficos/`
+— as 8 anteriores estavam paradas em 30/07 e descreviam o modelo de 3 recifes.
+São **5 linhas do tempo novas**, uma por recife novo com série; os dois locais
+sem coordenada são pulados pelo próprio comando, por não terem dia avaliado.
+
+Duas leituras que a série maior deixou mais nítidas:
+
+- **O coeficiente do DHW não troca de sinal em nenhum dos 6 anos** (média
+  **+3,99**, mínimo +3,2). As outras três trocam, e a figura marca isso: a média
+  perto de zero delas **não** é "quase sem efeito", é o modelo discordando de si
+  mesmo sobre a direção.
+- **Só o DHW cruza o limiar de aviso** na figura de resposta. Movendo cada
+  variável isoladamente a partir do valor típico, temperatura, salinidade e
+  oxigênio ficam colados no chão ao longo de toda a faixa observada.
+
+⚠️ Artefato derivado, não versionado — regerável pelo comando.
+
+### 25.2 Três coisas que mudaram, e uma que não
+
+1. **2023 passou a ter evento.** No conjunto de três recifes, 2023 não aparecia
+   na tabela de §24.3 — não havia episódio a detectar. Com os recifes do
+   Nordeste e do Norte ele entra com 3 episódios, e os três são pegos.
+2. **2022 ficou pior para o modelo** (6/8, contra 3/4 antes) e continua sendo o
+   ano em que a persistência ganha. Consistente com o diagnóstico já fechado no
+   Histórico de 09/08: 2022 concentra o artefato de agregação BAA-por-máximo
+   contra DHW-por-média.
+3. **A regra da NOAA deixou de ser o piso mais alto em episódios** (39/50
+   contra 40/50 da persistência), invertendo o que §24.3 media com 3 recifes.
+   Em F1 diário ela continua na frente das duas.
+4. **O que não mudou: a ordem das afirmações.** O modelo continua *mais
+   sensível*, e não *melhor*, que os pisos — a frase de §24.3 sobrevive ao
+   conjunto quase triplicar.
+
+### 25.3 ⚠️ O n cresceu 2,7×, e a independência não
+
+`dataset.montar_todos` já avisa que as linhas **não são independentes entre
+locais**: os episódios caem nos mesmos anos porque o forçante oceanográfico é o
+mesmo. Com 3 recifes isso valia; com 8 vale mais, não menos.
+
+🚨 **Concretamente: "44/50 episódios" não são 50 eventos independentes.** Um
+aquecimento que atinge o Nordeste inteiro vira episódio em Noronha, em Rocas,
+em Maracajaú e em Areia Vermelha ao mesmo tempo — quatro linhas na contagem,
+uma no oceano. O número de **anos-evento efetivos** continua sendo ~4
+([VARIAVEIS.md](VARIAVEIS.md) §7.2), e nada nesta seção o aumenta. Ler o salto
+de 19 para 50 episódios como "mais evidência" seria o erro que este parágrafo
+existe para impedir.
+
+### 25.4 Os dois recifes que continuam fora, e por quê
+
+`apa-costa-dos-corais` e `recife-de-fora-ba` estão cadastrados **sem
+coordenada**, de propósito ([FONTES.md](FONTES.md) §2.3.1): o primeiro é uma
+área de 12 municípios e não um ponto, o segundo não tem coordenada exata
+publicada. Sem coordenada não há `bbox`, sem `bbox` não há ingestão, e sem
+ingestão não há previsão. Os dois seguem no site como local cadastrado, agora
+**dizendo isso na tela** em vez de exibirem "Não calculado" — a mesma frase que
+um recife com o pipeline quebrado mostraria.
+
+---
+
 ## Reprodução
 
 ```bash
@@ -2094,6 +2204,7 @@ python backend\manage.py treinar_gcbd --so-ambiental --importancia
 
 | Data | Alteração |
 |---|---|
+| 12/08/2026 | 🚨 **§25 criada — o modelo servido passou de 3 para 8 recifes.** Os sete locais cadastrados em 11/08 ([FONTES.md](FONTES.md) §2.3.1) tinham ingestão completa desde então, e o artefato em `dados/modelos/` continuava declarando três locais: `PainelRiscoDetail` respondia **404 com motivo** para os cinco novos, corretamente, porque o modelo nunca os viu. Remedido antes de gravar, como §23 exige: **19.056 amostras** (era 7.095), 6 anos com evento (era 5 — **2023 passou a ter episódio**, que não existia no conjunto de três recifes), **44/50 episódios contra 40/50 da persistência e 39/50 da regra da NOAA**. A conclusão de §24.3 sobrevive à escala — o modelo é *mais sensível*, não *melhor* —, mas duas coisas se inverteram: a regra da NOAA deixou de ser o piso mais alto em episódios, e 2022 piorou para o modelo (6/8), consistente com o artefato de agregação já fechado em 09/08. ⚠️ **§25.3 registra o que o número maior não compra:** 50 episódios não são 50 eventos independentes — um aquecimento no Nordeste vira episódio em quatro recifes ao mesmo tempo, e os anos-evento efetivos continuam sendo ~4. Artefato regravado com `treinar_final` (1.643 positivas, 8,6%). Os dois locais sem coordenada continuam fora, agora **dizendo isso na tela** em vez de exibirem "Não calculado". |
 | 09/08/2026 | ✅ **§6.1 — fase 4.3 fechada: 2022 tem um episódio sem sinal térmico regional, e é um artefato de agregação já documentado.** Dos quatro episódios reais de 2022, três foram majoritariamente detectados pelo modelo (9/15, 11/24, 15/18 dias); o quarto — Picãozinho, 26/02–06/03 — foi perdido por **modelo e regra publicada igualmente** (0/9). Medido por quê: nesses nove dias o BAA gravado diz alerta todo dia, mas DHW nunca passa de 0,71 e HotSpot nunca passa de 0,90 — os dois abaixo até do corte reduzido de 1,0 que a dobra escolheu para o ano, e muito abaixo do corte oficial (DHW≥4, HotSpot≥1). `ml/baseline.py::prever_regra_noaa` já registrava, desde 30/07, que o BAA é agregado por **máximo** de pixel e DHW/HotSpot por **média** — um pixel quente sozinho levanta o BAA sem levantar a média —, com 261 dias assim no dataset inteiro. **O que faltava era localizar onde**: 2022 concentra 90,9% dos seus 66 dias de alerta nesse padrão (contra 28,5–53,4% nos outros anos completos), e no critério mais estrito (DHW **e** HotSpot abaixo de 1,0) o dataset inteiro tem só 17 dias assim — **15 deles (88%) são o episódio perdido de Picãozinho**. 🚨 **A hipótese geográfica de §6 (só Abrolhos e Picãozinho tiveram evento em 2022) se confirmou como fato e caiu como explicação**: `dataset.montar_todos` monta cada recife em separado e não existe feature que atravesse recifes, então o modelo não tinha como aprender nem se confundir com sincronia entre eles — a causa real é o artefato de agregação, não um padrão espacial aprendido. Isso também explica a baixa importância do DHW em 2022 medida em §7/§24.4 (0,296 contra 0,72–0,84): a permutação é medida sobre o ano inteiro, incluindo os 15 dias em que o DHW já não carregava relação nenhuma com o alerta. Remedido no processo: PR-AUC de 2022 caiu de 0,371 para 0,359 com o dado ingerido desde 25/07 — conclusão não muda. Investigação em [PLANEJAMENTO.md](../PLANEJAMENTO.md) fase 4.3. |
 | 30/07/2026 | 🚨 **§24 criada — o piso era o adversário errado.** A entrega 1 tinha **uma** linha de base, a persistência, que copia o BAA de hoje. Faltava a que qualquer gestor já tem de graça: **a regra publicada da NOAA** (`HotSpot ≥ 1` e `DHW ≥ 4`), que sai diariamente no site deles. Medida agora, ela é o **piso mais alto**: F1 0,779 e precisão 0,819 contra 0,671 e 0,560 do modelo, com os mesmos 15/19 episódios da persistência. **O modelo ganha no critério declarado e perde nos outros dois** — pega 2 episódios a mais e cobra 5 a 7 alarmes falsos a mais. Isso não reverte §22.9, que escolheu antecedência sabendo o preço, mas muda o que se pode afirmar: o modelo não é melhor que a regra, é **mais sensível** que ela. Dois achados laterais: **o corte publicado de 4 é alto demais nesta escala** (10/19 episódios; remedido dá `DHW ≥ 1`, 15/19 com precisão 0,880), porque o BAA é agregado por máximo e o DHW por média — quantificado em [FONTES.md](FONTES.md) §6.16, raciocinado em [VARIAVEIS.md](VARIAVEIS.md) §4.6 —, e **a regra também erra 2022** (3/4), o que estreita a pendência de §6. §24.5 registra a hipótese que a própria medição derrubou: *"o alvo é função do DHW, logo o modelo só extrapola DHW"* — falso, porque a regra tem duas metades e só com DHW ela faz F1 0,480 contra 0,671 do modelo. O corte da regra é escolhido **dentro da dobra de treino**, com teste que refaz a escolha à mão. 11 testes novos. |
 | 27/07/2026 | **§22.9.3 corrigida no mesmo dia — eu havia concluído domínio onde não havia.** A primeira versão dizia que *"0,20 é dominado por 0,30"*, olhando só episódios detectados e alarme falso. Ao medir **quando** o aviso chega, o suposto domínio some: entre 0,20 e 0,30 os episódios pegos são os mesmos, mas os avisados já no 1º dia caem de **16/20 para 13/20** e o atraso médio sobe de **1,50 para 2,60 dias**. O evento continua detectado — mais tarde. Fica o aviso de método: um patamar numa métrica agregada quase sempre esconde movimento em algo que ela não mede. Com a dimensão nova, **0,10 vira candidato sério** (recupera o episódio de nove dias de 2022, mantém aviso no 1º dia em 18/20). |

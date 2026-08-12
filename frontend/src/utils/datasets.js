@@ -67,6 +67,12 @@ export function normalizarDatasetCatalogo(item) {
     tamanhoMb,
     tamanho: item.tamanho || formatarTamanhoDataset(tamanhoMb),
     downloadUrl: downloadUrl || null,
+    // ⚠️ Vem do servidor, e o padrao e `false` — nunca `true`. Um catalogo
+    // antigo (ou o fallback de `data/datasets.js`, que so tem link de
+    // provedor) cai aqui, e assumir "exige conta" esconderia atras de um
+    // convite ao login um download que qualquer um poderia fazer.
+    exigeContaAprovada:
+      (item.download_exige_conta ?? item.exigeContaAprovada) === true,
     cobertura: normalizarCobertura(item.cobertura),
   };
 }

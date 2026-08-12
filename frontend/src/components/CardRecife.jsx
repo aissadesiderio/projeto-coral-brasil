@@ -9,6 +9,7 @@ import {
   formatarDataBr,
   formatarProbabilidade,
 } from '../utils/painelRisco';
+import AvisoSemSerie from './AvisoSemSerie';
 import ImagemRecife from './ImagemRecife';
 
 /**
@@ -71,15 +72,26 @@ export default function CardRecife({ local, predicao = null }) {
   const probabilidade = formatarProbabilidade(predicao);
   const dataBase = predicao?.disponivel ? formatarDataBr(predicao.data_base) : null;
 
+  // ⚠️ "Nao calculado" e a resposta certa para um recife cuja janela de 7 dias
+  // nao fechou hoje, e a resposta **errada** para um que nunca vai ter serie
+  // porque nao tem coordenada. As duas frases eram a mesma ate 12/08/2026.
+  // Ver AvisoSemSerie.
+  const motivoSemSerie = local.motivo_sem_serie || null;
+
   return (
     <Link
       to={obterRotaLocalizacao(local.slug)}
       className="group flex h-full flex-col text-left transition duration-300 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-dark focus-visible:ring-offset-4 focus-visible:ring-offset-sand-lightest"
     >
       <div className="overflow-hidden rounded-[22px] bg-white shadow-[0_18px_45px_rgba(43,105,120,0.12)]">
+        {/* ⚠️ Passa o credito e **nao** a URL da fonte: o cartao inteiro e um
+            `<Link>`, e uma ancora dentro de outra e HTML invalido. O link para
+            a fonte fica na pagina do recife, a um clique. */}
         <ImagemRecife
           nome={local.nome}
           imagem={local.imagem_url}
+          credito={local.credito_imagem}
+          localCaptura={local.local_captura_foto}
           className="h-56 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
         />
       </div>
@@ -96,21 +108,32 @@ export default function CardRecife({ local, predicao = null }) {
 
         <div className="mt-5 space-y-1.5 text-sm leading-6 text-slate-700">
           <p>{formatarQuantidadeEspecies(quantidadeEspecies)}</p>
-          <p>
-            Estresse termico em 7 dias:{' '}
-            <span className={`font-semibold ${alerta ? alerta.corTexto : 'text-slate-500'}`}>
-              {probabilidade ? probabilidade.texto : 'Nao calculado'}
-            </span>
-          </p>
-          <p>
-            {dataBase
-              ? `Calculado sobre dados ate ${dataBase}`
-              : 'Sem previsao disponivel para esta localizacao'}
-          </p>
+          {motivoSemSerie ? (
+            <AvisoSemSerie motivo={motivoSemSerie} compact />
+          ) : (
+            <>
+              <p>
+                Estresse termico em 7 dias:{' '}
+                <span
+                  className={`font-semibold ${alerta ? alerta.corTexto : 'text-slate-500'}`}
+                >
+                  {probabilidade ? probabilidade.texto : 'Nao calculado'}
+                </span>
+              </p>
+              <p>
+                {dataBase
+                  ? `Calculado sobre dados ate ${dataBase}`
+                  : 'Sem previsao disponivel para esta localizacao'}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="mt-5 inline-flex items-center gap-3">
-          <BadgeAlerta alerta={alerta} />
+          {/* Sem serie nao ha degrau a mostrar, e "Sem previsao" ao lado da
+              explicacao repetiria em tom de falha o que a explicacao acabou de
+              dizer que e decisao. */}
+          {!motivoSemSerie && <BadgeAlerta alerta={alerta} />}
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-ocean-dark">
             Abrir
             <ExternalLink

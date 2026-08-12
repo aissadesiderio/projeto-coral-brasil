@@ -258,6 +258,33 @@ class EuView(APIView):
         return Response(_dados_da_sessao(request.user))
 
 
+class CoberturaNoContextoMixin:
+    """Injeta a cobertura real das medicoes da pagina de uma vez.
+
+    🚨 Sem isto o catalogo anunciaria periodo e volume gravados a mao. Medido
+    em 27/07/2026: seis dos nove datasets nao tinham **nenhuma** medicao no
+    banco, e os tres reais declaravam fim em 2025 com a serie ja em 2026.
+
+    Uma consulta agrupada serve a lista inteira; calcular por item daria uma
+    consulta por linha.
+
+    ⚠️ O que viaja no contexto e o **resumo das medicoes**, e nao o mapa ja
+    montado por dataset. A diferenca custava uma consulta: montar o mapa aqui
+    obrigava a avaliar o queryset uma segunda vez, so para saber quais datasets
+    descrever. O resumo nao depende disso.
+
+    ⚠️ Usado por dois consumidores desde 12/08/2026, e por isso mora acima de
+    ambos: o catalogo (`cobertura.para`) e a pagina do recife
+    (`acervo.para_local`). Sao duas leituras do mesmo agregado — "quanto deste
+    dataset o projeto tem" e "o que o projeto tem deste local".
+    """
+
+    def get_serializer_context(self):
+        contexto = super().get_serializer_context()
+        contexto['medicoes'] = cobertura.resumo()
+        return contexto
+
+
 class LocaisDoModeloNoContextoMixin:
     """Injeta os slugs que o artefato do modelo cobre.
 
@@ -298,35 +325,25 @@ class LocalRecifeList(LocaisDoModeloNoContextoMixin, OfflineModeMixin,
         return LocalRecife.objects.filter(ativo=True).prefetch_related('especies')
 
 
-class LocalRecifeDetail(LocaisDoModeloNoContextoMixin, OfflineModeMixin,
-                        generics.RetrieveAPIView):
+class LocalRecifeDetail(CoberturaNoContextoMixin, LocaisDoModeloNoContextoMixin,
+                        OfflineModeMixin, generics.RetrieveAPIView):
+    """O recife inteiro: ficha, especies e **o acervo completo de medicoes**.
+
+    ⚠️ `CoberturaNoContextoMixin` entra aqui pelo mesmo motivo que entra no
+    catalogo — o serializer precisa do resumo agregado das medicoes, e sem ele
+    `acervo.get_acervo` faria a propria agregacao a cada resposta. E a mesma
+    consulta; a diferenca e quem paga por ela.
+
+    ⚠️ **So no detalhe.** `LocalRecifeList` continua sem o acervo: o cartao da
+    lista nao o mostra, e injeta-lo ali seria uma agregacao por requisicao de
+    uma pagina que nao a usa.
+    """
+
     serializer_class = LocalRecifeDetailSerializer
     lookup_field = 'slug'
 
     def get_queryset(self):
         return LocalRecife.objects.filter(ativo=True).prefetch_related('especies')
-
-
-class CoberturaNoContextoMixin:
-    """Injeta a cobertura real de todos os datasets da pagina de uma vez.
-
-    🚨 Sem isto o catalogo anunciaria periodo e volume gravados a mao. Medido
-    em 27/07/2026: seis dos nove datasets nao tinham **nenhuma** medicao no
-    banco, e os tres reais declaravam fim em 2025 com a serie ja em 2026.
-
-    Uma consulta agrupada serve a lista inteira; calcular por item daria uma
-    consulta por linha.
-
-    ⚠️ O que viaja no contexto e o **resumo das medicoes**, e nao o mapa ja
-    montado por dataset. A diferenca custava uma consulta: montar o mapa aqui
-    obrigava a avaliar o queryset uma segunda vez, so para saber quais datasets
-    descrever. O resumo nao depende disso.
-    """
-
-    def get_serializer_context(self):
-        contexto = super().get_serializer_context()
-        contexto['medicoes'] = cobertura.resumo()
-        return contexto
 
 
 class DatasetCatalogoList(CoberturaNoContextoMixin, OfflineModeMixin,

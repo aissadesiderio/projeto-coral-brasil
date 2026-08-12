@@ -116,7 +116,26 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
         (
             'Conteudo',
             {
-                'fields': ('descricao', 'imagem', 'mostrar_imagem_grande', 'ultima_atualizacao'),
+                'fields': ('descricao', 'ultima_atualizacao'),
+            },
+        ),
+        (
+            'Imagem do local',
+            {
+                'fields': (
+                    'imagem',
+                    'mostrar_imagem_grande',
+                    'credito_imagem',
+                    'fonte_imagem_url',
+                    'local_captura_foto',
+                ),
+                'description': (
+                    'Sem credito, a foto nao entra na copia versionada e a tela '
+                    'exibe "sem credito informado" em vez de atribuir a imagem a '
+                    'alguem. O credito pode ser um site, uma instituicao ou o nome '
+                    'de quem fotografou. O local de captura e opcional e nao e a '
+                    'coordenada monitorada.'
+                ),
             },
         ),
     )

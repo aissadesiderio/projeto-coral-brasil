@@ -119,7 +119,10 @@ export default function App() {
             path={ROTAS_APP.home}
             element={<HomePage siteOffline={siteOffline} offlineMessage={offlineMessage} />}
           />
-          <Route path={ROTAS_APP.banco} element={<BancoDadosPage />} />
+          {/* `usuario` chega ate aqui porque metade do catalogo passou a ser
+              baixavel deste projeto, e nao do provedor - e esse download exige
+              conta aprovada. Ver DatasetCard::AcaoDeDownload. */}
+          <Route path={ROTAS_APP.banco} element={<BancoDadosPage usuario={usuario} />} />
           <Route
             path={ROTAS_APP.recifes}
             element={

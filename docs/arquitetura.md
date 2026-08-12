@@ -580,6 +580,39 @@ Pacote `backend/observabilidade/`, no mesmo formato dos outros pacotes simples d
 
 🚨 **`ExecucaoIngestao.correlacao` (migracao `0027`) e a ponte entre o banco e o log.** A tabela diz **que** 406 medicoes foram rejeitadas; o log diz **por que** cada uma foi. Sem o campo, ligar as duas coisas dependia de horario aproximado — que falha justamente quando ha varias execucoes proximas, o caso normal da rotina diaria com 2 fontes x 10 locais. Fica em branco nas execucoes anteriores a 12/08/2026: preencher retroativamente seria inventar rastro, mesma regra ja aplicada a `iucn_avaliado_em`.
 
+## ✅ Checkpoints — retomada e mapeamento, construidos em 12/08/2026
+
+Pacote `backend/checkpoints/`, modelo `aquaculture.models.Checkpoint` (migracao `0028`), comando `manage.py checkpoints`.
+
+🚨 **A pergunta que o dado sozinho nao responde: "nao foi tentado" ou "foi tentado e voltou vazio"?**
+
+`ingestao.persistencia.ultima_data_ingerida` ja derivava a retomada da propria serie — pega a maior data gravada e continua dali. Isso continua existindo e continua sendo o mecanismo primario. O limite dele nao da para contornar do lado do dado: se o NOAA nao publicou nada para 2021-03-02, a serie fica com um buraco **identico** ao de um bloco que nunca foi pedido. Toda execucao seguinte repete o pedido que ja se sabe que nao rende nada, e nenhuma registra que ja tentou.
+
+| Situacao | `ultima_data_ingerida` | `Checkpoint` |
+|---|---|---|
+| bloco gravado com 406 medicoes | avanca | `concluido`, evidencia 406 |
+| bloco pedido, fonte devolveu vazio | nao distingue de buraco | `concluido`, evidencia 0 |
+| bloco nunca pedido | nao distingue de vazio | ausente |
+| bloco pedido, ERDDAP deu 408 | nao distingue de vazio | `falhou`, com o erro |
+
+⚠️ **O checkpoint e a fonte da verdade sobre o que foi TENTADO, nunca sobre o que EXISTE.** Confundir os dois e o unico jeito de esta funcionalidade causar dano — e o dano seria grave e silencioso: bastaria alguem restaurar um backup antigo para a retomada passar a pular blocos reais **para sempre**, sem erro em lugar nenhum. E a mesma classe do `Mussismilia braziliensis` gravado como VU: uma afirmacao sobre o passado que parou de corresponder ao presente.
+
+Tres defesas, cada uma com teste travando:
+
+1. **`evidencia`** guarda o que a unidade rendeu, em campos somaveis — nao so "fiz";
+2. **`conferir()`** cruza a afirmacao com o dado real (`manage.py checkpoints --conferir`) e loga `ERROR` na divergencia;
+3. **`limpar()`** devolve unidades a fila. Sem isso, corrigir um defeito no tratamento de um bloco nao teria efeito nenhum: o bloco seguiria marcado como concluido para sempre.
+
+🚨 **O checkpoint so filtra em modo incremental.** `--completo` existe para refazer tudo, de proposito, quando se desconfia do que ha no banco. Se o checkpoint pulasse blocos ali, `--completo` viraria um sinonimo caro de "nao faz nada" — a bandeira continuaria existindo e documentada, sem efeito. Ha teste fixando isso.
+
+⚠️ **Uma tarefa por par (fonte, local)**, e nao uma tarefa `'ingestao'` unica: os rotulos de bloco sao os mesmos em todo local, e uma tarefa so faria o bloco de Abrolhos marcar como concluido o bloco homonimo de Picaozinho — serie vazia, sem erro nenhum.
+
+⚠️ **Trocar `janela_dias` invalida os checkpoints existentes** (os rotulos passam a ser outros). Nao corrompe nada — `ultima_data_ingerida` continua evitando duplicata — mas custa uma coleta completa.
+
+📌 **`TENTATIVAS_ATE_DESISTIR = 5`** e o "tratar somente estas excecoes" do pedido: depois de cinco tentativas contra a mesma parede, a unidade sai da fila e vira caso para olhar, listada por `manage.py checkpoints`. O `LIMITE_FALHAS_SEGUIDAS` da ingestao esquece a cada execucao; este lembra entre execucoes.
+
+O **manifesto** (`--json`) e saida, sempre — gerado a partir dos checkpoints, nunca lido de volta pelo sistema. Se fosse lido, seria mais um estado para divergir do banco, e o projeto ja tem essa licao gravada em FONTES.md §2.1. Ele lista tambem o que **falhou**: um manifesto so com sucessos descreve um pipeline que nunca falhou, e nenhum pipeline e assim.
+
 ## Regras operacionais
 
 - sem `neo4j_init`, nao existe garantia de constraints validas;

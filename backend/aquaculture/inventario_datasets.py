@@ -16,6 +16,27 @@ Regras deste modulo:
 4. **Arquivos com problema de integridade ficam de fora**, com o motivo
    registrado em `EXCLUIDOS` - eles existem no disco, mas nao sao dados
    publicaveis. Ver docs/FONTES.md secao 6.
+
+🚨 **Este modulo passou a ter DUAS metades, e elas respondem perguntas
+diferentes.** A distincao foi o que faltava quando os sete locais novos entraram
+(12/08/2026): eles tinham serie ingerida no banco, previsao no painel — e a
+pagina de cada um dizia *"Ainda nao ha datasets relacionados a esta
+localizacao"*. Nao era bug de tela. O catalogo inteiro descrevia **arquivos**, e
+todo arquivo do acervo tinha sido extraido num unico ponto, o Banco dos Abrolhos
+(ver `LOCAL_PADRAO` abaixo). Um recife sem CSV proprio em `backend/dados/` nao
+tinha como aparecer, por mais medicao que tivesse.
+
+| Metade | Descreve | Cobertura vem de | Vale para |
+|---|---|---|---|
+| `DATASETS_REAIS` | o arquivo em `backend/dados/` | `ler_metadados_arquivo` | so `abrolhos-ba` |
+| `SERIES_INGERIDAS` | a serie em `MedicaoAmbiental` | o proprio banco | todo local ingerido |
+
+⚠️ **A segunda metade nao substitui a primeira, e nem poderia.** Metade dos
+arquivos catalogados (pH, nitrato, thetao, clorofila, KD490) sao variaveis que a
+ingestao **nao** grava: eles so existem como arquivo. Apagar a primeira metade
+perderia esse acervo do catalogo; apagar a segunda devolveria os sete locais ao
+vazio. As duas convivem, e `DatasetCatalogo.fonte_medicao` continua sendo o que
+diz, item a item, se o projeto **serve** aquilo ou apenas **aponta** para ele.
 """
 
 from dataclasses import dataclass, field
@@ -291,6 +312,181 @@ EXCLUIDOS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Segunda metade: a serie que a ingestao grava, catalogada por local.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SerieIngerida:
+    """Um conector, descrito como o conjunto de dados que ele produz por local.
+
+    Nao ha `arquivo` aqui, e a ausencia e o ponto: o que se cataloga e a serie
+    no banco, nao uma copia dela em disco.
+
+    ⚠️ **`variaveis_medicao` fica vazio de proposito.** `cobertura.py` le vazio
+    como "todas as variaveis desta fonte", e e isso que se quer: o conector
+    define quais variaveis produz, e repetir a lista aqui criaria uma segunda
+    declaracao para divergir da primeira. Foi exatamente assim que a cobertura
+    gravada a mao envelheceu em 27/07/2026.
+    """
+
+    fonte_medicao: str
+    titulo: str
+    fonte: str
+    tipo_dado: str
+    produto: str
+    dataset_id: str
+    url_fonte: str
+    descricao: str
+    ordem: int = 0
+    ressalvas: tuple = field(default=())
+
+    def resumo(self, local):
+        partes = [
+            self.descricao,
+            f'Extraida na caixa de {local.nome} ({local.latitude}, '
+            f'{local.longitude}).',
+            f'Produto: {self.produto} (dataset {self.dataset_id}).',
+            f'Fonte oficial: {self.url_fonte}',
+        ]
+        if self.ressalvas:
+            partes.append('Ressalvas: ' + ' '.join(self.ressalvas))
+        partes.append(
+            'O download sai do proprio banco deste projeto, com as colunas de '
+            'proveniencia (fonte, dataset_id, quality_flag) em cada linha.'
+        )
+        return ' '.join(partes)
+
+
+SERIES_INGERIDAS = [
+    SerieIngerida(
+        fonte_medicao='noaa_crw',
+        titulo='Estresse termico coralino (CoralTemp/DHW)',
+        fonte='NOAA',
+        tipo_dado='Oceanografico',
+        produto='Daily Global 5 km Coral Bleaching Heat Stress v3.1',
+        dataset_id='dhw_5km',
+        url_fonte=URL_CRW,
+        descricao=(
+            'Serie diaria de temperatura da superficie do mar e das metricas '
+            'oficiais de estresse termico (anomalia, HotSpot, DHW, BAA) '
+            'agregadas dos pixels de 5 km que cobrem o recife.'
+        ),
+        ressalvas=(
+            'O BAA e agregado por maximo, e nao por media - e categoria '
+            'ordinal. A fracao da area em alerta vai na serie ao lado. '
+            'Ver docs/VARIAVEIS.md secao 4.5.',
+        ),
+        ordem=10,
+    ),
+    SerieIngerida(
+        fonte_medicao='copernicus',
+        titulo='Salinidade e oxigenio dissolvido',
+        fonte='Copernicus',
+        tipo_dado='Biogeoquimico',
+        produto='GLOBAL_ANALYSISFORECAST_PHY_001_024 e GLOBAL_MULTIYEAR_BGC_001_029',
+        dataset_id='cmems_mod_glo_phy-so_anfc_0.083deg_PT6H-i, cmems_mod_glo_bgc_my_0.25deg_P1D-m',
+        url_fonte=URL_CMEMS,
+        descricao=(
+            'As duas variaveis nao termicas do baseline do modelo, extraidas '
+            'diariamente na caixa do recife.'
+        ),
+        ressalvas=(
+            'O oxigenio vem de reanalise e a salinidade de analise/previsao - '
+            'produtos diferentes, com latencias diferentes.',
+        ),
+        ordem=11,
+    ),
+]
+
+# O endpoint que devolve exatamente esta serie, em CSV, sem paginacao.
+#
+# 🚨 **E o primeiro `url_download` do catalogo que aponta para este projeto**, e
+# nao para o provedor. Ate aqui todo link do catalogo levava a NOAA ou ao
+# Copernicus - ou seja, um banco de dados que nao oferecia forma de baixar o que
+# ele mesmo guarda. Ver a nota de `formato=csv` em `views.MedicaoAmbientalList`.
+#
+# ⚠️ Exige conta aprovada, e por isso todo registro desta metade sai com
+# `download_exige_conta=True`.
+FORMATO_URL_DOWNLOAD = '/api/medicoes/?local={slug}&fonte={fonte}&formato=csv'
+
+
+def construir_inventario_das_series(medicoes=None):
+    """Uma entrada por (local, fonte) que exista **de fato** em `MedicaoAmbiental`.
+
+    🚨 **Par sem medicao nao vira registro** - nem mesmo desativado. E a regra 2
+    do topo deste modulo aplicada ao banco em vez do disco, e ela e o que impede
+    a volta do defeito de 27/07/2026: um catalogo que anuncia dez recifes
+    enquanto o banco tem oito. Os dois locais sem coordenada
+    (`apa-costa-dos-corais`, `recife-de-fora-ba`) caem aqui por consequencia, e
+    nao por excecao escrita a mao - eles nao entram na ingestao, entao nao tem
+    medicao, entao nao tem dataset.
+
+    `medicoes` e o retorno de `cobertura.resumo()`. Passe-o quando ja tiver.
+    """
+    from . import cobertura
+    from .models import LocalRecife
+
+    if medicoes is None:
+        medicoes = cobertura.resumo()
+
+    por_fonte = {serie.fonte_medicao: serie for serie in SERIES_INGERIDAS}
+    locais = {local.slug: local for local in LocalRecife.objects.all()}
+
+    # `cobertura.resumo()` agrupa por (fonte, variavel, local); aqui a variavel
+    # nao interessa - o dataset e a serie inteira daquela fonte no recife.
+    pares = sorted(
+        {
+            (fonte, slug)
+            for (fonte, _variavel, slug) in medicoes
+            if fonte in por_fonte and slug in locais
+        }
+    )
+
+    registros = []
+    for fonte, slug in pares:
+        serie = por_fonte[fonte]
+        local = locais[slug]
+        registros.append(
+            {
+                'id': f'serie-{fonte}-{slug}',
+                'defaults': {
+                    'titulo': f'{serie.titulo} - {local.nome}',
+                    'resumo': serie.resumo(local),
+                    'fonte': serie.fonte,
+                    'tipo_dado': serie.tipo_dado,
+                    'formato': 'CSV',
+                    'localizacao': local.nome,
+                    'local_slug': local.slug,
+                    'estado': local.estado,
+                    'cidade': local.cidade,
+                    'recorte_temporal': 'intervalo',
+                    # ⚠️ Nulos de proposito. Estes dois campos descrevem o
+                    # **arquivo** de origem (ver o comentario em cobertura.py),
+                    # e esta metade do catalogo nao tem arquivo. O periodo real
+                    # sai derivado do banco, no bloco `cobertura` do serializer,
+                    # e gravar uma copia dele aqui seria reintroduzir a
+                    # cobertura a mao que envelheceu em 27/07/2026.
+                    'data_inicio': None,
+                    'data_fim': None,
+                    'periodo_rotulo': 'Derivado do banco - ver cobertura',
+                    'tamanho_mb': None,
+                    'url_download': FORMATO_URL_DOWNLOAD.format(
+                        slug=local.slug, fonte=fonte,
+                    ),
+                    'download_exige_conta': True,
+                    'fonte_medicao': fonte,
+                    'variaveis_medicao': '',
+                    'ordem_exibicao': serie.ordem,
+                    'ativo': True,
+                },
+            }
+        )
+
+    return registros
+
+
 def caminho_dados():
     return Path(settings.BASE_DIR) / 'dados'
 
@@ -366,6 +562,7 @@ def construir_inventario(local=None):
                         'periodo_rotulo': 'Indisponivel',
                         'tamanho_mb': None,
                         'url_download': '',
+                    'download_exige_conta': False,
                         'fonte_medicao': fonte.fonte_medicao,
                         'variaveis_medicao': fonte.variaveis_medicao,
                         'ordem_exibicao': fonte.ordem,
@@ -395,6 +592,7 @@ def construir_inventario(local=None):
                     'periodo_rotulo': _rotulo_periodo(inicio, fim),
                     'tamanho_mb': tamanho_mb,
                     'url_download': '',
+                    'download_exige_conta': False,
                     'fonte_medicao': fonte.fonte_medicao,
                         'variaveis_medicao': fonte.variaveis_medicao,
                         'ordem_exibicao': fonte.ordem,

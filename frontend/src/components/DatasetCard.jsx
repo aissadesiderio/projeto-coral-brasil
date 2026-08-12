@@ -5,10 +5,13 @@ import {
   Download,
   ExternalLink,
   HelpCircle,
+  Lock,
   MapPin,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { formatarLocal, formatarPeriodo } from '../utils/formatters';
+import { ROTAS_APP } from '../utils/navigation';
 import { formatarDataBr } from '../utils/painelRisco';
 
 /**
@@ -82,8 +85,71 @@ function Cobertura({ cobertura }) {
   );
 }
 
-export default function DatasetCard({ item, compact = false }) {
+/**
+ * O rodape do cartao: baixar, pedir login, ou dizer que nao da.
+ *
+ * 🚨 **Os tres estados existem porque o catalogo passou a ter dois tipos de
+ * link.** Ate 12/08/2026 todo `url_download` apontava para o provedor (NOAA,
+ * Copernicus) e um `<a>` simples bastava. Desde que os locais novos entraram,
+ * metade dos itens aponta para `/api/medicoes/?formato=csv` — o proprio banco
+ * deste projeto —, e esse endpoint **exige conta aprovada**.
+ *
+ * ⚠️ Sem o estado do meio, o visitante deslogado clicaria em "Baixar conjunto"
+ * e receberia um JSON de 401 aberto no navegador. `SerieAmbiental` ja tinha
+ * resolvido isso do lado do recife, trocando o botao por um convite ao login;
+ * o cartao do catalogo faz o mesmo, com a mesma redacao.
+ *
+ * A permissao **nao e adivinhada pela URL**: vem de `download_exige_conta`, que
+ * o servidor deriva da mesma regra que a view aplica. Ver
+ * `models.DatasetCatalogo.download_exige_conta`.
+ */
+function AcaoDeDownload({ item, usuario }) {
+  if (!item.downloadUrl) {
+    return (
+      <span className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 sm:w-auto">
+        <AlertTriangle size={16} />
+        Download indisponivel no momento
+      </span>
+    );
+  }
+
+  const liberado =
+    !item.exigeContaAprovada || usuario?.aprovado === true || usuario?.master === true;
+
+  if (!liberado) {
+    return (
+      <Link
+        to={ROTAS_APP.login}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ocean-dark/30 px-4 py-2 text-sm font-semibold text-ocean-dark transition hover:bg-ocean-dark hover:text-white sm:w-auto"
+      >
+        <Lock size={16} />
+        Faca login e aguarde aprovacao para baixar
+      </Link>
+    );
+  }
+
+  return (
+    <a
+      href={item.downloadUrl}
+      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-dark px-4 py-2 text-sm font-semibold text-white transition hover:bg-ocean-light sm:w-auto"
+    >
+      <Download size={16} />
+      Baixar conjunto
+    </a>
+  );
+}
+
+export default function DatasetCard({ item, compact = false, usuario = null }) {
   const padding = compact ? 'p-4' : 'p-5';
+
+  // ⚠️ Metade do catalogo descreve **arquivo** e a outra metade descreve
+  // **serie no banco** (ver `inventario_datasets.py`). As linhas de arquivo so
+  // aparecem quando ha arquivo: numa serie elas sairiam como "Arquivo: Nao
+  // informado / Tamanho: Nao informado", tres palavras que se leem como falta
+  // de cadastro quando na verdade nao ha arquivo nenhum a descrever. O periodo
+  // e o volume da serie ja vem logo abaixo, no bloco de cobertura, derivados
+  // do banco.
+  const temArquivo = Boolean(item.dataInicio || item.dataFim || item.dataPublicacao);
 
   return (
     <article
@@ -114,16 +180,20 @@ export default function DatasetCard({ item, compact = false }) {
           <MapPin size={15} />
           {item.localizacao} - {formatarLocal(item)}
         </p>
-        <p className="inline-flex items-center gap-2">
-          <CalendarRange size={15} />
-          {/* ⚠️ Este periodo e o do ARQUIVO inventariado, nao o da API. Sao
-              coisas diferentes, e apresentar so um deles como "o periodo do
-              dataset" foi exatamente o defeito corrigido em 27/07/2026. */}
-          Arquivo: {formatarPeriodo(item)}
-        </p>
-        <p>
-          <strong>Tamanho:</strong> {item.tamanho}
-        </p>
+        {temArquivo && (
+          <>
+            <p className="inline-flex items-center gap-2">
+              <CalendarRange size={15} />
+              {/* ⚠️ Este periodo e o do ARQUIVO inventariado, nao o da API. Sao
+                  coisas diferentes, e apresentar so um deles como "o periodo do
+                  dataset" foi exatamente o defeito corrigido em 27/07/2026. */}
+              Arquivo: {formatarPeriodo(item)}
+            </p>
+            <p>
+              <strong>Tamanho:</strong> {item.tamanho}
+            </p>
+          </>
+        )}
       </div>
 
       <div className="mt-4">
@@ -131,20 +201,7 @@ export default function DatasetCard({ item, compact = false }) {
       </div>
 
       <div className="mt-5 flex flex-1 items-end">
-        {item.downloadUrl ? (
-          <a
-            href={item.downloadUrl}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-dark px-4 py-2 text-sm font-semibold text-white transition hover:bg-ocean-light sm:w-auto"
-          >
-            <Download size={16} />
-            Baixar conjunto
-          </a>
-        ) : (
-          <span className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 sm:w-auto">
-            <AlertTriangle size={16} />
-            Download indisponivel no momento
-          </span>
-        )}
+        <AcaoDeDownload item={item} usuario={usuario} />
       </div>
     </article>
   );

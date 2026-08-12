@@ -7,8 +7,22 @@ export const FALLBACK_RECIFES = [
     "cidade": "Diversos municipios (AL/PE)",
     "descricao": "Area de Protecao Ambiental que se estende por 12 municipios entre Alagoas e Pernambuco - nao e um ponto unico, por isso sem latitude/longitude aqui.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": false,
+    "motivo_sem_serie": {
+      "codigo": "sem_coordenadas",
+      "resumo": "Este local esta cadastrado sem latitude/longitude, entao os conectores nao tem de onde extrair a serie do satelite. Sem serie nao ha previsao de estresse termico nem dataset para baixar.",
+      "detalhe": "Sem coordenada: e uma area, nao um ponto. Um lat/lon unico para 12 municipios seria inventado."
+    },
+    "latitude": null,
+    "longitude": null,
+    "fonte_coordenadas": "Sem coordenada: e uma area, nao um ponto. Um lat/lon unico para 12 municipios seria inventado.",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "fernando-de-noronha-pe",
@@ -17,8 +31,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Fernando de Noronha",
     "descricao": "Arquipelago vulcanico com 21 ilhas; Parque Nacional Marinho, unidade de conservacao federal.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -3.8522,
+    "longitude": -32.4208,
+    "fonte_coordenadas": "Convertida de 3o51'08\" S, 32o25'15\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "atol-das-rocas-rn",
@@ -27,8 +51,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Natal",
     "descricao": "Unico atol do Atlantico Sul; Reserva Biologica, visitacao proibida.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -3.8631,
+    "longitude": -33.8061,
+    "fonte_coordenadas": "Convertida de 3o51'47\" S, 33o48'22\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. Municipio (Natal) e coordenadas PENDENTES de verificacao em fonte oficial (ICMBio).",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "parcel-manuel-luis-ma",
@@ -37,8 +71,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Cururupu",
     "descricao": "Um dos maiores bancos de corais da America do Sul; Parque Estadual Marinho.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -0.9133,
+    "longitude": -44.3194,
+    "fonte_coordenadas": "Convertida de 0o54'48\" S, 44o19'10\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "areia-vermelha-pb",
@@ -47,8 +91,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Cabedelo",
     "descricao": "Banco de areia recifal que emerge apenas na mare baixa, em frente a Cabedelo.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -7.0047,
+    "longitude": -34.8125,
+    "fonte_coordenadas": "Convertida de 7o00'17\" S, 34o48'45\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "recife-de-fora-ba",
@@ -57,8 +111,22 @@ export const FALLBACK_RECIFES = [
     "cidade": "Porto Seguro",
     "descricao": "Recife costeiro protegido a cerca de 5 milhas nauticas da costa de Porto Seguro, area de uso publico para mergulho.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": false,
+    "motivo_sem_serie": {
+      "codigo": "sem_coordenadas",
+      "resumo": "Este local esta cadastrado sem latitude/longitude, entao os conectores nao tem de onde extrair a serie do satelite. Sem serie nao ha previsao de estresse termico nem dataset para baixar.",
+      "detalhe": "Sem coordenadas exatas publicadas na tabela de referencia trazida pelo usuario - nao estimadas para nao fabricar posicao. Localizacao aproximada: ~5 milhas nauticas da costa de Porto Seguro/BA."
+    },
+    "latitude": null,
+    "longitude": null,
+    "fonte_coordenadas": "Sem coordenadas exatas publicadas na tabela de referencia trazida pelo usuario - nao estimadas para nao fabricar posicao. Localizacao aproximada: ~5 milhas nauticas da costa de Porto Seguro/BA.",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "abrolhos-ba",
@@ -67,8 +135,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Caravelas",
     "descricao": "Area de referencia para monitoramento e biodiversidade coralinea.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": "2026-04-14",
-    "informacoes_disponiveis": 3
+    "informacoes_disponiveis": 3,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -17.972,
+    "longitude": -38.688,
+    "fonte_coordenadas": "Seed original do projeto (backend/db/setup_graph.py) - Arquipelago dos Abrolhos. Conferir contra ICMBio.",
+    "profundidade_media_m": 10.0,
+    "area_km2": null
   },
   {
     "slug": "parrachos-de-maracajau-rn",
@@ -77,8 +155,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Maxaranguape",
     "descricao": "Piscinas naturais recifais; ponto turistico conhecido para mergulho de superficie.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": null,
-    "informacoes_disponiveis": 0
+    "informacoes_disponiveis": 0,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -5.4025,
+    "longitude": -35.2969,
+    "fonte_coordenadas": "Convertida de 5o24'09\" S, 35o17'49\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "porto-de-galinhas-pe",
@@ -87,8 +175,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Ipojuca",
     "descricao": "Zona recifal turistica com ocorrencia de corais e peixes costeiros.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": "2026-04-15",
-    "informacoes_disponiveis": 3
+    "informacoes_disponiveis": 3,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -8.51,
+    "longitude": -34.998,
+    "fonte_coordenadas": "Aproximada - piscinas naturais a ~500 m da praia, Ipojuca/PE. PENDENTE de verificacao em fonte oficial.",
+    "profundidade_media_m": null,
+    "area_km2": null
   },
   {
     "slug": "picaozinho-pb",
@@ -97,8 +195,18 @@ export const FALLBACK_RECIFES = [
     "cidade": "Joao Pessoa",
     "descricao": "Recife costeiro raso com especies recifais e monitoramento ambiental.",
     "imagem_url": "",
+    "credito_imagem": "",
+    "fonte_imagem_url": "",
+    "local_captura_foto": "",
     "ultima_atualizacao": "2026-04-10",
-    "informacoes_disponiveis": 3
+    "informacoes_disponiveis": 3,
+    "tem_coordenadas": true,
+    "motivo_sem_serie": null,
+    "latitude": -7.108,
+    "longitude": -34.81,
+    "fonte_coordenadas": "Aproximada - zona recifal a ~1,5 km da praia de Tambau, Joao Pessoa/PB. PENDENTE de verificacao em fonte oficial.",
+    "profundidade_media_m": null,
+    "area_km2": null
   }
 ];
 

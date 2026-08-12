@@ -74,3 +74,52 @@ test('usa fallback transitorio quando a API de datasets relacionados falha', asy
   ).toBeInTheDocument();
   expect(screen.getByText(/Temperatura da superficie do mar - Abrolhos/i)).toBeInTheDocument();
 });
+
+/**
+ * 🚨 O acervo vem de `/api/locais/<slug>/`, e nao do detalhe do grafo que esta
+ * pagina ja busca. Sao dois endpoints com perguntas diferentes — o do Neo4j
+ * devolve o recife como no grafo, o de locais devolve o que o PostgreSQL
+ * guarda. Se este teste quebrar porque alguem trocou a origem, a tabela "Tudo
+ * o que o projeto mede aqui" volta a ficar vazia **em silencio**, que e
+ * exatamente o defeito de 12/08/2026 reaparecendo.
+ */
+test('busca o acervo do local no endpoint do PostgreSQL', async () => {
+  global.fetch = jest.fn(async (url) => {
+    if (url === '/api/locais/abrolhos-ba/') {
+      return criarRespostaJson({
+        acervo: [
+          {
+            variavel: 'hotspot',
+            nome: 'Coral Bleaching HotSpot',
+            unidade: '°C',
+            n_medicoes: 2408,
+            data_inicio: '2020-01-01',
+            data_fim: '2026-08-10',
+            fontes: ['noaa_crw'],
+            papel: 'opcional',
+            papel_rotulo: 'Coletada, fora do modelo',
+            entra_no_modelo: false,
+            motivo: 'Ficou fora do modelo por decisao registrada.',
+            consulta: '/api/medicoes/?local=abrolhos-ba&variavel=hotspot',
+          },
+        ],
+      });
+    }
+
+    return criarRespostaJson({}, false);
+  });
+
+  renderizarPagina();
+
+  // A variavel que o grafico nunca desenhou, agora com numero na tela.
+  expect(await screen.findByText(/Coral Bleaching HotSpot/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '2.408' })).toBeInTheDocument();
+});
+
+test('acervo indisponivel nao derruba a pagina do recife', async () => {
+  global.fetch = jest.fn(async () => criarRespostaJson({}, false));
+
+  renderizarPagina();
+
+  expect(await screen.findByText(/Nenhuma medicao ingerida/i)).toBeInTheDocument();
+});

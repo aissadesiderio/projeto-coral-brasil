@@ -67,6 +67,17 @@ export default function LocalRecifeRoutePage({
   const detalheCache = slug ? detalhesPorSlug[slug] : null;
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
   const [erroDetalhe, setErroDetalhe] = useState(false);
+  // 🚨 O acervo vem de `/api/locais/<slug>/`, e **nao** do detalhe do grafo que
+  // esta pagina ja busca. Os dois endpoints respondem perguntas diferentes: o
+  // do Neo4j devolve o recife como no grafo (especies, predicoes), e o de
+  // locais devolve o que o PostgreSQL guarda — inclusive quantas medicoes de
+  // cada variavel existem aqui. Pedir o acervo ao grafo teria sido escreve-lo
+  // duas vezes, em dois bancos, com liberdade para divergirem.
+  //
+  // ⚠️ Falha em silencio de proposito: sem acervo a tabela mostra o proprio
+  // estado vazio, e derrubar a pagina do recife porque uma tabela secundaria
+  // nao carregou seria trocar uma lacuna por uma pagina em branco.
+  const [acervo, setAcervo] = useState([]);
   const [datasetsRelacionados, setDatasetsRelacionados] = useState([]);
   const [carregandoDatasetsRelacionados, setCarregandoDatasetsRelacionados] = useState(false);
   const [erroDatasetsRelacionados, setErroDatasetsRelacionados] = useState(false);
@@ -124,6 +135,26 @@ export default function LocalRecifeRoutePage({
     let ativo = true;
 
     if (!slug || !localBase) {
+      setAcervo([]);
+      return undefined;
+    }
+
+    setAcervo([]);
+    buscarJson(`/api/locais/${slug}/`).then((payload) => {
+      if (ativo) {
+        setAcervo(Array.isArray(payload?.acervo) ? payload.acervo : []);
+      }
+    });
+
+    return () => {
+      ativo = false;
+    };
+  }, [localBase, slug]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    if (!slug || !localBase) {
       setDatasetsRelacionados([]);
       setCarregandoDatasetsRelacionados(false);
       setErroDatasetsRelacionados(false);
@@ -166,8 +197,11 @@ export default function LocalRecifeRoutePage({
   }, [localBase, slug]);
 
   const recifeAtual = useMemo(
-    () => combinarDetalhe(localBase, detalheCache),
-    [detalheCache, localBase],
+    () => {
+      const combinado = combinarDetalhe(localBase, detalheCache);
+      return combinado ? { ...combinado, acervo } : combinado;
+    },
+    [acervo, detalheCache, localBase],
   );
 
   if (carregandoLocais && !localBase) {

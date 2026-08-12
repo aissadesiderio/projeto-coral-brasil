@@ -14,7 +14,7 @@ import { DADOS_GERAIS } from '../data/datasets';
 import { buscarCatalogoDatasets } from '../utils/api';
 import { criarOpcoesFiltro, normalizarDatasetCatalogo } from '../utils/datasets';
 
-export default function BancoDadosPage() {
+export default function BancoDadosPage({ usuario = null }) {
   const [datasets, setDatasets] = useState([]);
   const [catalogoCarregado, setCatalogoCarregado] = useState(false);
   const [usandoFallback, setUsandoFallback] = useState(false);
@@ -240,7 +240,9 @@ export default function BancoDadosPage() {
         )}
 
         {catalogoCarregado &&
-          resultados.map((item) => <DatasetCard key={item.id} item={item} />)}
+          resultados.map((item) => (
+            <DatasetCard key={item.id} item={item} usuario={usuario} />
+          ))}
       </div>
     </section>
   );

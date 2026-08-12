@@ -10,6 +10,7 @@
  */
 
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 import DatasetCard from './DatasetCard';
 import { normalizarDatasetCatalogo } from '../utils/datasets';
@@ -111,4 +112,96 @@ test('download ausente continua declarado como ausente', () => {
   render(<DatasetCard item={item(DISPONIVEL)} />);
 
   expect(screen.getByText(/Download indisponivel/i)).toBeInTheDocument();
+});
+
+/**
+ * O download que sai deste projeto, e nao do provedor.
+ *
+ * 🚨 Desde 12/08/2026 metade do catalogo aponta para
+ * `/api/medicoes/?formato=csv` — o proprio banco —, e esse endpoint exige conta
+ * aprovada. Um `<a>` simples ali faria o visitante deslogado clicar em "Baixar
+ * conjunto" e receber um JSON de 401 aberto no navegador.
+ */
+function itemBaixavel(extras = {}) {
+  return normalizarDatasetCatalogo({
+    id: 'serie-noaa_crw-noronha',
+    titulo: 'Estresse termico - Noronha',
+    resumo: 'Serie diaria.',
+    fonte: 'NOAA',
+    tipo_dado: 'Oceanografico',
+    localizacao: 'Fernando de Noronha',
+    estado: 'Pernambuco',
+    cidade: 'Fernando de Noronha',
+    formato: 'CSV',
+    url_download: '/api/medicoes/?local=noronha&fonte=noaa_crw&formato=csv',
+    download_exige_conta: true,
+    cobertura: DISPONIVEL,
+    ...extras,
+  });
+}
+
+test('🚨 download que exige conta nao vira botao para quem nao esta aprovado', () => {
+  render(
+    <MemoryRouter>
+      <DatasetCard item={itemBaixavel()} usuario={null} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByRole('link', { name: /Faca login/i })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /Baixar conjunto/i })).not.toBeInTheDocument();
+});
+
+test('conta aprovada recebe o link de download de verdade', () => {
+  render(
+    <MemoryRouter>
+      <DatasetCard item={itemBaixavel()} usuario={{ aprovado: true }} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByRole('link', { name: /Baixar conjunto/i })).toHaveAttribute(
+    'href',
+    '/api/medicoes/?local=noronha&fonte=noaa_crw&formato=csv',
+  );
+});
+
+test('⚠️ download do provedor nao pede login a ninguem', () => {
+  // O erro simetrico: esconder atras de um convite ao login um arquivo que
+  // qualquer um poderia baixar direto da NOAA.
+  render(
+    <MemoryRouter>
+      <DatasetCard
+        item={itemBaixavel({ download_exige_conta: false })}
+        usuario={null}
+      />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByRole('link', { name: /Baixar conjunto/i })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /Faca login/i })).not.toBeInTheDocument();
+});
+
+test('catalogo antigo sem o campo nao passa a exigir conta', () => {
+  // `undefined` precisa cair em "nao exige". Assumir `true` esconderia
+  // downloads livres atras de um login que ninguem pediu.
+  render(
+    <MemoryRouter>
+      <DatasetCard item={itemBaixavel({ download_exige_conta: undefined })} usuario={null} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByRole('link', { name: /Baixar conjunto/i })).toBeInTheDocument();
+});
+
+test('dataset de serie nao anuncia arquivo nem tamanho que nao existem', () => {
+  // A metade derivada do banco nao tem arquivo. "Arquivo: Nao informado" se le
+  // como cadastro incompleto, e o periodo real ja vem no bloco de cobertura.
+  render(
+    <MemoryRouter>
+      <DatasetCard item={itemBaixavel()} usuario={{ aprovado: true }} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.queryByText(/^Arquivo:/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Tamanho:/)).not.toBeInTheDocument();
+  expect(screen.getByText(/14\.346 medicoes/)).toBeInTheDocument();
 });

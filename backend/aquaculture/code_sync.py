@@ -16,7 +16,7 @@ def _arquivo_url(field_file) -> str:
     return field_file.url if field_file else ''
 
 
-def _tem_procedencia_de_imagem(especie) -> bool:
+def _tem_procedencia_de_imagem(registro) -> bool:
     """🚨 Ate 11/08/2026 este modulo *fabricava* procedencia de imagem.
 
     `_credito_imagem` devolvia a string `'Acervo local do projeto'` sempre que
@@ -30,8 +30,14 @@ def _tem_procedencia_de_imagem(especie) -> bool:
     O criterio agora e o mesmo ja aplicado a `iucn_categoria`: sem credito nao
     ha procedencia, e sem procedencia nada entra na copia versionada — nem o
     credito, nem a fonte, nem o arquivo.
+
+    ⚠️ Recebe `registro`, e nao `especie`, desde 12/08/2026: vale igual para
+    `Especie.foto` e para `LocalRecife.imagem`. A foto do recife ganhou os
+    mesmos tres campos na migracao `0030`, e teria sido facil deixa-la de fora
+    desta regra — foto de lugar parece menos "de alguem" que foto de bicho, e
+    nao e.
     """
-    return bool(especie.credito_imagem)
+    return bool(registro.credito_imagem)
 
 
 def _serialize_especie(especie) -> dict:
@@ -71,6 +77,10 @@ def build_sync_payload() -> dict:
             _serialize_especie(especie)
             for especie in local.especies.order_by('nome_comum', 'nome_cientifico')
         ]
+        # A mesma regra da foto de especie, aplicada a foto do recife desde a
+        # migracao `0030`: sem credito, a imagem inteira fica fora do `.js`.
+        tem_imagem = _tem_procedencia_de_imagem(local)
+
         recifes.append(
             {
                 'slug': local.slug,
@@ -78,11 +88,32 @@ def build_sync_payload() -> dict:
                 'estado': local.estado,
                 'cidade': local.cidade,
                 'descricao': local.descricao,
-                'imagem_url': _arquivo_url(local.imagem),
+                'imagem_url': _arquivo_url(local.imagem) if tem_imagem else '',
+                'credito_imagem': local.credito_imagem if tem_imagem else '',
+                'fonte_imagem_url': local.fonte_imagem_url if tem_imagem else '',
+                'local_captura_foto': local.local_captura_foto if tem_imagem else '',
                 'ultima_atualizacao': (
                     local.ultima_atualizacao.isoformat() if local.ultima_atualizacao else None
                 ),
                 'informacoes_disponiveis': len(especies),
+                # ⚠️ Entram na copia versionada porque a tela offline precisa
+                # poder **explicar** um recife vazio. Sem eles, os dois locais
+                # sem coordenada apareceriam no fallback exatamente como
+                # apareceria um recife cuja ingestao falhou — e o visitante nao
+                # teria como distinguir decisao registrada de defeito.
+                'tem_coordenadas': local.tem_coordenadas,
+                'motivo_sem_serie': local.motivo_sem_serie,
+                # 🚨 A ficha fisica do recife, que ate 12/08/2026 nao saia do
+                # Django admin. Vao para a copia versionada pelo mesmo motivo
+                # que `motivo_sem_serie` foi: sao dados **do local**, nao da
+                # serie, e portanto continuam verdadeiros com a API fora do ar.
+                # Nulo aqui e nulo de verdade — "nao registrado" —, nao um
+                # efeito de o exportador nao saber o valor.
+                'latitude': local.latitude,
+                'longitude': local.longitude,
+                'fonte_coordenadas': local.fonte_coordenadas,
+                'profundidade_media_m': local.profundidade_media_m,
+                'area_km2': local.area_km2,
             }
         )
 

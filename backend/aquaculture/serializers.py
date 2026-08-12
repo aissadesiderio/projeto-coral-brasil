@@ -138,6 +138,9 @@ class LocalRecifeListSerializer(serializers.ModelSerializer):
     imagem_url = serializers.SerializerMethodField()
     informacoes_disponiveis = serializers.SerializerMethodField()
     possui_painel_risco = serializers.SerializerMethodField()
+    tem_coordenadas = serializers.BooleanField(read_only=True)
+    motivo_sem_serie = serializers.SerializerMethodField()
+    imagem_tem_procedencia = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = LocalRecife
@@ -152,6 +155,32 @@ class LocalRecifeListSerializer(serializers.ModelSerializer):
             'ultima_atualizacao',
             'informacoes_disponiveis',
             'possui_painel_risco',
+            'latitude',
+            'longitude',
+            'tem_coordenadas',
+            'fonte_coordenadas',
+            'motivo_sem_serie',
+            # 🚨 **Existiam no modelo desde a migracao 0014 e nunca sairam do
+            # Django admin.** Nao entram em nenhuma conta do modelo — e era
+            # justamente por isso que ninguem tinha reparado na ausencia: um
+            # campo que a previsao nao usa nao quebra nada quando some. Mas o
+            # site se apresenta como banco de dados de recifes, e profundidade
+            # e area sao dois dos poucos atributos fisicos que ele tem para dar
+            # sobre um recife. Vazio continua vazio; quem le a tela distingue
+            # "nao registrado" de "nao existe".
+            'profundidade_media_m',
+            'area_km2',
+            # --- proveniencia da foto (migracao 0030) ----------------------
+            # ⚠️ `imagem_url` continua saindo com o que houver no banco, com ou
+            # sem credito — a regra de "sem procedencia nao entra" vale para a
+            # **copia versionada** (`code_sync`), nao para a API. E a mesma
+            # divisao ja escolhida para a foto de especie em docs/FONTES.md
+            # §2.1: a API serve o acervo, a tela decide o que afirmar, e
+            # `imagem_tem_procedencia` e o que ela usa para decidir.
+            'credito_imagem',
+            'fonte_imagem_url',
+            'local_captura_foto',
+            'imagem_tem_procedencia',
         ]
 
     def get_imagem_url(self, obj):
@@ -181,16 +210,43 @@ class LocalRecifeListSerializer(serializers.ModelSerializer):
         """
         return obj.slug in (self.context.get('locais_do_modelo') or ())
 
+    def get_motivo_sem_serie(self, obj):
+        """A explicacao derivada no modelo — ver `LocalRecife.motivo_sem_serie`.
+
+        ⚠️ O texto nao mora aqui de proposito: `code_sync` grava o mesmo campo
+        na copia de fallback do frontend, e duas redacoes da mesma explicacao
+        divergiriam no primeiro ajuste.
+        """
+        return obj.motivo_sem_serie
+
 
 class LocalRecifeDetailSerializer(LocalRecifeListSerializer):
     especies = serializers.SerializerMethodField()
+    acervo = serializers.SerializerMethodField()
 
     class Meta(LocalRecifeListSerializer.Meta):
-        fields = LocalRecifeListSerializer.Meta.fields + ['especies']
+        fields = LocalRecifeListSerializer.Meta.fields + ['especies', 'acervo']
 
     def get_especies(self, obj):
         especies = obj.especies.order_by('nome_comum', 'nome_cientifico')
         return EspecieSerializer(especies, many=True, context=self.context).data
+
+    def get_acervo(self, obj):
+        """Toda variavel medida neste local, e nao so as que a previsao usa.
+
+        🚨 O grafico da pagina desenha `sst` e `dhw` por razao medida
+        (docs/RESULTADOS.md §7), e ate 12/08/2026 esse recorte era **tudo** o
+        que o site dizia ter: as outras seis variaveis ingeridas — ~7.200
+        medicoes de cada, por local — nao apareciam em numero nenhum. Escolher
+        o que desenhar e uma decisao legitima; nao dizer o que se tem e outra
+        coisa.
+
+        ⚠️ So no detalhe, nunca na lista. Na lista seriam N locais chamando a
+        mesma agregacao, e o cartao nao tem onde mostrar isso.
+        """
+        from . import acervo
+
+        return acervo.para_local(obj.slug, self.context.get('medicoes'))
 
 
 class DatasetCatalogoSerializer(serializers.ModelSerializer):
@@ -228,6 +284,10 @@ class DatasetCatalogoSerializer(serializers.ModelSerializer):
             'periodo_rotulo',
             'tamanho_mb',
             'url_download',
+            # ⚠️ Viaja no payload porque a tela nao consegue deduzi-lo da URL
+            # sem duplicar a regra de permissao da view. Ver o comentario do
+            # campo em `models.DatasetCatalogo`.
+            'download_exige_conta',
             'cobertura',
         ]
 

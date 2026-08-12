@@ -47,6 +47,47 @@ class LocalRecife(models.Model):
         help_text='De onde vieram as coordenadas (rastreabilidade). Ex: ICMBio, Allen Coral Atlas',
     )
 
+    # --- proveniencia da foto do local --------------------------------------
+    #
+    # 🚨 **Os mesmos tres campos que `Especie` ganhou na migracao 0026, um
+    # modelo atras.** A foto do recife aparece no topo da pagina do local e no
+    # cartao da lista — os dois lugares mais vistos do site — e ate 12/08/2026
+    # nao havia **onde** registrar de onde ela veio. Nao era o caso de credito
+    # errado como o das especies: era a ausencia do campo, que e pior, porque
+    # nao ha nem o que auditar.
+    #
+    # ⚠️ A regra de exibicao e a mesma ja fixada em `docs/FONTES.md` §2.1:
+    # **sem `credito_imagem` nada e afirmado**, e a imagem nao entra na copia
+    # versionada (`code_sync`). Vazio continua vazio ate a borda da tela, onde
+    # "Sem credito informado" e texto de interface, nunca dado.
+    credito_imagem = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Credito da imagem',
+        help_text='Site, instituicao ou nome de quem tirou/cedeu a foto.',
+    )
+    fonte_imagem_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='Link da fonte da imagem',
+        help_text='A pagina de origem da foto — nunca a URL da copia local.',
+    )
+    # ⚠️ Opcional de proposito, e **nao** e o mesmo que as coordenadas do local.
+    # A foto pode ter sido tirada num ponto especifico da zona recifal, de um
+    # barco a 2 km, ou do ar. Afirmar que ela foi feita na coordenada
+    # monitorada, so porque e a foto daquele recife, seria inventar posicao —
+    # exatamente o que `fonte_coordenadas` existe para impedir do outro lado.
+    local_captura_foto = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Local de captura da foto',
+        help_text=(
+            'Onde a foto foi tirada, quando se souber. Nao e a coordenada '
+            'monitorada: pode ser outro ponto do mesmo recife, ou uma vista '
+            'aerea. Deixe vazio se nao souber.'
+        ),
+    )
+
     class Meta:
         ordering = ['nome']
         verbose_name = 'Local de recife'
@@ -72,6 +113,68 @@ class LocalRecife(models.Model):
     def tem_coordenadas(self):
         """Indica se o local pode ser usado pelos conectores de ingestao."""
         return self.latitude is not None and self.longitude is not None
+
+    @property
+    def imagem_tem_procedencia(self):
+        """A foto pode ser exibida como foto de alguem?
+
+        🚨 **O credito e a condicao, nao o arquivo.** Uma imagem em disco sem
+        credito e uma foto de autor desconhecido sendo servida como se fosse do
+        projeto — foi assim que uma foto sem licenca nenhuma apareceu creditada
+        ao "acervo local" em tres lugares (docs/FONTES.md §2.1). Mesmo criterio
+        de `Especie.iucn_tem_procedencia`: quem desenha a tela usa isto para
+        escolher entre mostrar a imagem e dizer que ela nao tem procedencia.
+        """
+        return bool(self.credito_imagem)
+
+    @property
+    def motivo_sem_serie(self):
+        """Por que este recife nao tem serie ambiental — ou `None` se tem.
+
+        🚨 **A ausencia de dado precisa dizer o proprio motivo, senao ela e
+        lida como falha do site.** Dois dos dez locais cadastrados nunca vao ter
+        serie, e por razoes que nada tem a ver com "ainda nao rodamos a
+        ingestao":
+
+        | Local | Por que |
+        |---|---|
+        | `apa-costa-dos-corais` | e uma area de 12 municipios, nao um ponto |
+        | `recife-de-fora-ba` | nao ha coordenada exata publicada |
+
+        Os dois foram cadastrados **sem** latitude/longitude de proposito
+        (migration 0025), porque inventar um par de numeros para eles seria
+        fabricar a posicao de onde o satelite mediu — exatamente o que
+        `fonte_coordenadas` existe para tornar impossivel. Sem coordenada nao ha
+        `bbox`, sem `bbox` nao ha ingestao, sem ingestao nao ha medicao, e sem
+        medicao nao ha previsao no painel nem dataset no catalogo. A cadeia
+        inteira e consequencia de uma decisao registrada, e e essa decisao que
+        esta propriedade devolve para a tela.
+
+        ⚠️ **Mora no modelo, e nao no serializer, porque tem dois consumidores.**
+        O outro e `code_sync.build_sync_payload`, que grava a copia de fallback
+        em `recifeData.js`: se a explicacao existisse so no serializer, a tela
+        offline mostraria os dois locais vazios e sem motivo nenhum — que e
+        justamente o estado que esta propriedade existe para eliminar.
+
+        ⚠️ Deriva de `tem_coordenadas`, e nao de uma lista de slugs: preencher
+        as coordenadas de um deles no admin apaga o motivo sozinho, sem que
+        ninguem precise lembrar de mexer aqui.
+        """
+        if self.tem_coordenadas:
+            return None
+
+        return {
+            'codigo': 'sem_coordenadas',
+            'resumo': (
+                'Este local esta cadastrado sem latitude/longitude, entao os '
+                'conectores nao tem de onde extrair a serie do satelite. Sem '
+                'serie nao ha previsao de estresse termico nem dataset para '
+                'baixar.'
+            ),
+            # O texto que a migration gravou, com o porque especifico deste
+            # local. Vazio quando ninguem registrou — que ja e informacao.
+            'detalhe': self.fonte_coordenadas or '',
+        }
 
     def bbox(self, margem_graus=0.25):
         """Caixa delimitadora para consultas a NOAA/Copernicus.
@@ -247,6 +350,121 @@ class ExecucaoIngestao(models.Model):
     def __str__(self):
         local = self.local_recife.slug if self.local_recife else 'global'
         return f'{self.fonte}/{local} {self.iniciado_em:%Y-%m-%d %H:%M} -> {self.status}'
+
+
+class Checkpoint(models.Model):
+    """Uma unidade de trabalho que ja foi feita, com a evidencia do que rendeu.
+
+    🚨 **A pergunta que o dado sozinho nao responde: "nao foi tentado" ou
+    "foi tentado e voltou vazio"?**
+
+    `ingestao.persistencia.ultima_data_ingerida` deriva a retomada da propria
+    serie — pega a maior data gravada e continua dali. Isso funciona e vai
+    continuar existindo, mas tem um limite que nao da para contornar do lado do
+    dado: se o NOAA nao publicou nada para 2021-03-02 (nuvem sobre o recife,
+    satelite em manutencao), a serie fica com um buraco **identico** ao buraco
+    de um bloco que nunca foi pedido. Toda execucao seguinte tenta de novo o
+    que ja se sabe que nao existe, e nenhuma delas registra que ja tentou.
+
+    O checkpoint grava a **tentativa**, e nao so o resultado. Com ele:
+
+    | Situacao | `ultima_data_ingerida` | `Checkpoint` |
+    |---|---|---|
+    | bloco gravado com 406 medicoes | avanca | `concluido`, evidencia 406 |
+    | bloco pedido, fonte devolveu vazio | nao distingue de buraco | `concluido`, evidencia 0 |
+    | bloco nunca pedido | nao distingue de vazio | ausente |
+    | bloco pedido, ERDDAP deu 408 | nao distingue de vazio | `falhou`, com o erro |
+
+    ⚠️ **Um checkpoint e uma afirmacao sobre o passado, e afirmacao sobre o
+    passado envelhece — este projeto ja pagou por isso.** `Mussismilia
+    braziliensis` ficou anos gravada como VU porque o registro local nao tinha
+    como saber que a IUCN publicara outra avaliacao. Aqui o risco e o mesmo em
+    outra forma: um checkpoint diz "gravei 406 medicoes deste bloco", alguem
+    apaga a tabela, e a proxima execucao **pula o bloco** confiando no
+    checkpoint. O buraco vira permanente e invisivel.
+
+    Por isso o campo `evidencia` guarda o que foi produzido, e existe
+    `checkpoints.conferir()` para cruzar a afirmacao com o dado real. O
+    checkpoint **nunca** e a fonte da verdade sobre o que existe no banco: ele
+    e a fonte da verdade sobre o que ja foi **tentado**. Sao coisas diferentes,
+    e confundi-las e exatamente o defeito que ele poderia introduzir.
+    """
+
+    CONCLUIDO = 'concluido'
+    FALHOU = 'falhou'
+    EM_ANDAMENTO = 'em_andamento'
+
+    STATUS_CHOICES = [
+        (CONCLUIDO, 'Concluido'),
+        (FALHOU, 'Falhou'),
+        # ⚠️ Um `em_andamento` que sobrevive ao fim do processo nao e um estado
+        # valido: e o rastro de uma queda (timeout, kill, falta de energia). E
+        # tratado como retentavel, e nao como "alguem esta mexendo" — supor o
+        # contrario travaria a retomada justamente no caso que ela existe para
+        # resolver.
+        (EM_ANDAMENTO, 'Em andamento (ou interrompido)'),
+    ]
+
+    # O nome do processo. Nao e o comando: `manage.py atualizar` chama duas
+    # tarefas diferentes, e cada uma retoma por conta propria.
+    tarefa = models.CharField(max_length=80)
+
+    # O identificador da unidade dentro da tarefa. Texto, e nao chave
+    # estrangeira, de proposito: a unidade de treino e um ano, a de ingestao e
+    # (fonte, local, bloco), e a de predicao e um local — nao existe uma tabela
+    # que sirva para as tres, e inventar uma acoplaria o mecanismo aos dominios.
+    unidade = models.CharField(max_length=200)
+
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=EM_ANDAMENTO,
+    )
+
+    # Quantas vezes esta unidade ja foi tentada. E o que permite "tratar
+    # somente as excecoes": depois de N tentativas, a unidade vira caso para
+    # olhar, e nao para repetir mais uma vez.
+    tentativas = models.PositiveIntegerField(default=0)
+
+    # O que a unidade rendeu, em campos somaveis. `{'gravadas': 406,
+    # 'rejeitadas': 0}`. E o que torna o manifesto auditavel sem reprocessar.
+    evidencia = models.JSONField(default=dict, blank=True)
+
+    erro = models.TextField(blank=True)
+
+    # Liga ao rastro no log, mesma ponte de `ExecucaoIngestao.correlacao`.
+    correlacao = models.CharField(max_length=32, blank=True)
+
+    iniciado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Checkpoint'
+        verbose_name_plural = 'Checkpoints'
+        ordering = ['tarefa', 'unidade']
+        constraints = [
+            # 🚨 A unicidade e o mecanismo, nao um detalhe de higiene. Sem ela,
+            # duas execucoes concorrentes criariam dois checkpoints da mesma
+            # unidade e as duas a processariam — que e precisamente o
+            # reprocessamento que a funcionalidade existe para evitar.
+            models.UniqueConstraint(
+                fields=['tarefa', 'unidade'], name='checkpoint_unico_por_unidade',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['tarefa', 'status']),
+        ]
+
+    def __str__(self):
+        return f'{self.tarefa}/{self.unidade} -> {self.status}'
+
+    @property
+    def retentavel(self):
+        """Se a proxima execucao deve tentar esta unidade de novo.
+
+        Concluido nao se repete. Falha e interrupcao sim — e a interrupcao
+        precisa ser retentavel pelo motivo dito em `STATUS_CHOICES`.
+        """
+        return self.status != self.CONCLUIDO
 
 
 class Especie(models.Model):
@@ -504,6 +722,30 @@ class DatasetCatalogo(models.Model):
     periodo_rotulo = models.CharField(max_length=80, blank=True)
     tamanho_mb = models.FloatField(blank=True, null=True)
     url_download = models.CharField(max_length=500, blank=True)
+
+    # 🚨 Existe porque o catalogo passou a ter **dois tipos de download**, e a
+    # tela nao tem como distingui-los pela URL sem duplicar aqui a regra que
+    # mora na view.
+    #
+    # | Origem do link | Quem pode baixar |
+    # |---|---|
+    # | provedor externo (NOAA, Copernicus) | qualquer um, na conta deles |
+    # | `/api/medicoes/?formato=csv` | so conta aprovada (ver `MedicaoAmbientalList.list`) |
+    #
+    # ⚠️ Sem este campo, o cartao do dataset ofereceria "Baixar conjunto" para
+    # visitante deslogado e o clique devolveria **um JSON de 401 aberto no
+    # navegador** — que e a forma mais confusa possivel de dizer "faca login".
+    # `SerieAmbiental` ja resolvia isso do lado do recife, trocando o botao por
+    # um convite ao login; o catalogo passou a poder fazer o mesmo.
+    download_exige_conta = models.BooleanField(
+        default=False,
+        verbose_name='Download exige conta aprovada',
+        help_text=(
+            'Marque quando url_download apontar para um endpoint deste projeto '
+            'que exige conta aprovada. Falso para link do provedor externo.'
+        ),
+    )
+
     ordem_exibicao = models.PositiveIntegerField(default=0)
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)

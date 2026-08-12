@@ -164,3 +164,52 @@ test('o rotulo diz estresse termico, nao branqueamento', () => {
 
   expect(screen.getByText(/Estresse termico em 7 dias/i)).toBeInTheDocument();
 });
+
+/**
+ * O recife que nunca vai ter serie, e diz por que.
+ *
+ * 🚨 Ate 12/08/2026 a APA Costa dos Corais e o Recife de Fora — cadastrados sem
+ * coordenada de proposito, para nao inventar a posicao de onde o satelite mediu
+ * — apareciam com "Nao calculado" e "Sem previsao", exatamente como apareceria
+ * um recife cuja ingestao quebrou. Decisao registrada e defeito ficavam com a
+ * mesma cara.
+ */
+const SEM_COORDENADAS = {
+  slug: 'apa-costa-dos-corais',
+  nome: 'APA Costa dos Corais',
+  estado: 'Alagoas/Pernambuco',
+  cidade: 'Diversos municipios (AL/PE)',
+  quantidade_especies: 0,
+  tem_coordenadas: false,
+  motivo_sem_serie: {
+    codigo: 'sem_coordenadas',
+    resumo: 'Cadastrado sem latitude/longitude.',
+    detalhe: 'E uma area, nao um ponto.',
+  },
+};
+
+test('🚨 recife sem coordenada explica a ausencia em vez de dizer "Nao calculado"', () => {
+  render(
+    <MemoryRouter>
+      <CardRecife local={SEM_COORDENADAS} predicao={null} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByText(/cadastrado sem coordenadas/i)).toBeInTheDocument();
+  expect(screen.queryByText(/Nao calculado/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Sem previsao/i)).not.toBeInTheDocument();
+});
+
+test('⚠️ recife com coordenada e sem previsao hoje continua dizendo "Nao calculado"', () => {
+  // A distincao que o aviso existe para preservar: aqui a serie **vai**
+  // existir, e trocar isto pelo mesmo aviso apagaria a diferenca entre "a
+  // janela nao fechou hoje" e "nunca vai fechar".
+  render(
+    <MemoryRouter>
+      <CardRecife local={{ ...LOCAL, tem_coordenadas: true, motivo_sem_serie: null }} predicao={null} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByText(/Nao calculado/i)).toBeInTheDocument();
+  expect(screen.queryByText(/cadastrado sem coordenadas/i)).not.toBeInTheDocument();
+});

@@ -296,7 +296,27 @@ Por isso o `recifeData.js` versionado ainda trazia as nove espécies com o créd
 
 **Onde é usado:** campos `foto`, `credito_imagem`, `fonte_imagem_url`, `local_captura_foto` do modelo `Especie` (`backend/aquaculture/models.py`); arquivos em `backend/media/especies/`; espelhados na cópia versionada `frontend/src/data/recifeData.js` (gerada por `code_sync.py`, nunca editada à mão). `local_captura_foto` é novo (migração `0026`) — registra onde a **foto** foi tirada, que não é necessariamente onde a espécie ocorre nem um dos locais monitorados pelo projeto.
 
-### 2.2 Imagens sem proveniência registrada
+### 2.2 Fotos dos locais de recife — ✅ campos abertos em 12/08/2026 (migração `0030`)
+
+**Uso:** a imagem que aparece no topo da página do recife (`LocalRecifePage`) e no cartão da listagem (`CardRecife`) — as duas faixas mais visíveis do site.
+
+🚨 **A correção de 11/08/2026 (§2.1) alcançou as fotos de _espécie_ e parou ali.** `LocalRecife.imagem` existe desde o começo do projeto e **nunca teve onde registrar autor, fonte ou local de captura**. O caso não é o mesmo das espécies, e é pior de um jeito específico: lá havia um crédito errado, que uma auditoria de campo encontra; aqui não havia campo nenhum, e **o que não tem campo não aparece numa busca por campo errado**. A auditoria de 11/08 varreu `credito_imagem` e `fonte_imagem_url` em `Especie`; `LocalRecife` não tinha esses nomes para serem varridos.
+
+**Corrigido:** a migração `0030` acrescenta a `LocalRecife` os mesmos três campos de `Especie`, com a mesma regra e a mesma opcionalidade:
+
+| Campo | Obrigatório? | O que registra |
+|---|---|---|
+| `credito_imagem` | não — mas **sem ele nada é afirmado** | site, instituição ou nome de quem fotografou/cedeu |
+| `fonte_imagem_url` | não | a página de origem — **nunca** a URL da cópia local |
+| `local_captura_foto` | não | onde a foto foi tirada, quando se souber |
+
+⚠️ **`local_captura_foto` não é a coordenada monitorada**, e a distinção importa mais aqui do que nas espécies. A foto de um recife pode ter sido feita num ponto específico da zona recifal, de um barco a 2 km ou do ar. Preenchê-la automaticamente com o `lat/lon` do local, só porque é a foto daquele recife, seria inventar a posição da câmera — exatamente o que `fonte_coordenadas` existe para impedir do outro lado (§2.3).
+
+⚠️ **A regra de exibição é a mesma de §2.1, e vale nos dois caminhos.** Sem `credito_imagem`: o exportador (`code_sync.build_sync_payload`) deixa `imagem_url`, `fonte_imagem_url` e `local_captura_foto` vazios na cópia versionada `frontend/src/data/recifeData.js`, e a tela escreve *"Foto sem crédito informado"* como texto de interface. A API continua servindo o que houver no banco, com `imagem_tem_procedencia` dizendo se aquilo pode ser afirmado — mesma divisão já escolhida para a foto de espécie: **a API serve o acervo, a tela decide o que afirmar**.
+
+**Situação hoje:** os 10 locais cadastrados estão com `imagem` vazia, então não há nenhum crédito pendente a corrigir. Os campos existem para a primeira foto que entrar — e ela só será exibida com crédito. Travado por 6 testes de backend (`ProcedenciaDaFotoDoLocalTests`) e 5 de frontend (`ImagemRecife.test.jsx`).
+
+### 2.2.1 Imagens sem proveniência registrada
 
 Os diretórios `fotos_especies/{Corais,Peixes,Invertebrados}/` (9 arquivos), `especies/` (1 arquivo) e `visual/` (1 captura de tela) **não têm nenhum registro de origem, autor ou licença**. Precisam ser rastreados ou removidos.
 
@@ -330,7 +350,17 @@ Migration `0025_seed_novos_locais_recife.py`. Vieram de uma tabela (nome, estado
 
 ⚠️ **`abrolhos-ba` já existia e foi deixado de fora desta migration.** A tabela trazia 17°57'47" S, 38°42'12" W para o mesmo local, que converte para −17,9631/−38,7033 — cerca de 1,5 km da coordenada já gravada (−17,972/−38,688). A migration não decide qual prevalece; isso fica pendente de decisão manual, não é assumido automaticamente.
 
-Nenhum dos sete entra no pipeline de ingestão sem coordenada válida (`LocalRecife.tem_coordenadas`), então `apa-costa-dos-corais` e `recife-de-fora-ba` ficam cadastrados sem série ambiental possível até que uma coordenada real apareça. Os outros cinco **podem** entrar no pipeline assim que alguém rodar a ingestão para eles, mas nenhuma medição foi coletada ainda — os cinco aparecem no site como local cadastrado, sem dado.
+Nenhum dos sete entra no pipeline de ingestão sem coordenada válida (`LocalRecife.tem_coordenadas`), então `apa-costa-dos-corais` e `recife-de-fora-ba` ficam cadastrados sem série ambiental possível até que uma coordenada real apareça.
+
+#### 2.3.1.1 ✅ Os cinco com coordenada foram ingeridos e entraram no modelo — 12/08/2026
+
+Ingestão rodada para os cinco: **2020-01-01 a 2026-08-11, 19.278 medições por local**, das duas fontes (NOAA CRW e Copernicus), pelo mesmo caminho e com a mesma proveniência por valor dos três originais. O banco passou a ter **8 locais com série** e 2 sem.
+
+⚠️ **Ingerir não retreina, e a distância entre as duas coisas ficou visível.** O artefato em `dados/modelos/` continuou declarando três locais nos metadados, e `PainelRiscoDetail` responde **404 com motivo** para todo local fora dessa lista — então os cinco recifes com série completa apareciam no site **sem previsão**, corretamente. Remedido e regravado em 12/08 depois de medir; os números estão em [RESULTADOS.md](RESULTADOS.md) §25.
+
+🚨 **As coordenadas continuam pendentes de verificação, e agora há dado extraído em cima delas.** A tabela acima não muda: nenhuma das cinco veio de fonte primária citável. A consequência que muda é o tamanho — antes era um cadastro sem lastro, agora são **96.390 medições** posicionadas por uma conversão de graus/minutos/segundos sem fonte declarada. Enquanto assim, a série desses cinco **não é citável academicamente**, pela mesma regra já aplicada a Picãozinho e Porto de Galinhas na §2.3. Conferir contra ICMBio continua sendo a pendência, e ela ficou mais cara de adiar: mudar uma coordenada depois implica reingerir o local inteiro, porque a `bbox` muda.
+
+⚠️ **`abrolhos-ba` continua com a divergência de ~1,5 km registrada e não resolvida**, e a decisão de não mexer ficou mais fácil de justificar: as 19.278 medições dele foram extraídas na `bbox` da coordenada gravada. Trocar a coordenada sem reingerir deixaria a série descrevendo um ponto e o cadastro declarando outro.
 
 ### 2.4 Status de conservação — ✅ esquema corrigido em 31/07/2026, dados preenchidos em 04/08/2026
 
@@ -1294,6 +1324,82 @@ marcado para remoção (PLANEJAMENTO.md, fase 3.2), e quando isso acontecer o
 catálogo inteiro precisa ser repensado — não faz sentido investir em
 estendê-lo por local antes disso.
 
+### 6.24 ✅ RESOLVIDO em 12/08/2026 — o catálogo passou a descrever a série, e não só o arquivo
+
+A pendência declarada logo acima em §6.23 fechou. O gatilho foi prático: com os
+cinco locais novos já ingeridos (§2.3.1.1) e servidos pelo painel, a página de
+cada um deles continuava dizendo *"Ainda não há datasets relacionados a esta
+localização"* — sobre um recife com **19.278 medições** no banco.
+
+🚨 **A frase não era um bug de tela; era o catálogo respondendo com precisão a
+outra pergunta.** `DatasetCatalogo` descrevia **arquivos** de `backend/dados/`,
+e todo arquivo do acervo foi extraído num ponto só, o Banco dos Abrolhos. Um
+recife sem CSV próprio não tinha como aparecer, por mais série que tivesse.
+
+**O que mudou:** `inventario_datasets.py` passou a ter duas metades, que
+respondem perguntas diferentes e **não se substituem**:
+
+| Metade | Descreve | Cobertura vem de | Vale para |
+|---|---|---|---|
+| `DATASETS_REAIS` | o arquivo em `backend/dados/` | `ler_metadados_arquivo` | só `abrolhos-ba` |
+| `SERIES_INGERIDAS` | a série em `MedicaoAmbiental` | o próprio banco | todo local ingerido |
+
+⚠️ **Apagar a primeira não era opção.** Metade dos arquivos catalogados (pH,
+nitrato, `thetao`, clorofila, KD490) são variáveis que a ingestão **não** grava
+— eles só existem como arquivo, e a segunda metade não os alcança.
+
+A metade nova rende **16 registros** (8 locais × 2 fontes), e três decisões
+nela são o que impede o defeito da §6.20 de voltar em roupa nova:
+
+1. **Par sem medição não vira registro — nem desativado.** É a regra 2 do
+   inventário aplicada ao banco em vez do disco. Os dois locais sem coordenada
+   caem fora por consequência, não por exceção escrita à mão.
+2. **Período e tamanho ficam nulos**, e a cobertura sai derivada por
+   `cobertura.py` a cada resposta. Gravá-los aqui reintroduziria em 16
+   registros exatamente a cópia que envelheceu em silêncio na §6.20.
+3. **O `url_download` aponta para este projeto**, e não para o provedor:
+   `/api/medicoes/?local=<slug>&fonte=<fonte>&formato=csv` — o mesmo endpoint
+   citável da §7.5, agora alcançável pelo catálogo.
+
+⚠️ **Consequência que exigiu um campo novo.** Esse endpoint **exige conta
+aprovada**, enquanto todo `url_download` anterior apontava para a NOAA ou o
+Copernicus e era livre. Sem distinguir os dois casos, o cartão ofereceria
+"Baixar conjunto" a visitante deslogado e o clique devolveria **um JSON de 401
+aberto no navegador**. `DatasetCatalogo.download_exige_conta` (migração `0029`)
+carrega a diferença até a tela, que passa a mostrar o mesmo convite ao login
+que `SerieAmbiental` já usava do lado do recife. O padrão do campo é `false`:
+assumir o contrário esconderia atrás de login um arquivo que qualquer um baixa
+direto do provedor.
+
+📌 **O que continua pendente:** `backend/dados/` segue marcado para remoção
+(PLANEJAMENTO.md fase 3.2) e, quando sumir, a primeira metade se desativa
+sozinha pela regra 2 — restando o catálogo derivado do banco. Isso agora é uma
+transição, e não mais um esvaziamento: em 27/07/2026 esta seção registrava que
+*"apagar `backend/dados/` esvazia a página do catálogo"*, e desde hoje deixa de
+esvaziar. ⚠️ Registrado também um efeito prático: numa máquina que clonou o
+repositório, os CSVs **não estão lá** (são ignorados pelo Git), e a execução
+completa de `inventariar_datasets` leria isso como "os nove arquivos sumiram",
+gravando `ativo=False` por cima do que já estava medido. Por isso o comando
+ganhou `--somente-series`, que atualiza só a metade derivada do banco.
+
+### 6.25 ✅ RESOLVIDO em 12/08/2026 — a política de §6.23 valia na API e não aparecia em lugar nenhum do site
+
+§6.23 declarou em 11/08/2026 que **o banco disponível ao usuário serve o máximo que o projeto tiver, mesmo o que o modelo não usa**, e mostrou que isso já era verdade por construção: `MedicaoAmbientalList` nunca filtrou por variável. Estava certo — e faltava a outra metade da mesma frase.
+
+🚨 **Uma política que só existe no endpoint não é uma política do site.** Medido hoje, em Abrolhos: o banco tem **8 variáveis** ingeridas, **19.278 medições**, de 01/01/2020 a 11/08/2026. A página do recife desenhava **duas** (`sst` e `dhw`) e não dizia, em número nenhum, que as outras seis existiam — nem numa lista, nem numa contagem, nem numa frase. Quem visitasse o site concluiria, **corretamente pelo que via**, que o projeto tem SST e DHW. A rota `/api/medicoes/?local=abrolhos-ba&variavel=hotspot` respondia perfeitamente desde 27/07; ninguém que só use o site tinha como saber que ela existia.
+
+⚠️ **O recorte do gráfico não estava errado — a omissão estava.** `VARIAVEIS_DA_SERIE = ['sst', 'dhw']` continua como está, e por dois motivos que seguem valendo: a permutação mede queda de PR-AUC de 0,84 → 0,30 ao embaralhar `dhw`, contra ~0,00 em salinidade e oxigênio (docs/RESULTADOS.md §7); e seis curvas no mesmo bloco dariam peso visual igual a variáveis que não pesam. **Escolher o que desenhar e esconder o que se tem são coisas diferentes**, e a segunda foi a que aconteceu.
+
+**Corrigido:** `aquaculture/acervo.py` deriva do mesmo agregado que o catálogo já usa (`cobertura.resumo()`, uma consulta) o inventário por local: uma linha por variável **que tem medição**, com contagem, período coberto, fonte e o link `/api/medicoes/?...` que devolve exatamente aquele número. Sai em `/api/locais/<slug>/` no campo `acervo` e vira a tabela *"Tudo o que o projeto mede aqui"* (`AcervoDoLocal.jsx`), abaixo do gráfico.
+
+🚨 **Cada linha diz o papel da variável no modelo, e isso não é enfeite.** Listar `baa` ao lado de `sst` sem dizer o papel de cada uma induziria o erro oposto ao que a correção resolve: `baa >= 3 em t+7` é o **alvo** do artefato servido — o que o modelo tenta prever —, não uma entrada dele. Confundir alvo com feature é o mal-entendido mais caro que um painel destes pode causar. Os papéis (`feature`, `alvo`, `contexto`, `opcional`) são declarados em `acervo.PAPEL_DA_VARIAVEL` a partir de docs/VARIAVEIS.md §§3, 5 e 6 — descrevem o **desenho do experimento**, não a lista de colunas de uma versão do `.joblib`.
+
+⚠️ **Variável sem medição neste local não vira linha.** Uma linha *"kd490 — 0 medições"* seria lida como lacuna **daquele recife**, quando o que falta é o conector, para todos. Isso é assunto do catálogo, que já distingue referência externa de dado espelhado (`cobertura.MOTIVO_EXTERNO`).
+
+**No mesmo movimento, a ficha física do local.** `profundidade_media_m` e `area_km2` estavam em `LocalRecife` desde a migração `0014` e **nunca saíram do Django admin** — não estavam em nenhum serializer, em nenhuma tela, em nenhuma cópia versionada. O motivo de ninguém ter reparado é exatamente o que torna o caso instrutivo: **nenhuma previsão usa esses campos**, então a ausência não quebrava teste, gráfico nem número. Agora saem na API (lista e detalhe), na cópia versionada e no bloco *"Ficha do local"* (`FichaDoLocal.jsx`), junto de coordenadas e `fonte_coordenadas`. 📌 **Pendência aberta:** dos 10 locais, só `abrolhos-ba` tem profundidade (10 m) e **nenhum** tem área. A ficha escreve *"Não registrado"* em vez de esconder a linha — pelo mesmo princípio de `iucn_categoria` sem ano (§2.4): a lacuna se declara. Quem preencher precisa registrar a fonte junto, aqui.
+
+Travado por 22 testes de backend (`testes_acervo_local.py`) e 11 de frontend (`AcervoDoLocal.test.jsx`, `FichaDoLocal.test.jsx`).
+
 ---
 
 ## 7. Como citar, e onde cada fonte entra
@@ -1491,6 +1597,8 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 12/08/2026 | 🚨 **§6.25 — a política de §6.23 valia na API e não aparecia em lugar nenhum do site; §2.2 — a foto do local não tinha onde registrar autoria.** Dois defeitos da mesma família: *o projeto guardava e não mostrava*. **(1)** Abrolhos tem **8 variáveis** e **19.278 medições** no banco; a página desenhava duas (`sst`, `dhw`) e não dizia, em número nenhum, que as outras seis existiam — quem visitasse concluiria, corretamente pelo que via, que o projeto só tem SST e DHW. O recorte do gráfico continua (docs/RESULTADOS.md §7), porque *escolher o que desenhar* e *esconder o que se tem* são coisas diferentes; o que entrou foi `acervo.py` + a tabela "Tudo o que o projeto mede aqui", uma linha por variável com contagem, período, fonte e o link que devolve exatamente aquele número — **e o papel de cada uma no modelo**, para `baa` (o **alvo**, não uma entrada) não passar por feature. **(2)** `profundidade_media_m` e `area_km2` estavam em `LocalRecife` desde a migração `0014` e **nunca saíram do Django admin**: nenhuma previsão os usa, e por isso a ausência não quebrava teste, gráfico nem número. Agora saem na API, na cópia versionada e no bloco "Ficha do local", que escreve *"Não registrado"* em vez de esconder a linha — 📌 só Abrolhos tem profundidade, nenhum local tem área. **(3)** A correção de 11/08 (§2.1) alcançou as fotos de *espécie* e parou ali: `LocalRecife.imagem` — topo da página e cartão da lista — não tinha campo de crédito, e **o que não tem campo não aparece numa auditoria de campo errado**. Migração `0030` abre `credito_imagem`, `fonte_imagem_url` e `local_captura_foto` (os dois últimos opcionais), com a mesma regra: sem crédito, nada entra na cópia versionada e a tela escreve "Foto sem crédito informado". 22 testes de backend novos, 16 de frontend (162, era 140). |
+| 12/08/2026 | ✅ **§2.3.1.1 e §6.24 — os cinco locais novos com coordenada passaram a ter série, previsão e dataset baixável.** Ingestão completa (2020-01-01 a 2026-08-11, **19.278 medições por local**, duas fontes), modelo remedido e regravado sobre **8 recifes** ([RESULTADOS.md](RESULTADOS.md) §25 — 19.056 amostras contra 7.095, 44/50 episódios contra 40 da persistência). ⚠️ **Ingerir não retreina:** o artefato continuava declarando três locais, e o painel respondia 404 com motivo para os cinco — corretamente, porque o modelo nunca os viu. **§6.24 fecha a pendência declarada em §6.23:** o catálogo descrevia *arquivos*, todos extraídos em Abrolhos, e por isso a página de um recife com 19.278 medições dizia "ainda não há datasets relacionados". `inventario_datasets.py` ganhou uma segunda metade derivada de `MedicaoAmbiental` — 16 registros (8 locais × 2 fontes), com período e tamanho **nulos** (a cobertura sai derivada, nunca gravada) e `url_download` apontando para `/api/medicoes/?...&formato=csv`, o primeiro do catálogo a apontar para este projeto e não para o provedor. Par sem medição **não vira registro**, nem desativado — é a regra da §6.20 aplicada ao banco. Campo novo `DatasetCatalogo.download_exige_conta` (migração `0029`) porque esse endpoint exige conta aprovada e um `<a>` simples devolveria um JSON de 401 ao visitante deslogado. Na tela, `motivo_sem_serie` faz os dois locais **sem coordenada** explicarem a própria ausência, em vez de exibirem "Não calculado" — a mesma frase que um pipeline quebrado mostraria. 12 testes de backend novos, 7 de frontend (147, era 140). |
 | 12/08/2026 | 🚨 **§2.1 — a migração `0026` tinha corrigido só o banco; o crédito falso continuava sendo _gerado por código_.** Três funções fabricavam procedência a partir da mera existência de um arquivo de foto: `code_sync.py::_credito_imagem` gravava `"Acervo local do projeto"` na cópia versionada, `code_sync.py::_fonte_imagem_url` gravava a URL do próprio arquivo local no campo "fonte da imagem", e `formatters.js::resolverCreditoImagem` exibia o mesmo crédito falso na tela — esta última no **caminho ao vivo**, sobre dados da API, não só no fallback. Consequência concreta: `recifeData.js` ainda trazia as nove espécies com o crédito falso e com `foto_url` apontando para `/media/especies/Dendrogyra_cylindrus.jpeg`, então **com a API fora do ar o site continuava servindo a foto sem licença**. As três deixaram de inventar, e o exportador passou a aplicar à imagem o mesmo critério da categoria IUCN: sem `credito_imagem`, nada entra na cópia versionada — nem foto, nem fonte, nem local. Os dois arquivos gerados (`recifeData.js`, `generated_admin_sync.py`) foram regerados, estavam parados em 04/08 e listavam três locais em vez de dez. 768 testes de backend (era 762), 140 de frontend (era 139). |
 | 11/08/2026 | **§6.23 — declarado: o banco de dados para download sempre serve o máximo disponível, mesmo sem uso no modelo.** Política pedida pelo usuário, confirmada como já verdadeira em `/api/medicoes/` (nunca filtrou por variável do modelo — `hotspot`, `baa` e `sst_anomalia` já provam isso ao vivo) e travada por teste novo. Registrada a exceção que a política não cobre: `/api/datasets/` (`DatasetCatalogo`) é um catálogo curado de nove produtos, todos fixados em Abrolhos — consultar por Picãozinho, Porto de Galinhas ou os sete locais novos (§2.3.1) devolve lista vazia, mesmo os dois primeiros tendo série real completa. Não bloqueia download (que passa por `/api/medicoes/`, não pelo catálogo); fica pendência declarada, consistente com o catálogo estar amarrado a `backend/dados/`, que o roadmap já manda apagar (fase 3.2). |
 | 11/08/2026 | 🚨 **§2.1 corrigida — o defeito era nas nove espécies, não em duas.** Conferindo o banco direto (e não só o que este documento já sabia), as nove tinham o mesmo `credito_imagem="Acervo local do projeto"` e nenhuma tinha `fonte_imagem_url`. Conferidas as quatro com URL de observação documentada, pela API pública do iNaturalist (a página HTML recusa acesso automatizado com 403, a API não): três têm licença aberta (CC BY/CC BY-NC) e local da observação recuperado; **uma — `Dendrogyra cylindrus` — não tem licença nenhuma concedida** (`license_code` nulo = todos os direitos reservados), e o projeto vinha servindo uma cópia local do arquivo sem permissão. Migração `0026`: as quatro passam a ter crédito e fonte corretos; a cópia local de `Dendrogyra cylindrus` para de ser servida (campo `foto` limpo, arquivo mantido em disco); as outras três também param de servir cópia local, mas por preferir linkar a fonte a redistribuir (licença permite as duas, a fonte é a que não diverge com o tempo); as cinco sem URL documentada (`Holacanthus ciliaris`, `Sparisoma axillare`, `Ocyurus chrysurus`, `Phyllogorgia dilatata`, `Condylactis gigantea`) ficam sem crédito, sem foto e sem local — mesmo princípio de "não afirmar o que não se consegue verificar" já usado para `iucn_categoria` sem ano (§2.4). Campo novo `local_captura_foto` acrescentado ao modelo, ao formulário de contribuição do site e à modal — pendência aberta para quem souber a origem real das cinco preencher. |
