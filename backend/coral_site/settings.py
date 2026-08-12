@@ -33,6 +33,12 @@ except ImportError as exc:  # pragma: no cover - depende do ambiente, nao do cod
 
 from django.core.exceptions import ImproperlyConfigured
 
+# ⚠️ Importado aqui, e nao dentro do bloco de log la embaixo: um import no meio
+# do arquivo esconde a dependencia de quem le o topo. O modulo so usa `sys` e a
+# biblioteca padrao — nao toca em Django nem em app, entao e seguro no tempo de
+# settings, quando o registro de apps ainda nao existe.
+from observabilidade import config as observabilidade_config
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
@@ -143,6 +149,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # 🚨 Antes de tudo que possa falhar. Uma excecao levantada por um
+    # middleware acima deste sairia sem correlacao — e um 500 sem rastro e
+    # exatamente o caso em que o rastro faz falta.
+    'observabilidade.middleware.CorrelacaoMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -246,6 +256,43 @@ SECURE_HSTS_PRELOAD = env.bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
 # nginx). Sem isto, SECURE_SSL_REDIRECT entra em loop atras de um proxy.
 if env.bool('DJANGO_BEHIND_PROXY', default=False):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# --- Observabilidade --------------------------------------------------------
+# 🚨 Ate 12/08/2026 este bloco nao existia, e o efeito nao era "log feio": era
+# log **invisivel**. As chamadas de `logger.warning` em `ingestao/`, `ml/` e
+# `db/` caiam na configuracao implicita do Django — apareciam no `runserver` e
+# sumiam sob cron, que e justamente onde `manage.py atualizar` roda.
+#
+# O detalhe de cada decisao esta em `observabilidade/config.py`.
+LOG_PASTA = Path(env('LOG_PASTA', default=str(BASE_DIR / 'logs')))
+LOG_NIVEL = env('LOG_NIVEL', default='DEBUG' if DEBUG else 'INFO').upper()
+LOG_NIVEL_CONSOLE = env('LOG_NIVEL_CONSOLE', default=LOG_NIVEL).upper()
+
+# ⚠️ Desligado durante a suite de testes por padrao. Sem isto, rodar os testes
+# passaria a escrever em `backend/logs/`, e um clone recem-clonado deixaria de
+# ser identico a um clone que ja rodou a suite — a mesma classe de defeito que
+# derrubou o CI em 30/07, quando dois testes so passavam em maquina que ja
+# tinha feito a ingestao.
+LOG_EM_ARQUIVO = env.bool(
+    'LOG_EM_ARQUIVO', default=not observabilidade_config.rodando_teste()
+)
+
+# Nivel por dominio: LOG_NIVEL_INGESTAO=DEBUG deixa so a ingestao falante.
+_NIVEIS_POR_DOMINIO = {
+    dominio: env(f'LOG_NIVEL_{dominio.upper()}', default=LOG_NIVEL).upper()
+    for dominio in observabilidade_config.DOMINIOS
+}
+
+LOGGING = observabilidade_config.montar(
+    base_dir=BASE_DIR,
+    nivel=LOG_NIVEL,
+    nivel_console=LOG_NIVEL_CONSOLE,
+    pasta=LOG_PASTA,
+    em_arquivo=LOG_EM_ARQUIVO,
+    rotacao_mb=env.int('LOG_ROTACAO_MB', default=observabilidade_config.ROTACAO_MB_PADRAO),
+    backups=env.int('LOG_BACKUPS', default=observabilidade_config.BACKUPS_PADRAO),
+    niveis_por_dominio=_NIVEIS_POR_DOMINIO,
+)
 
 # --- Fontes externas de dados (pipeline de ingestao) ------------------------
 # Servidor e dataset andam em par: cada espelho ERDDAP publica o produto do

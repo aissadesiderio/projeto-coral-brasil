@@ -2,7 +2,7 @@
 
 > **Status:** documento vivo — obrigatório manter atualizado.
 > **Regra:** nenhum dado entra no projeto sem uma linha correspondente neste documento.
-> **Última revisão:** 08/08/2026
+> **Última revisão:** 12/08/2026
 
 Este documento registra **toda** fonte de informação usada na construção do Coral Brasil: de onde veio cada dado, como foi obtido, onde é usado no código, sob qual licença e como deve ser citado. Serve tanto para reprodutibilidade acadêmica quanto para atribuição legal.
 
@@ -257,22 +257,44 @@ Duas diferenças estruturais entre elas continuam valendo e não devem ser confu
 
 ## 2. Fontes de biodiversidade e imagens
 
-### 2.1 iNaturalist
+### 2.1 iNaturalist — ✅ conferido e corrigido em 11/08/2026 (migração `0026`)
 
 **Site:** https://www.inaturalist.org
 **Uso:** fotografias das espécies exibidas nas fichas do site.
 **Licença:** varia por observação (CC0, CC-BY, CC-BY-NC, ou "todos os direitos reservados"). ⚠️ **É obrigatório verificar a licença de cada observação individualmente** — o iNaturalist não licencia em bloco.
 
-| Espécie | Nome científico | Observação de origem | Crédito registrado no banco |
-|---|---|---|---|
-| Coral-cérebro brasileiro | *Mussismilia braziliensis* | https://www.inaturalist.org/observations/326387144 | ⚠️ "Acervo local do projeto" — contradiz a URL |
-| Coral-estrela | *Montastraea cavernosa* | https://www.inaturalist.org/observations/326387704 | ⚠️ "Acervo local do projeto" — contradiz a URL |
-| Coral-fogo-vermelho | *Muricea flamma* | https://www.inaturalist.org/observations/137432286 | inaturalist.org |
-| Coral-pilar | *Dendrogyra cylindrus* | https://www.inaturalist.org/observations/276213882 | inaturalist.org |
+🚨 **O que estava registrado aqui era otimista demais.** Esta seção só apontava **duas** das nove espécies como mal creditadas — as que tinham URL documentada nesta tabela e contradiziam o próprio crédito. Ao conferir o banco direto (não só o que este documento já sabia), **as nove tinham exatamente o mesmo problema**: `credito_imagem = "Acervo local do projeto"` e `fonte_imagem_url` vazio, em **todas**, mesmo nas que claramente não são produção própria do projeto — são fotos de animal, de terceiros. Nenhuma das nove tinha `local_captura_foto` (campo que não existia até esta correção).
 
-🚨 As duas primeiras estão creditadas como "Acervo local do projeto" mas apontam para observações do iNaturalist. **Uma das duas informações está errada** — resolver antes de publicar, é risco de violação de direito autoral.
+**Conferido agora pela API pública do iNaturalist** (`api.inaturalist.org/v1/observations/<id>` — responde sem autenticação, ao contrário da página HTML, que devolve 403 a acesso automatizado) para as quatro espécies com URL de observação documentada:
 
-**Onde é usado:** campos `foto`, `credito_imagem`, `fonte_imagem_url` do modelo `Especie` (`backend/aquaculture/models.py`); arquivos em `backend/media/especies/`; espelhado em `frontend/src/recifeData.js`.
+| Espécie | Nome científico | Observador | Licença | Local da observação | Data |
+|---|---|---|---|---|---|
+| Coral-cérebro brasileiro | *Mussismilia braziliensis* | Kai Lima (`kailimma_nascimento`) | CC BY-NC | Caravelas, BA | 23/02/2025 |
+| Coral-estrela | *Montastraea cavernosa* | Kai Lima (`kailimma_nascimento`) | CC BY-NC | Caravelas, BA | 26/02/2025 |
+| Coral-fogo-vermelho | *Muricea flamma* | João D'Andretta (`jpdandretta`) | CC BY | Arquipélago de Abrolhos, BA | 25/09/2022 |
+| Coral-pilar | *Dendrogyra cylindrus* | Laura Proença (`lproenca`) | 🚨 **nenhuma** (`license_code` nulo) | Bahia, BR | 01/02/2024 |
+
+**Observação:** https://www.inaturalist.org/observations/326387144, .../326387704, .../137432286 e .../276213882, respectivamente.
+
+🚨 **`Dendrogyra cylindrus` não tinha licença concedida pelo fotógrafo.** `license_code` nulo na API do iNaturalist significa **"todos os direitos reservados"** — o padrão do site quando ninguém escolheu uma licença aberta. O projeto vinha hospedando uma cópia do arquivo (`backend/media/especies/Dendrogyra_cylindrus.jpeg`) e servindo-a no site, sem nenhuma permissão de reuso. **Corrigido**: o campo `foto` dela foi limpo pela migração `0026` — o site para de servir a cópia, mantendo só o crédito e o link da observação (linkar para a fonte não é violação; redistribuir a cópia, sem licença, é). O arquivo continua em disco, não apagado, para não destruir a única cópia enquanto ninguém decide se vale pedir permissão à fotógrafa.
+
+⚠️ **As outras três (com licença de verdade) também tiveram `foto` limpo.** Não por problema de licença — CC BY e CC BY-NC permitem reuso com atribuição —, mas porque o caminho correto para exibir a foto de um terceiro é **linkar** `fonte_imagem_url` (o crédito completo mora na própria observação, incluindo a licença exata e futuras correções do autor), não redistribuir uma cópia estática que pode divergir da fonte com o tempo. O site mostra o ícone de espécie no lugar da miniatura e o link "Ver fonte da imagem" continua funcionando — mesmo padrão que as cinco abaixo já usavam antes desta correção.
+
+**As outras cinco (Holacanthus ciliaris, Sparisoma axillare, Ocyurus chrysurus, Phyllogorgia dilatata, Condylactis gigantea) não têm URL de observação documentada em lugar nenhum do projeto.** Não há como confirmar procedência de uma foto sem fonte — a migração `0026` limpou `foto`, `credito_imagem` e `fonte_imagem_url` delas também, em vez de continuar afirmando um crédito já sabido falso. Ficam com o mesmo vazio que `iucn_categoria` já usa para "sem procedência registrada" (migração `0022`, §2.4) — a modal do site já sabe mostrar isso sem inventar texto. 📌 **Pendência aberta:** se alguém souber a origem real dessas cinco fotos, `local_captura_foto` e os demais campos agora existem para registrá-la — pelo formulário de contribuição do site (`/minhas-especies`) ou pelo Django admin.
+
+🚨 **Limpar o banco não bastava: o crédito falso era _gerado por código_, em dois lugares, e sobrevivia à migração `0026`.** A correção acima só alcançava o PostgreSQL. Duas funções continuavam fabricando a mesma afirmação a partir da simples existência de um arquivo de foto:
+
+| Onde | O que fazia | Alcance |
+|---|---|---|
+| `backend/aquaculture/code_sync.py::_credito_imagem` | sem `credito_imagem`, gravava a string `"Acervo local do projeto"` na cópia versionada | `frontend/src/data/recifeData.js` — o **fallback offline**, o que o site mostra quando a API cai |
+| `backend/aquaculture/code_sync.py::_fonte_imagem_url` | sem `fonte_imagem_url`, gravava a URL do **próprio arquivo local**, fazendo a cópia se passar por fonte externa | idem |
+| `frontend/src/utils/formatters.js::resolverCreditoImagem` | sem `credito_imagem`, exibia `"Acervo local do projeto"` na tela | **caminho ao vivo** — modal e card, sobre dados vindos da API |
+
+Por isso o `recifeData.js` versionado ainda trazia as nove espécies com o crédito falso **e** `"foto_url": "/media/especies/Dendrogyra_cylindrus.jpeg"` — ou seja, com a API fora do ar o site continuava servindo exatamente a foto sem licença que a `0026` tirou do ar. **Corrigido em 12/08/2026:** as três funções deixaram de inventar; sem crédito no banco, nada é afirmado. O exportador passou a aplicar à imagem o mesmo critério que já aplicava à categoria IUCN — *sem procedência, não entra na cópia versionada*: sem `credito_imagem`, o `foto_url`, a fonte e o `local_captura_foto` saem vazios do `.js`, ainda que a API continue servindo o que houver no banco. Travado por 6 testes de backend (`ProcedenciaDeImagemNaCopiaVersionadaTests`) e 1 de frontend. Os dois arquivos gerados foram regerados: estavam parados em 04/08/2026, antes das migrações `0025` e `0026`, e por isso listavam três locais em vez de dez.
+
+⚠️ **Lição de desenho, não só de dado:** um valor-padrão calculado na leitura (`credito or 'Acervo local do projeto'`) é indistinguível de um dado real depois de escrito em arquivo — foi assim que uma foto sem licença nenhuma apareceu creditada ao projeto em três lugares diferentes, sem ninguém nunca ter digitado isso. Vazio precisa continuar vazio até a borda da tela, onde "Sem credito informado" é escrito como texto de interface, e não como dado.
+
+**Onde é usado:** campos `foto`, `credito_imagem`, `fonte_imagem_url`, `local_captura_foto` do modelo `Especie` (`backend/aquaculture/models.py`); arquivos em `backend/media/especies/`; espelhados na cópia versionada `frontend/src/data/recifeData.js` (gerada por `code_sync.py`, nunca editada à mão). `local_captura_foto` é novo (migração `0026`) — registra onde a **foto** foi tirada, que não é necessariamente onde a espécie ocorre nem um dos locais monitorados pelo projeto.
 
 ### 2.2 Imagens sem proveniência registrada
 
@@ -358,7 +380,25 @@ Conta criada como **Organisation** (não Personal), vinculada à UFF, com e-mail
 
 **Como abrir um `.gdb` sem ArcGIS** (registrado porque não é óbvio): `pip install geopandas pyogrio`, depois `pyogrio.list_layers(caminho)` lista as camadas, e `pyogrio.read_dataframe(caminho, layer=nome)` lê uma camada sem geometria direto — mais robusto que `geopandas.read_file` pra tabelas não-espaciais, e evita depender do `fiona`.
 
-📌 **Pendência real, não a de antes:** confirmar com o Mark Leckie se o dataset completo (não-amostra) cobre Anthozoa/Brasil com essa mesma estrutura de tabela, e se existe caminho não-comercial pra acessar só a tabela de atributos (sem os polígonos multi-GB, sem o relatório de US$1.000, sem o PAYG por área). Pergunta enviada em 11/08/2026; resposta ainda pendente.
+📌 **Pendência real, não a de antes:** confirmar com o Mark Leckie se o dataset completo (não-amostra) cobre Anthozoa/Brasil com essa mesma estrutura de tabela, e se existe caminho não-comercial pra acessar só a tabela de atributos (sem os polígonos multi-GB, sem o relatório de US$1.000, sem o PAYG por área). Pergunta enviada em 11/08/2026 — ✅ **respondida em 12/08/2026, ver abaixo.**
+
+#### 📬 Resposta do IBAT, 12/08/2026 — a lista nomeada não é necessariamente paga
+
+Resposta de Mark Leckie (IBAT Programme Officer) à pergunta enviada em 11/08. Três coisas, nessa ordem de importância:
+
+1. ✅ **"Your work fits within our definition of non-commercial"** — confirmação explícita, por escrito, de que o projeto se enquadra. Encerra a dúvida que vinha desde a recusa-padrão da IUCN de 31/07, que tratava o pedido como comercial (§2.4).
+2. ⚠️ **Busca por nome de espécie não existe mesmo** — confirma a suspeita registrada em 05/08. O acesso é sempre por local. **Mas** a triagem de um site *lista as espécies com os campos que o projeto precisa*: categoria da Lista Vermelha, ano da avaliação e versão da Lista.
+3. 🚨 **A conta foi atualizada com 10 *proximity reports* gratuitos.** Fluxo indicado: subir o site → rodar o *proximity report* → filtrar a lista de espécies até os corais de interesse.
+
+🚨 **Isto corrige o item 1 da investigação de 11/08** ("a contagem por site é gratuita, mas só agregada; a lista nomeada é paga"). A conclusão estava certa *para a conta como ela estava* — o que a conta gratuita padrão devolvia era só `7 PAs / 1.816 espécies / 0 KBAs`, e o único caminho visível até a lista nomeada era o `Disclosure Preparation Report` de US$ 1.000. O *proximity report* é um terceiro caminho, que não aparecia como opção antes do upgrade manual da conta. **A barreira era de permissão, não de preço.**
+
+⚠️ **Os 10 relatórios são um orçamento finito e sem renovação declarada.** São 3 locais de recife (§1) — cabe com folga, mas não cabe gastar em teste exploratório como se gastou o site `abrolhos-ba`. Cada corrida precisa ser de um local real, com o buffer já decidido.
+
+⚠️ **O raio de 50 km continua sendo o recorte, e ele não é o recife.** A lista devolvida é *"espécies num raio de 50 km do ponto"*, não *"espécies neste recife"*. Para o uso imediato — pegar categoria/ano/versão de nove espécies que já se sabe quais são — isso é irrelevante, porque a lista é usada como **tabela de consulta**, não como inventário. O que o raio afeta é a **cobertura**: se uma das nove não aparecer na lista de nenhum dos três locais, esta via simplesmente não responde por ela, e isso não é o mesmo que "não avaliada".
+
+📌 **Decisão pendente antes de usar o dado: qual `iucn_origem`.** Nenhum dos três valores atuais (`api`, `ficha`, `terceiro`) descreve isto honestamente. Não é a API da IUCN; não é a ficha aberta uma a uma; e chamar de `terceiro` — a categoria criada para Wikidata/GBIF, que *republicam* a categoria — apaga que o IBAT é parceiro oficial da IUCN distribuindo o dado sob licença, com a versão da Lista carimbada na entrega. A citação correta é diferente das três. Provável quarto valor, `ibat`, pelo mesmo motivo que `origem` existe (§2.4.1): sem distinguir a via, não há como auditar depois o que pode ser citado como quê.
+
+📌 **O que esta via vale agora:** as nove espécies já foram preenchidas por `ficha` em 04/08, então o ganho imediato **não é preencher** — é (a) **conferência independente** dos seis valores datados, por uma via que não é a mesma pessoa relendo a mesma ficha, e (b) o **caminho de escala de §2.4.1**, para quando as ocorrências vierem do OBIS/GBIF por `bbox()` e o catálogo crescer sozinho: aí a lista por raio deixa de ser tabela de consulta e passa a ser exatamente a forma certa do dado.
 
 ✅ **As 9 espécies foram preenchidas em 04/08/2026 pelo caminho `ficha`** (migração `0024_conferencia_iucn_agosto_2026.py`), sem precisar da API — confirmando que a recusa não bloqueava o que havia de mais urgente. Cada uma foi aberta individualmente em `iucnredlist.org` (busca manual, não scraping em lote):
 
@@ -1209,6 +1249,51 @@ Tentar mandar um desses campos no corpo da requisição não falha em silêncio:
 `EspecieContribuicaoSerializer.to_internal_value` recusa com `400`, nomeando o
 campo recusado. Coberto por teste (`CampoRecusadoTests`).
 
+### 6.23 Decisão declarada em 11/08/2026 — para download, o projeto sempre serve o máximo que tiver, mesmo sem uso no modelo
+
+**A política:** qualquer variável, de qualquer local, que chegue a
+`MedicaoAmbiental` fica disponível para consulta e download em
+`/api/medicoes/`, **independente de o modelo de predição usá-la ou não**. O
+modelo consome só quatro (`sst`, `dhw`, `salinidade`, `oxigênio`, via
+`ml/dataset.py::VARIAVEIS_BASELINE`); o banco de dados do site — o que fica
+disponível para baixar — não é o mesmo contrato que o do modelo, e não deve
+encolher para caber nele.
+
+**Já é verdade hoje, por construção, não por filtro removido.**
+`MedicaoAmbientalList.get_queryset()` nunca restringiu por variável — os
+filtros (`local`, `variavel`, `fonte`, `de`/`ate`, `qualidade`) são todos
+opcionais e todos definidos por quem consulta, nunca por uma lista fixa do
+que "importa". `hotspot`, `baa` e `sst_anomalia` já são exemplos vivos disso:
+nenhum dos três é feature do modelo (só alimentam o alvo e as linhas de
+base — ver `ml/dataset.py::VARIAVEIS_DE_LINHA_DE_BASE` e
+`PROIBIDAS_COMO_FEATURE`), e os três são baixáveis hoje pelo mesmo endpoint,
+do mesmo jeito que `sst`/`dhw`. Travado por teste
+(`test_variavel_nao_usada_pelo_modelo_continua_pesquisavel_e_baixavel`, em
+`aquaculture/testes_api_medicoes.py`) para a política sobreviver a uma
+refatoração futura da view.
+
+⚠️ **O que essa política NÃO cobre: o catálogo `/api/datasets/`
+(`DatasetCatalogo`).** Ele é outra coisa — uma lista curada de **nove
+produtos-fonte** históricos (NOAA CoralTemp, os oito do Copernicus),
+descrevendo os arquivos CSV legados em `backend/dados/`
+(`aquaculture/inventario_datasets.py`), e **todos os nove estão fixados em
+`local_slug='abrolhos-ba'`** (`LOCAL_PADRAO`). Consultar
+`/api/locais/<slug>/datasets/` para Picãozinho, Porto de Galinhas, ou
+qualquer um dos sete locais novos (§2.3.1) devolve **lista vazia** — não
+porque falte dado real (Picãozinho e Porto de Galinhas têm série completa em
+`MedicaoAmbiental` desde 25/07/2026), mas porque nenhum dos nove
+`FonteDataset` descreve outro local além de Abrolhos.
+
+🚨 **Pendência conhecida, registrada aqui para não virar surpresa depois:**
+o catálogo curado não cresce sozinho com o projeto — ele é uma lista
+Python fixa, escrita à mão. Não bloqueia a política acima (o dado
+continua baixável por `/api/medicoes/`, sem passar pelo catálogo), mas
+significa que a *descrição* dos produtos-fonte para os outros nove locais
+não existe ainda. Consistente com o roadmap: `backend/dados/` está
+marcado para remoção (PLANEJAMENTO.md, fase 3.2), e quando isso acontecer o
+catálogo inteiro precisa ser repensado — não faz sentido investir em
+estendê-lo por local antes disso.
+
 ---
 
 ## 7. Como citar, e onde cada fonte entra
@@ -1406,6 +1491,9 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 12/08/2026 | 🚨 **§2.1 — a migração `0026` tinha corrigido só o banco; o crédito falso continuava sendo _gerado por código_.** Três funções fabricavam procedência a partir da mera existência de um arquivo de foto: `code_sync.py::_credito_imagem` gravava `"Acervo local do projeto"` na cópia versionada, `code_sync.py::_fonte_imagem_url` gravava a URL do próprio arquivo local no campo "fonte da imagem", e `formatters.js::resolverCreditoImagem` exibia o mesmo crédito falso na tela — esta última no **caminho ao vivo**, sobre dados da API, não só no fallback. Consequência concreta: `recifeData.js` ainda trazia as nove espécies com o crédito falso e com `foto_url` apontando para `/media/especies/Dendrogyra_cylindrus.jpeg`, então **com a API fora do ar o site continuava servindo a foto sem licença**. As três deixaram de inventar, e o exportador passou a aplicar à imagem o mesmo critério da categoria IUCN: sem `credito_imagem`, nada entra na cópia versionada — nem foto, nem fonte, nem local. Os dois arquivos gerados (`recifeData.js`, `generated_admin_sync.py`) foram regerados, estavam parados em 04/08 e listavam três locais em vez de dez. 768 testes de backend (era 762), 140 de frontend (era 139). |
+| 11/08/2026 | **§6.23 — declarado: o banco de dados para download sempre serve o máximo disponível, mesmo sem uso no modelo.** Política pedida pelo usuário, confirmada como já verdadeira em `/api/medicoes/` (nunca filtrou por variável do modelo — `hotspot`, `baa` e `sst_anomalia` já provam isso ao vivo) e travada por teste novo. Registrada a exceção que a política não cobre: `/api/datasets/` (`DatasetCatalogo`) é um catálogo curado de nove produtos, todos fixados em Abrolhos — consultar por Picãozinho, Porto de Galinhas ou os sete locais novos (§2.3.1) devolve lista vazia, mesmo os dois primeiros tendo série real completa. Não bloqueia download (que passa por `/api/medicoes/`, não pelo catálogo); fica pendência declarada, consistente com o catálogo estar amarrado a `backend/dados/`, que o roadmap já manda apagar (fase 3.2). |
+| 11/08/2026 | 🚨 **§2.1 corrigida — o defeito era nas nove espécies, não em duas.** Conferindo o banco direto (e não só o que este documento já sabia), as nove tinham o mesmo `credito_imagem="Acervo local do projeto"` e nenhuma tinha `fonte_imagem_url`. Conferidas as quatro com URL de observação documentada, pela API pública do iNaturalist (a página HTML recusa acesso automatizado com 403, a API não): três têm licença aberta (CC BY/CC BY-NC) e local da observação recuperado; **uma — `Dendrogyra cylindrus` — não tem licença nenhuma concedida** (`license_code` nulo = todos os direitos reservados), e o projeto vinha servindo uma cópia local do arquivo sem permissão. Migração `0026`: as quatro passam a ter crédito e fonte corretos; a cópia local de `Dendrogyra cylindrus` para de ser servida (campo `foto` limpo, arquivo mantido em disco); as outras três também param de servir cópia local, mas por preferir linkar a fonte a redistribuir (licença permite as duas, a fonte é a que não diverge com o tempo); as cinco sem URL documentada (`Holacanthus ciliaris`, `Sparisoma axillare`, `Ocyurus chrysurus`, `Phyllogorgia dilatata`, `Condylactis gigantea`) ficam sem crédito, sem foto e sem local — mesmo princípio de "não afirmar o que não se consegue verificar" já usado para `iucn_categoria` sem ano (§2.4). Campo novo `local_captura_foto` acrescentado ao modelo, ao formulário de contribuição do site e à modal — pendência aberta para quem souber a origem real das cinco preencher. |
 | 11/08/2026 | **§2.3.1 — sete locais novos cadastrados, sem série ambiental.** Migration `0025_seed_novos_locais_recife.py`, a partir de uma tabela sem fonte primária citada trazida pelo usuário. Coordenadas convertidas de graus/minutos/segundos, marcadas **pendentes de verificação** — mesmo padrão dos três locais originais (§2.3). Dois ficaram sem latitude/longitude de propósito: `apa-costa-dos-corais` é uma área de 12 municípios, não um ponto; `recife-de-fora-ba` não tinha coordenada exata na tabela de origem, e a própria tabela já registrava isso em vez de estimar. `abrolhos-ba` já existia e foi deixado de fora — a tabela trazia uma coordenada ~1,5 km diferente da já gravada, e a divergência fica registrada, não resolvida. Grafo reprojetado (`neo4j_projetar`): 10 localizações, conferido item a item contra o Postgres. |
 | 08/08/2026 | **§6.22 — a nova contribuição pública de espécie não pode tocar proveniência.** O site ganhou login e um formulário para conta aprovada propor espécie nova ou edição (fica pendente até um master aceitar). A lista branca de campos aceitos — `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`, `locais` — **exclui `iucn_categoria`, `iucn_avaliado_em`, `iucn_versao`, `iucn_taxon_id`, `fonte_iucn_url`, `aphia_id` e `gbif_key` para todo mundo, master incluso**: são os mesmos campos que a migração `0022` (§2.4, abaixo) passou a exigir com data e origem depois do episódio de `Mussismilia braziliensis`. Um formulário público moderado ainda é uma porta para categoria digitada sem procedência — a aprovação audita quem editou, não se o dado tem lastro. Enviar um desses campos recusa com `400` nomeando o campo, não ignora em silêncio. |
 | 31/07/2026 | 🚨 **§2.4.2 — um dos quatro valores estava ERRADO, não só sem lastro.** `Mussismilia braziliensis` estava gravada como **VU** e a IUCN a registra como **CR** desde 2022-2. É o coral-cérebro brasileiro, endêmico, a espécie que abre a página de Abrolhos. Não era falta de procedência: era **dado errado**, do tipo que a ausência de ano esconde perfeitamente — alguém digitou uma categoria que já foi verdadeira, a IUCN reavaliou, e nada tinha como perceber. Isso decide a favor de esconder tudo até haver ano: a alternativa "menos destrutiva" deixaria a afirmação errada no ar com aparência de dado revisado. ⚠️ Conferido em Wikidata e busca, **não** na ficha da IUCN (403 para acesso automatizado), e por isso **nada foi gravado** com essa procedência. §2.4.1 registra o que muda no desenho para isso escalar: `iucn_origem` (por qual via o dado veio, incluindo `terceiro` — Wikidata é fonte legítima **se declarada**), e o vencimento virando **recado diário** em `db/atualizacao.py` em vez de tarefa que alguém lembra. 🚨 **O pedido de API à IUCN foi recusado**, com e-mail institucional e sem motivo declarado. |

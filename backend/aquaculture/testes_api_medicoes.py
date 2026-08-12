@@ -157,6 +157,18 @@ class MedicaoAmbientalApiTests(TestCase):
 
         self.assertEqual(corpo['count'], 3)
 
+    def test_variavel_nao_usada_pelo_modelo_continua_pesquisavel_e_baixavel(self):
+        """🚨 Decisao de produto: o catalogo para download nunca fica restrito
+        as quatro variaveis que `ml/dataset.py::VARIAVEIS_BASELINE` usa para
+        prever. `ph` nao entra no modelo (e nem tem dado real hoje fora dos
+        testes — ver docs/FONTES.md secao 6), mas se um dia tiver, este
+        endpoint precisa continuar servindo-o do mesmo jeito que serve
+        `sst`/`dhw`/`salinidade`/`oxigenio`. Local: nunca em `get_queryset`."""
+        corpo = self.buscar('?variavel=ph').json()
+
+        self.assertEqual(corpo['count'], 1)
+        self.assertEqual(corpo['results'][0]['variavel'], 'ph')
+
     def test_filtra_por_fonte(self):
         self.assertEqual(self.buscar('?fonte=copernicus').json()['count'], 2)
 

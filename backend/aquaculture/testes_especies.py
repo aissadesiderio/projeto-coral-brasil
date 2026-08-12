@@ -451,6 +451,73 @@ class CampoRecusadoTests(TestCase):
         self.assertEqual(resposta.status_code, 400)
         self.assertIn('foto', resposta.json())
 
+    def test_local_captura_foto_e_aceito(self):
+        """Ao contrario de `foto`, este campo e texto livre e nao tem
+        proveniencia sensivel — entra na lista branca (conta comum, entao
+        vira solicitacao pendente, e nao rejeicao)."""
+        resposta = self.client.post(reverse('especie_list'), {
+            'nome_cientifico': 'Crafted testus 3', 'tipo': 'CORAL',
+            'local_captura_foto': 'Caravelas, BA',
+        })
+
+        self.assertEqual(resposta.status_code, 202)
+        solicitacao = SolicitacaoEspecie.objects.get(
+            dados_propostos__nome_cientifico='Crafted testus 3',
+        )
+        self.assertEqual(solicitacao.dados_propostos['local_captura_foto'], 'Caravelas, BA')
+
+
+class ProveninciaDasFotosTests(TestCase):
+    """Migracao 0026 — as 9 especies tinham o mesmo credito falso.
+
+    🚨 Ate a 0026, todas diziam `credito_imagem="Acervo local do projeto"`,
+    nenhuma tinha `fonte_imagem_url`, e uma delas (`Dendrogyra cylindrus`)
+    tinha uma foto local hospedada sem licenca concedida pelo fotografo
+    (`license_code` nulo na API do iNaturalist = todos os direitos
+    reservados). Ver docs/FONTES.md secao 2.1.
+    """
+
+    VERIFICADAS = (
+        'Mussismilia braziliensis', 'Montastraea cavernosa',
+        'Muricea flamma', 'Dendrogyra cylindrus',
+    )
+    SEM_FONTE = (
+        'Holacanthus ciliaris', 'Sparisoma axillare', 'Ocyurus chrysurus',
+        'Phyllogorgia dilatata', 'Condylactis gigantea',
+    )
+
+    def test_as_quatro_verificadas_tem_credito_fonte_e_local(self):
+        for nome in self.VERIFICADAS:
+            especie = Especie.objects.get(nome_cientifico=nome)
+            self.assertTrue(especie.credito_imagem, nome)
+            self.assertIn('inaturalist.org', especie.fonte_imagem_url, nome)
+            self.assertTrue(especie.local_captura_foto, nome)
+
+    def test_dendrogyra_nao_tem_licenca_e_por_isso_nao_serve_a_foto_local(self):
+        """🚨 A unica das quatro sem licenca concedida — `foto` precisa ficar
+        vazio, mesmo tendo credito e link corretos."""
+        especie = Especie.objects.get(nome_cientifico='Dendrogyra cylindrus')
+        self.assertIn('reservados', especie.credito_imagem)
+        self.assertFalse(especie.foto)
+
+    def test_as_tres_com_licenca_tambem_nao_servem_copia_local(self):
+        """O caminho correto para foto de terceiro e linkar `fonte_imagem_url`,
+        nao redistribuir uma copia — `foto` fica vazio nas quatro por igual."""
+        for nome in self.VERIFICADAS:
+            especie = Especie.objects.get(nome_cientifico=nome)
+            self.assertFalse(especie.foto, nome)
+
+    def test_as_cinco_sem_fonte_documentada_ficam_sem_credito_e_sem_foto(self):
+        """Nao ha como confirmar procedencia sem URL de observacao — mesmo
+        principio de `iucn_categoria` sem ano: nao afirmar o que nao se
+        consegue datar/verificar."""
+        for nome in self.SEM_FONTE:
+            especie = Especie.objects.get(nome_cientifico=nome)
+            self.assertEqual(especie.credito_imagem, '', nome)
+            self.assertEqual(especie.fonte_imagem_url, '', nome)
+            self.assertEqual(especie.local_captura_foto, '', nome)
+            self.assertFalse(especie.foto, nome)
+
 
 @override_settings(OFFLINE_MODE=False)
 class AutorNoSerializerTests(TestCase):

@@ -50,6 +50,7 @@ class EspecieSerializer(serializers.ModelSerializer):
             'foto_url',
             'credito_imagem',
             'fonte_imagem_url',
+            'local_captura_foto',
             'fonte_url',
             'locais',
         ]
@@ -116,6 +117,7 @@ class EspecieContribuicaoSerializer(serializers.ModelSerializer):
             'descricao',
             'credito_imagem',
             'fonte_imagem_url',
+            'local_captura_foto',
             'fonte_url',
             'locais',
         ]

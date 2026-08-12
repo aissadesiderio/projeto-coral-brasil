@@ -93,6 +93,34 @@ describe('GerenciarEspeciesPage', () => {
     expect(await screen.findByText('Testus jestus')).toBeInTheDocument();
   });
 
+  test('formulario envia o local de captura da foto junto dos demais campos', async () => {
+    let corpoEnviado = null;
+    global.fetch = jest.fn(async (url, opcoes = {}) => {
+      if (url === '/api/especies/' && opcoes.method === 'POST') {
+        corpoEnviado = JSON.parse(opcoes.body);
+        return criarResposta({ id: 1, nome_cientifico: 'Testus jestus' }, { status: 201 });
+      }
+      return criarResposta([]);
+    });
+
+    renderPagina({ autenticado: true, aprovado: false, master: true });
+
+    await waitFor(() =>
+      expect(screen.getByText(/Nenhuma especie cadastrada/i)).toBeInTheDocument(),
+    );
+
+    fireEvent.change(screen.getByLabelText(/Nome cientifico/i), {
+      target: { value: 'Testus jestus' },
+    });
+    fireEvent.change(screen.getByLabelText(/Local de captura da foto/i), {
+      target: { value: 'Caravelas, BA' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Adicionar especie/i }));
+
+    await waitFor(() => expect(corpoEnviado).not.toBeNull());
+    expect(corpoEnviado.local_captura_foto).toBe('Caravelas, BA');
+  });
+
   test('🚨 so master ve quem criou/editou cada especie', async () => {
     global.fetch = jest.fn(async (url) => {
       if (url === '/api/especies/') {

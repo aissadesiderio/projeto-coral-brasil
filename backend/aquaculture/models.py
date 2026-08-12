@@ -365,11 +365,24 @@ class Especie(models.Model):
         max_length=200,
         blank=True,
         verbose_name='Credito da imagem',
+        help_text='Site, instituicao ou nome de quem tirou/cedeu a foto.',
     )
     fonte_imagem_url = models.URLField(
         max_length=500,
         blank=True,
         verbose_name='Link da fonte da imagem',
+    )
+    # 🚨 Ate 11/08/2026 nao existia campo para isto, e as 9 especies tinham o
+    # mesmo credito generico ("Acervo local do projeto") mesmo vindo de fora
+    # do projeto. Ver docs/FONTES.md secao 2.1: quatro tem fonte iNaturalist
+    # verificada (com local da observacao lido da API), as outras cinco nao
+    # tem procedencia confirmavel e ficam sem afirmar local nenhum — mesmo
+    # principio ja usado para `iucn_categoria` sem ano.
+    local_captura_foto = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Local de captura da foto',
+        help_text='Onde a foto foi tirada, nao onde a especie ocorre.',
     )
     fonte_url = models.URLField(
         max_length=500,

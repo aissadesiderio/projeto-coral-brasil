@@ -200,7 +200,7 @@ pelos proprios testes — saiu em 30/07/2026 junto com o `StatusPredicao`.
 `Especie`
 - id canonico: `slugify(nome_cientifico)`
 - origem atual: `Especie`
-- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `iucn_categoria`, `iucn_categoria_rotulo`, `iucn_avaliado_em`, `iucn_versao`, `fonte_iucn_url`, `iucn_tem_procedencia`, `aphia_id`, `credito_imagem`, `fonte_imagem_url`, `fonte_url`
+- propriedades principais: `id`, `nome_cientifico`, `nome_comum`, `tipo`, `descricao`, `iucn_categoria`, `iucn_categoria_rotulo`, `iucn_avaliado_em`, `iucn_versao`, `fonte_iucn_url`, `iucn_tem_procedencia`, `aphia_id`, `credito_imagem`, `fonte_imagem_url`, `local_captura_foto`, `fonte_url`
   - ⚠️ **Esta lista descrevia a intencao, nao o que `projetar_especies` gravava, ate 08/08/2026.** `tipo`, `descricao`, `credito_imagem`, `fonte_imagem_url`, `fonte_url` e os campos de proveniencia IUCN nunca eram escritos — so `nome_cientifico`, `nome_comum`, `iucn_categoria`, `iucn_avaliado_em` e `aphia_id` chegavam ao no. Corrigido; ver Historico de decisoes.
 
 `MedicaoAmbiental`

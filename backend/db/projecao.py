@@ -208,6 +208,7 @@ def projetar_especies(conexao=Neo4jConnection):
             'aphia_id': e.aphia_id,
             'credito_imagem': e.credito_imagem,
             'fonte_imagem_url': e.fonte_imagem_url,
+            'local_captura_foto': e.local_captura_foto,
             'fonte_url': e.fonte_url,
             'django_pk': e.pk,
             'origem_registro': ORIGEM,

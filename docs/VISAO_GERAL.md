@@ -127,6 +127,12 @@ mais ao sul e mais frio, tem salinidade e oxigênio dissolvido mais altos —
 três, porque é o mesmo forçante atingindo a mesma costa. Não são três amostras
 independentes. Ver [VARIAVEIS.md](VARIAVEIS.md) §7.2.
 
+📌 **Atualização de 11/08/2026:** o catálogo de `LocalRecife` cresceu para dez
+locais (ver [FONTES.md](FONTES.md) §2.3.1) — mas os sete novos não têm série
+ambiental nem entraram no treino. Esta seção, o gradiente e o modelo treinado
+continuam descrevendo especificamente os três acima; catálogo maior não é
+cobertura maior.
+
 ---
 
 ## 4. Como se mede estresse térmico de longe
@@ -687,7 +693,7 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Publicar** | hospedagem, domínio e o `atualizar` num agendador. É o único item que bloqueia literalmente *"ter um site"* |
 | **Gravar o que foi previsto** | o alerta é calculado na requisição e evapora. Sem isso não há como responder *"o que o site dizia no dia 12/03?"*, nem medir desempenho em produção |
 | **Proveniência das espécies** | ⏳ **esquema pronto em 31/07, dados pendentes.** Os campos existem (`iucn_avaliado_em`, `iucn_versao`, `aphia_id`, `gbif_key`) e a tela deixou de afirmar categoria sem ano — mas os **anos ainda não foram coletados** nas 9 espécies, e a ocorrência espécie↔local continua sendo um vínculo sem quem viu, quando e por qual método ([FONTES.md](FONTES.md) §2.4) |
-| **Só três recifes** | para *"banco de dados de corais do Brasil"* é pouco. Catálogo e série podem crescer já; a **previsão** só depois de um retreino medido |
+| **Só três recifes com série e modelo** | catálogo cresceu para dez locais em 11/08/2026 ([FONTES.md](FONTES.md) §2.3.1) — cinco novos têm coordenada mas nenhuma medição ingerida ainda, dois ficaram sem coordenada (um é área, não ponto; o outro não tem fonte publicada). A **previsão** continua restrita aos três originais até um retreino medido |
 | **Contrato da API documentado** | sem OpenAPI, e sem URL própria por espécie — não dá para linkar nem indexar uma espécie, o que para um acervo é requisito |
 | **Investigar 2022** | único ano em que o modelo perde. Duas pistas agora: menor dependência do DHW, e a **regra da NOAA erra o mesmo ano** (§24.4) |
 | **Variáveis canônicas aprovadas** | item de go-live ainda aberto |
@@ -754,6 +760,7 @@ O catálogo completo, com medição de cada um, está em [FONTES.md](FONTES.md) 
 
 | Data | Alteração |
 |---|---|
+| 11/08/2026 | **Catálogo de locais cresceu de três para dez** — sete novos em `LocalRecife` a partir de uma tabela de referência trazida na conversa, sem fonte primária citada; coordenadas convertidas de graus/minutos/segundos e marcadas pendentes de verificação (ICMBio). Dois ficaram sem coordenada de propósito: `apa-costa-dos-corais` é uma área de 12 municípios, não um ponto, e `recife-de-fora-ba` não tinha coordenada exata publicada na tabela de origem. §3 e §10 atualizadas para não confundir *locais cadastrados* com *locais monitorados* — o modelo treinado e a série de 57.420 medições continuam restritos aos três originais. Corrigido também um defeito na projeção do Neo4j: `descricao` e `ultima_atualizacao` nunca eram gravados no grafo, então todo local — os três originais inclusive — saía sem descrição na API. Ver [FONTES.md](FONTES.md) §2.3.1. |
 | 27/07/2026 | ✅ **§7 e §10 atualizadas — o caminho do dado chegou até a tela.** O diagrama ganhou os dois passos que faltavam: **artefato** (`dados/modelos/*.joblib`) e **predição** (`ml/predicao.py`), este último montando a janela de **hoje**, para a qual o alvo ainda não existe. Registrado por que os dois ramos — treinar e responder — não podem ser dois códigos: se divergirem, o modelo recebe colunas com o nome certo e o conteúdo errado e responde sem erro nenhum, então `predicao.py` traduz o nome da coluna de volta numa `dataset.Janela` e chama o mesmo `aplicar_janela`. Em §10 entram como prontos a **API da série ambiental** e a **predição servida**; entram como pendências o site consumir o painel — com a proibição nova de exibir "0%" ou "100%" (§22.8 de [RESULTADOS.md](RESULTADOS.md)) — e a **aprovação do limiar 0,20**, que hoje está no `settings` por ser o ponto equivalente ao antigo 0,50, e não por decisão de produto. |
 | 27/07/2026 | §10 atualizada: **projeção do Neo4j concluída** — o grafo deixou de mostrar dado legado e passou a ter as 57.420 medições com proveniência por valor. Também entram em "pronto" a **persistência do modelo** e a **calibração da probabilidade**. Restam como pendências o passo de deploy que reconstrua os três artefatos derivados, os endpoints, o nome honesto do produto na interface e o painel. |
 | 27/07/2026 | ✅ **§7.4 criada — o modelo passou a ser salvo.** `manage.py treinar_final` faz o oposto dos comandos de medição: um modelo só, sobre todos os dados, gravado em `dados/modelos/` com metadados em JSON ao lado. Registradas as três decisões e o motivo de cada uma — artefato **não versionado** (cópia versionada envelhece em silêncio), metadados **legíveis sem abrir o pickle** (é preciso saber o que é o arquivo antes de executá-lo), e recusa de artefato desconhecido porque 🚨 **`joblib.load` executa código** e o pickle de um `Pipeline` falha em silêncio entre versões do scikit-learn. §10 troca a pendência: sai "persistir o modelo", entra "**passo de deploy que rode `treinar_final`**", já que o artefato é derivado. |
