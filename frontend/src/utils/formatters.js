@@ -28,6 +28,56 @@ export function formatarQuantidadeEspecies(total) {
   return `${total} ${total === 1 ? 'especie cadastrada' : 'especies cadastradas'}`;
 }
 
+/**
+ * Um número, ou nada — nunca zero por acidente.
+ *
+ * 🚨 **`Number(null)` é `0`, e `Number('')` também.** Foi assim que a régua da
+ * costa nasceu errada: `Number.isFinite(Number(local.latitude))` devolve `true`
+ * para uma latitude nula, e a APA Costa dos Corais e o Recife de Fora — os dois
+ * locais cadastrados **sem** coordenada, de propósito, para não inventar a
+ * posição de onde o satélite mediu — apareciam plotados no **equador**, no topo
+ * da régua e no topo da lista ordenada de norte a sul.
+ *
+ * É a mesma falha de categoria que o projeto persegue no resto do código:
+ * ausência de dado virando o menor dos valores. Aqui ela é silenciosa porque
+ * `isFinite` diz que sim.
+ */
+export function numeroOuNulo(valor) {
+  if (valor === null || valor === undefined || valor === '') {
+    return null;
+  }
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+/**
+ * Latitude em grau e minuto, para a coluna e a régua da costa.
+ *
+ * ⚠️ Grau e minuto, e **não** a decimal com quatro casas da ficha. Os dois
+ * números respondem perguntas diferentes: aqui a latitude serve para ordenar a
+ * costa de norte a sul e situar o leitor, e "17°58′ S" faz isso melhor que
+ * "-17.9720". A decimal continua na ficha do local, onde existe para ser colada
+ * num mapa — ver `FichaDoLocal.formatarCoordenadas`.
+ */
+export function formatarLatitudeCurta(latitude) {
+  const valor = numeroOuNulo(latitude);
+  if (valor === null) {
+    return null;
+  }
+
+  const absoluto = Math.abs(valor);
+  let graus = Math.floor(absoluto);
+  let minutos = Math.round((absoluto - graus) * 60);
+
+  // 59,7' arredonda para 60' e sairia como "17°60′".
+  if (minutos === 60) {
+    graus += 1;
+    minutos = 0;
+  }
+
+  return `${graus}°${String(minutos).padStart(2, '0')}′ ${valor < 0 ? 'S' : 'N'}`;
+}
+
 export function scrollToTopo() {
   if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
     try {

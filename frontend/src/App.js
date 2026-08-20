@@ -100,14 +100,14 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout min-h-screen overflow-x-hidden bg-sand-light text-gray-800">
+    <div className="app-layout min-h-screen overflow-x-hidden bg-sand-lightest text-ocean-deep">
       <Header paginaAtual={paginaAtual} usuario={usuario} onLogout={logout} />
 
-      <main className={`main-content flex-1 ${paginaAtual === 'recifes' ? 'bg-sand-lightest' : ''}`}>
+      <main className="main-content flex-1">
         {siteOffline && paginaAtual !== 'home' && (
-          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-              <strong>Modo manutencao:</strong>{' '}
+          <div className="faixa pt-8">
+            <div className="bloco-procedencia text-sm leading-relaxed text-ocean-deep/80">
+              <strong className="text-terra-dark">Modo manutencao:</strong>{' '}
               {offlineMessage ||
                 'Site em manutencao para reestruturacao do backend e banco de dados.'}
             </div>
@@ -117,7 +117,19 @@ export default function App() {
         <Routes>
           <Route
             path={ROTAS_APP.home}
-            element={<HomePage siteOffline={siteOffline} offlineMessage={offlineMessage} />}
+            element={
+              // A home do desenho 3a nao e mais so uma vitrine: a faixa escura
+              // mostra o mesmo monitor da listagem, entao ela precisa dos
+              // mesmos locais que `RecifesPage`. Buscar de novo aqui daria duas
+              // leituras do mesmo endpoint por sessao e duas listas livres para
+              // divergir enquanto uma carrega.
+              <HomePage
+                siteOffline={siteOffline}
+                offlineMessage={offlineMessage}
+                locais={locais}
+                carregandoLocais={carregandoLocais}
+              />
+            }
           />
           {/* `usuario` chega ate aqui porque metade do catalogo passou a ser
               baixavel deste projeto, e nao do provedor - e esse download exige

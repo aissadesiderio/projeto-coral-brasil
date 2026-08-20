@@ -103,13 +103,31 @@ class LocalRecifeAdmin(SyncToCodeAdminMixin, admin.ModelAdmin):
                     'latitude',
                     'longitude',
                     'profundidade_media_m',
-                    'area_km2',
                     'fonte_coordenadas',
                 ),
                 'description': (
                     'Define de onde os conectores de ingestao extraem dados. '
                     'Sem latitude e longitude, o local fica fora do pipeline. '
                     'Registre sempre a origem das coordenadas.'
+                ),
+            },
+        ),
+        (
+            'Areas',
+            {
+                'fields': (
+                    'area_uc_km2',
+                    'fonte_area_uc',
+                    'area_recifal_km2',
+                    'fonte_area_recifal',
+                ),
+                'description': (
+                    'Duas perguntas diferentes, com ate tres ordens de grandeza '
+                    'entre elas: Abrolhos tem 879,43 km2 de parque e ~8 km2 de '
+                    'recife mapeado. Preencha a area da UC so quando o local FOR '
+                    'uma unidade de conservacao — a area da APA nao e a area do '
+                    'recife que ela contem. Nunca derive uma area da outra, e '
+                    'nunca grave numero sem preencher a fonte ao lado.'
                 ),
             },
         ),

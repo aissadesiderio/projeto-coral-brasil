@@ -169,7 +169,15 @@ class LocalRecifeListSerializer(serializers.ModelSerializer):
             # sobre um recife. Vazio continua vazio; quem le a tela distingue
             # "nao registrado" de "nao existe".
             'profundidade_media_m',
-            'area_km2',
+            # ⚠️ Cada area viaja **com a sua fonte**, e nao com uma fonte
+            # comum. Sao medidas de coisas diferentes — o decreto da UC e um
+            # mapeamento por satelite —, e uma tela que mostrasse "879,43 km²"
+            # sem dizer que e o parque, e nao o recife, repetiria o erro de
+            # categoria que motivou separar os dois campos (migracao 0031).
+            'area_uc_km2',
+            'fonte_area_uc',
+            'area_recifal_km2',
+            'fonte_area_recifal',
             # --- proveniencia da foto (migracao 0030) ----------------------
             # ⚠️ `imagem_url` continua saindo com o que houver no banco, com ou
             # sem credito — a regra de "sem procedencia nao entra" vale para a

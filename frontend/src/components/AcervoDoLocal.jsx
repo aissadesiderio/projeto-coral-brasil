@@ -29,17 +29,17 @@ import { formatarData } from '../utils/formatters';
  */
 
 const CLASSES_DO_PAPEL = {
-  feature: 'border-ocean-dark/30 bg-ocean-light/10 text-ocean-dark',
-  alvo: 'border-terra/40 bg-terra/10 text-terra',
-  contexto: 'border-slate-200 bg-slate-50 text-slate-600',
-  opcional: 'border-slate-200 bg-slate-50 text-slate-600',
+  feature: 'border-ocean-dark/30 bg-ocean-light/15 text-ocean-dark',
+  alvo: 'border-terra/40 bg-terra/10 text-terra-dark',
+  contexto: 'border-ocean-deep/12 bg-sand-lightest text-ocean-deep/60',
+  opcional: 'border-ocean-deep/12 bg-sand-lightest text-ocean-deep/60',
 };
 
 function SeloPapel({ papel, rotulo }) {
   const classes = CLASSES_DO_PAPEL[papel] || CLASSES_DO_PAPEL.opcional;
   return (
     <span
-      className={`inline-flex w-fit items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${classes}`}
+      className={`inline-flex w-fit items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-2xs font-semibold ${classes}`}
     >
       {rotulo}
     </span>
@@ -49,9 +49,9 @@ function SeloPapel({ papel, rotulo }) {
 export default function AcervoDoLocal({ acervo = [] }) {
   if (!Array.isArray(acervo) || acervo.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-6 text-center text-sm text-gray-500">
+      <p className="superficie px-6 py-8 text-center text-sm text-ocean-deep/55">
         Nenhuma medicao ingerida para esta localizacao ate agora.
-      </div>
+      </p>
     );
   }
 
@@ -59,40 +59,45 @@ export default function AcervoDoLocal({ acervo = [] }) {
   const noModelo = acervo.filter((item) => item.entra_no_modelo).length;
 
   return (
-    <div className="space-y-3">
-      <p className="flex flex-wrap items-center gap-2 rounded-xl border border-ocean-light/30 bg-ocean-light/5 p-3 text-sm text-ocean-dark">
-        <Database size={16} />
+    <div className="space-y-4">
+      <p className="flex flex-wrap items-center gap-2 text-[15px] leading-relaxed text-ocean-deep/70">
+        <Database size={16} className="text-terra" />
         <span>
-          <strong>{total.toLocaleString('pt-BR')} medicoes</strong> em{' '}
-          {acervo.length} variavel(is). {noModelo} delas entra(m) na previsao; as
+          <strong className="font-semibold text-ocean-deep">
+            {total.toLocaleString('pt-BR')} medicoes
+          </strong>{' '}
+          em {acervo.length} variavel(is). {noModelo} delas entra(m) na previsao; as
           demais o projeto guarda e serve mesmo sem usar.
         </span>
       </p>
 
-      <div className="overflow-x-auto rounded-2xl border border-sand-dark/20 bg-white shadow-sm">
-        <table className="w-full min-w-[44rem] border-collapse text-left text-sm">
+      <div className="overflow-x-auto rounded-xl bg-white shadow-superficie">
+        <table className="w-full min-w-[46rem] border-collapse text-left text-sm">
           <thead>
-            <tr className="border-b border-sand-dark/20 text-xs uppercase tracking-[0.12em] text-slate-500">
-              <th scope="col" className="px-4 py-3 font-semibold">Variavel</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Medicoes</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Periodo</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Fonte</th>
-              <th scope="col" className="px-4 py-3 font-semibold">No modelo</th>
+            <tr className="cabecalho-tabela">
+              <th scope="col" className="rotulo-mono px-5 py-3 font-normal sm:px-6">variavel</th>
+              <th scope="col" className="rotulo-mono px-5 py-3 font-normal">medicoes</th>
+              <th scope="col" className="rotulo-mono px-5 py-3 font-normal">periodo</th>
+              <th scope="col" className="rotulo-mono px-5 py-3 font-normal">fonte</th>
+              <th scope="col" className="rotulo-mono px-5 py-3 font-normal">no modelo</th>
             </tr>
           </thead>
           <tbody>
             {acervo.map((item) => (
-              <tr key={item.variavel} className="border-b border-sand-dark/10 last:border-b-0">
-                <th scope="row" className="px-4 py-3 align-top font-semibold text-ocean-dark">
+              <tr key={item.variavel} className="border-b border-ocean-deep/8 last:border-b-0">
+                <th
+                  scope="row"
+                  className="px-5 py-3.5 align-top font-serif text-lg font-normal text-ocean-deep sm:px-6"
+                >
                   {item.nome}
                   {item.unidade && (
-                    <span className="ml-1 font-normal text-slate-500">({item.unidade})</span>
+                    <span className="ml-1 text-sm text-ocean-deep/55">({item.unidade})</span>
                   )}
-                  <span className="mt-0.5 block font-mono text-xs font-normal text-slate-400">
+                  <span className="mt-0.5 block font-mono text-3xs font-normal text-ocean-deep/40">
                     {item.variavel}
                   </span>
                 </th>
-                <td className="whitespace-nowrap px-4 py-3 align-top text-slate-700">
+                <td className="whitespace-nowrap px-5 py-3.5 align-top">
                   {/* O numero vem com o link que o devolve. Sem isso, "7.173
                       medicoes" e uma afirmacao sem recibo — mesmo criterio de
                       `cobertura._consulta_de_medicoes`. */}
@@ -100,21 +105,21 @@ export default function AcervoDoLocal({ acervo = [] }) {
                     href={item.consulta}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-semibold text-ocean-dark hover:underline"
+                    className="font-mono text-[15px] font-medium text-ocean-dark hover:underline"
                   >
                     {(item.n_medicoes || 0).toLocaleString('pt-BR')}
                   </a>
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">
+                <td className="whitespace-nowrap px-5 py-3.5 align-top font-mono text-2xs text-ocean-deep/60">
                   {formatarData(item.data_inicio)} a {formatarData(item.data_fim)}
                 </td>
-                <td className="px-4 py-3 align-top font-mono text-xs text-slate-500">
+                <td className="px-5 py-3.5 align-top font-mono text-2xs text-ocean-deep/50">
                   {(item.fontes || []).join(', ')}
                 </td>
-                <td className="px-4 py-3 align-top">
+                <td className="px-5 py-3.5 align-top">
                   <SeloPapel papel={item.papel} rotulo={item.papel_rotulo} />
                   {item.motivo && (
-                    <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-slate-500">
+                    <p className="mt-2 max-w-xs text-2xs leading-relaxed text-ocean-deep/55">
                       {item.motivo}
                     </p>
                   )}

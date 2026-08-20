@@ -33,11 +33,11 @@ export default function ImagemRecife({
   const fallbackClassName = className.replace('object-cover', '').trim();
 
   const legenda = mostrarCredito ? (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-sand-dark/10 bg-sand-lightest/70 px-4 py-2 text-xs text-slate-500">
+    <figcaption className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-sand-nota px-5 py-2.5 font-mono text-3xs tracking-[0.04em] text-ocean-deep/55">
       <span>
         {credito ? `Foto: ${credito}` : 'Foto sem credito informado'}
         {localCaptura && (
-          <span className="text-slate-400"> — tirada em {localCaptura}</span>
+          <span className="text-ocean-deep/40"> — tirada em {localCaptura}</span>
         )}
       </span>
 
@@ -52,7 +52,7 @@ export default function ImagemRecife({
           Ver fonte da imagem
         </a>
       )}
-    </div>
+    </figcaption>
   ) : null;
 
   if (imagem) {
@@ -69,11 +69,11 @@ export default function ImagemRecife({
   // gradiente e do site. A legenda so acompanha uma foto de verdade.
   return (
     <div
-      className={`flex items-end bg-gradient-to-br from-ocean-dark via-ocean-light to-cyan-400 p-4 text-white ${fallbackClassName}`}
+      className={`flex items-end bg-gradient-to-br from-ocean-deep via-ocean-dark to-ocean-light p-5 text-white ${fallbackClassName}`}
     >
       <div>
-        <ImageOff size={18} className="mb-2 opacity-80" />
-        <p className="text-sm font-semibold">{nome}</p>
+        <ImageOff size={18} className="mb-2 opacity-70" />
+        <p className="font-serif text-lg">{nome}</p>
       </div>
     </div>
   );

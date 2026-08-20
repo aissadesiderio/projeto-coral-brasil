@@ -5,9 +5,11 @@ guardava e nao mostrava**.
 
 1. Oito variaveis ingeridas por recife, duas exibidas. As outras seis — ~7.200
    medicoes de cada, desde 2020 — nao apareciam em numero nenhum do site.
-2. `profundidade_media_m` e `area_km2` no modelo desde a migracao `0014`, nunca
-   num serializer. Nenhuma previsao usa esses campos, e foi exatamente por isso
-   que a ausencia nao quebrou nada por um mes.
+2. `profundidade_media_m` e a area no modelo desde a migracao `0014`, nunca num
+   serializer. Nenhuma previsao usa esses campos, e foi exatamente por isso que
+   a ausencia nao quebrou nada por um mes. O campo de area virou **dois** em
+   13/08/2026 (migracao `0031`), com uma fonte para cada — ver
+   `AreasSemeadasTests`.
 
 E um terceiro, de outra familia: a foto do local nao tinha **onde** registrar
 autor, fonte ou local de captura (migracao `0030`). Ver docs/FONTES.md §2.2.
@@ -144,7 +146,8 @@ class DetalheDoLocalNaApiTests(TestCase):
             latitude=-17.972, longitude=-38.688,
             fonte_coordenadas='ICMBio',
             profundidade_media_m=10.0,
-            area_km2=913.0,
+            area_uc_km2=879.43,
+            fonte_area_uc='ICMBio - 87.943 ha, Dec. 88.218/1983',
         )
         _medicao(self.local, 'sst', date(2026, 7, 24), unidade='°C')
 
@@ -162,7 +165,16 @@ class DetalheDoLocalNaApiTests(TestCase):
         detalhe = self._detalhe()
 
         self.assertEqual(detalhe['profundidade_media_m'], 10.0)
-        self.assertEqual(detalhe['area_km2'], 913.0)
+        self.assertEqual(detalhe['area_uc_km2'], 879.43)
+
+    def test_cada_area_viaja_com_a_propria_fonte(self):
+        """🚨 O numero sozinho nao e citavel, e pior: 879,43 km² sem "e o
+        parque, nao o recife" e lido como area de recife. Ver migracao 0031."""
+        detalhe = self._detalhe()
+
+        self.assertIn('87.943 ha', detalhe['fonte_area_uc'])
+        self.assertIn('area_recifal_km2', detalhe)
+        self.assertIn('fonte_area_recifal', detalhe)
 
     def test_coordenada_vem_com_a_origem_junto(self):
         detalhe = self._detalhe()
@@ -190,6 +202,72 @@ class DetalheDoLocalNaApiTests(TestCase):
         resposta = self.client.get(reverse('local_recife_list'))
 
         self.assertIn('profundidade_media_m', resposta.json()[0])
+
+
+class AreasSemeadasTests(TestCase):
+    """Os valores que a migracao `0031` gravou, e os que ela deixou nulos.
+
+    🚨 **Os nulos sao o conteudo deste teste, tanto quanto os numeros.** Tres
+    locais nao sao unidades de conservacao — sao feicoes recifais dentro de UCs
+    maiores. A "correcao" obvia para quem vier depois e preencher com a area da
+    APA que os contem, e ela transformaria o parracho de Maracajau num poligono
+    de 1.360 km². Este teste existe para essa correcao falhar alto.
+    """
+
+    # Nao sao UC propria: dentro da APA dos Recifes de Corais (RN), dentro da
+    # APA Costa dos Corais, e sem protecao legal vigente, respectivamente.
+    SEM_UC_PROPRIA = (
+        'parrachos-de-maracajau-rn', 'porto-de-galinhas-pe', 'picaozinho-pb',
+    )
+
+    def test_area_da_uc_veio_com_fonte_em_todos_os_que_tem_numero(self):
+        """Nao ha area sem fonte. A regra vale para os 10, e o teste nao lista
+        quais tem numero de proposito — um local novo com area e sem fonte
+        precisa quebrar aqui."""
+        for local in LocalRecife.objects.all():
+            if local.area_uc_km2 is not None:
+                self.assertTrue(
+                    local.fonte_area_uc,
+                    f'{local.slug} tem area de UC sem fonte registrada',
+                )
+
+    def test_abrolhos_guarda_o_parque_e_nao_o_banco(self):
+        """🚨 O numero que quase entrou errado.
+
+        Abrolhos tem quatro areas publicadas: ~8 km² de recife mapeado,
+        879,43 km² de parque, 6.000 km² de ecossistema recifal do banco norte e
+        45.000 km² de Banco. `area_uc_km2` e a segunda — e a fonte diz qual.
+        """
+        local = LocalRecife.objects.filter(slug='abrolhos-ba').first()
+        if local is None:
+            self.skipTest('banco sem o seed de locais')
+
+        self.assertAlmostEqual(local.area_uc_km2, 879.43, places=2)
+        self.assertIn('87.943 ha', local.fonte_area_uc)
+
+    def test_feicao_recifal_dentro_de_uc_maior_nao_herda_a_area_da_uc(self):
+        """🚨 Gravar aqui a area da APA que contem o local seria atribuir a
+        area do continente a ilha."""
+        for slug in self.SEM_UC_PROPRIA:
+            local = LocalRecife.objects.filter(slug=slug).first()
+            if local is None:
+                continue
+            self.assertIsNone(
+                local.area_uc_km2,
+                f'{slug} nao e unidade de conservacao propria',
+            )
+
+    def test_nenhuma_area_recifal_foi_afirmada_sem_fonte_conferida(self):
+        """⚠️ Ha um numero circulando para Abrolhos (~8 km², WorldView-2), mas a
+        publicacao esta atras de paywall e autores/ano/DOI nao foram
+        conferidos. Gravar assim repetiria a §3.1 do FONTES — referencia nao
+        identificada usada como dado."""
+        for local in LocalRecife.objects.all():
+            if local.area_recifal_km2 is not None:
+                self.assertTrue(
+                    local.fonte_area_recifal,
+                    f'{local.slug} tem area recifal sem fonte registrada',
+                )
 
 
 @override_settings(OFFLINE_MODE=False)
@@ -270,13 +348,24 @@ class ProcedenciaDaFotoDoLocalTests(TestCase):
             latitude=-17.972, longitude=-38.688,
             fonte_coordenadas='ICMBio',
             profundidade_media_m=10.0,
-            area_km2=913.0,
+            area_uc_km2=879.43,
+            fonte_area_uc='ICMBio - 87.943 ha, Dec. 88.218/1983',
         )
 
         self.assertEqual(exportado['latitude'], -17.972)
         self.assertEqual(exportado['fonte_coordenadas'], 'ICMBio')
         self.assertEqual(exportado['profundidade_media_m'], 10.0)
-        self.assertEqual(exportado['area_km2'], 913.0)
+        self.assertEqual(exportado['area_uc_km2'], 879.43)
+
+    def test_a_fonte_da_area_acompanha_a_area_na_copia_versionada(self):
+        """⚠️ Numero sem lastro dentro de um `.js` sobrevive a limpeza do banco
+        — a combinacao que a §2.1 do FONTES ensinou a evitar."""
+        exportado = self._exportado(
+            area_uc_km2=879.43,
+            fonte_area_uc='ICMBio - 87.943 ha, Dec. 88.218/1983',
+        )
+
+        self.assertIn('87.943 ha', exportado['fonte_area_uc'])
 
     def test_campo_nao_registrado_sai_nulo_e_nao_zero(self):
         """⚠️ Zero em profundidade e uma afirmacao fisica ("recife na
@@ -285,4 +374,5 @@ class ProcedenciaDaFotoDoLocalTests(TestCase):
         exportado = self._exportado()
 
         self.assertIsNone(exportado['profundidade_media_m'])
-        self.assertIsNone(exportado['area_km2'])
+        self.assertIsNone(exportado['area_uc_km2'])
+        self.assertIsNone(exportado['area_recifal_km2'])

@@ -41,23 +41,27 @@ export function obterPaginaAtual(pathname) {
   return 'home';
 }
 
+/**
+ * A navegação é **fixa**, e a página atual vem marcada.
+ *
+ * 🚨 Até 13/08/2026 este arquivo devolvia um conjunto diferente de links por
+ * página — a atual sumia da barra. O efeito era que a barra mudava de tamanho a
+ * cada rota e nunca dizia onde o visitante estava: numa listagem de três itens,
+ * "a que falta é onde você está" é uma pista que ninguém lê.
+ *
+ * Com o desenho 3a a barra tem os mesmos três destinos sempre, e o atual leva o
+ * filete terra embaixo. `ativo` sai daqui e não do componente para que a regra
+ * de "detalhe do recife também acende Localizações" viva num lugar só.
+ */
 export function obterItensNavegacao(paginaAtual) {
-  if (paginaAtual === 'banco') {
-    return [
-      { id: 'home', rotulo: 'Pagina inicial', to: ROTAS_APP.home },
-      { id: 'recifes', rotulo: 'Explorar recifes', to: ROTAS_APP.recifes },
-    ];
-  }
-
-  if (paginaAtual === 'recifes' || paginaAtual === 'detalhe') {
-    return [
-      { id: 'home', rotulo: 'Pagina inicial', to: ROTAS_APP.home },
-      { id: 'banco', rotulo: 'Banco de dados', to: ROTAS_APP.banco },
-    ];
-  }
-
   return [
-    { id: 'recifes', rotulo: 'Explorar recifes', to: ROTAS_APP.recifes },
-    { id: 'banco', rotulo: 'Banco de dados', to: ROTAS_APP.banco },
+    { id: 'home', rotulo: 'Costa', to: ROTAS_APP.home, ativo: paginaAtual === 'home' },
+    {
+      id: 'recifes',
+      rotulo: 'Localizacoes',
+      to: ROTAS_APP.recifes,
+      ativo: paginaAtual === 'recifes' || paginaAtual === 'detalhe',
+    },
+    { id: 'banco', rotulo: 'Dados', to: ROTAS_APP.banco, ativo: paginaAtual === 'banco' },
   ];
 }

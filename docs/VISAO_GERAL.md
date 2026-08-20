@@ -127,11 +127,27 @@ mais ao sul e mais frio, tem salinidade e oxigênio dissolvido mais altos —
 três, porque é o mesmo forçante atingindo a mesma costa. Não são três amostras
 independentes. Ver [VARIAVEIS.md](VARIAVEIS.md) §7.2.
 
-📌 **Atualização de 11/08/2026:** o catálogo de `LocalRecife` cresceu para dez
-locais (ver [FONTES.md](FONTES.md) §2.3.1) — mas os sete novos não têm série
-ambiental nem entraram no treino. Esta seção, o gradiente e o modelo treinado
-continuam descrevendo especificamente os três acima; catálogo maior não é
-cobertura maior.
+📌 **Atualização de 12/08/2026 — o modelo servido cobre oito recifes.** O
+catálogo cresceu para dez locais em 11/08 ([FONTES.md](FONTES.md) §2.3.1), cinco
+dos novos receberam ingestão completa, e o modelo foi **remedido e regravado**
+sobre os oito com série ([RESULTADOS.md](RESULTADOS.md) §25). Os dois restantes
+não têm coordenada de propósito: `apa-costa-dos-corais` é uma área de 12
+municípios e não um ponto, e `recife-de-fora-ba` não tinha coordenada publicada
+na fonte.
+
+| Local | Estado | Medições |
+|---|---|---|
+| Areia Vermelha | Paraíba | 19.278 |
+| Atol das Rocas | Rio Grande do Norte | 19.278 |
+| Fernando de Noronha | Pernambuco | 19.278 |
+| Parcel Manuel Luís | Maranhão | 19.278 |
+| Parrachos de Maracajaú | Rio Grande do Norte | 19.278 |
+
+⚠️ **A tabela do gradiente acima continua sendo sobre os três originais**, e ela
+não foi refeita: o argumento do gradiente latitudinal de ~11 graus foi construído
+com aqueles três, e estender a afirmação para oito exigiria remedir a
+comparação, não acrescentar linhas. **Catálogo maior não é análise maior** — o
+que mudou é a cobertura do modelo, não esta seção.
 
 ---
 
@@ -271,7 +287,8 @@ Justificativa completa de cada exclusão em [VARIAVEIS.md](VARIAVEIS.md) §6.
 Produto *Daily Global 5 km Coral Bleaching Heat Stress v3.1*. Acesso público
 por **ERDDAP**, um protocolo padrão de servidores oceanográficos.
 
-**43.038 medições**, 2020-01-01 a 2026-07-24, três locais, seis variáveis.
+**115.584 medições**, 2020-01-01 a 2026-08-10, **oito locais**, seis variáveis
+*(conferido por `manage.py auditar` em 14/08/2026)*.
 
 ⚠️ **A série tem 6 datas ausentes**, três delas consecutivas. Não é falha do
 pipeline — é lacuna do produto, confirmada em dois espelhos independentes.
@@ -326,7 +343,7 @@ completude inverteria o que cada uma vale como evidência.
           ↓            jamais zero
    [ persistência ]    upsert idempotente no PostgreSQL
           ↓            (local, data, variável, fonte)
-   [ PostgreSQL ]      fonte única da verdade — 57.420 medições
+   [ PostgreSQL ]      fonte única da verdade — 154.224 medições
           ↓
    [ dataset ]         backend/ml/dataset.py
           ↓            features em t, alvo em t+N, guardas contra vazamento
@@ -380,7 +397,7 @@ A linha gravada:
 |---|---|---|---|---|---|
 | Abrolhos | 2026-07-24 | `sst` | 28,4 | `noaa_crw` | `dhw_5km` |
 
-E ela **fica salva**, até alguém apagar. Hoje são **57.420 linhas** dessas.
+E ela **fica salva**, até alguém apagar. Hoje são **154.224 linhas** dessas.
 
 O Copernicus percorre o mesmo caminho. Duas diferenças: **exige senha** — que
 mora em `~/.copernicusmarine`, fora do repositório e nunca na linha de comando
@@ -389,20 +406,21 @@ mora em `~/.copernicusmarine`, fora do repositório e nunca na linha de comando
 ### 7.2 Onde cada coisa fica salva — são três lugares
 
 ```
-  PostgreSQL (Docker)   57.420 medições, 3 recifes, 2020–2026
+  PostgreSQL (Docker)   154.224 medições, 8 recifes, 2020–2026
                         ✅ é a fonte única da verdade da ENTREGA 1
 
   dados/                global_bleaching_environmental.csv  (o GCBD)
                         gcbd_janelas_ambientais.csv         (30.212 valores)
                         ✅ a ENTREGA 2 — não versionados, reconstruíveis
 
-  backend/dados/        ~260 MB de CSV de abril/2026
-                        ⛔ NÃO usados por nada — ver FONTES.md §6
+  backend/dados/        78 MB — os 9 CSV catalogados que sobraram da limpeza
+                        ⚠️ não alimentam o modelo, mas a página "Banco de
+                        Dados" os inventaria: apagá-los ESVAZIA a página
 ```
 
 **Por que a entrega 2 não entra no banco.** `MedicaoAmbiental` pendura em
-`LocalRecife`, e `LocalRecife` são os **três recifes monitorados**, com foto,
-slug e página pública. O GCBD tem **119 pontos de mergulho** onde alguém
+`LocalRecife`, e `LocalRecife` são os **recifes monitorados** — dez cadastrados,
+oito com série —, cada um com foto, slug e página pública. O GCBD tem **119 pontos de mergulho** onde alguém
 esteve uma vez em 2007. Cadastrá-los como `LocalRecife` criaria 119 recifes
 falsos no site para viabilizar um experimento. Ver [GCBD.md](GCBD.md).
 
@@ -474,8 +492,9 @@ O que ficou gravado hoje:
 |---|---|
 | Alvo | `baa ≥ 3` em t+7 |
 | Colunas | `sst_variacao_7d`, `dhw_variacao_7d`, `salinidade_variacao_7d`, `oxigenio_variacao_7d` |
-| Amostras | 7.095, com 596 positivas (8,4%) |
-| Locais | os três |
+| Amostras | 19.056, com 1.643 positivas (8,6%) |
+| Locais | os **oito** com série |
+| Gerado em | 12/08/2026 |
 
 **Três decisões, e nenhuma é óbvia:**
 
@@ -663,17 +682,17 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | | |
 |---|---|
 | **Ingestão automatizada** | NOAA e Copernicus, com retentativa, proveniência por valor e registro de execução |
-| **57.420 medições** | 2020–2026, três locais, oito variáveis |
+| **154.224 medições** | 2020–2026, **oito locais**, oito variáveis — conferido por `manage.py auditar` em 14/08/2026 |
 | **PostgreSQL** | fonte única, subindo por Docker |
 | **Conjunto supervisionado** | features em `t`, alvo em `t+N`, com guardas contra vazamento |
-| **Duas linhas de base** | persistência (F1 0,738) e a **regra publicada da NOAA** (F1 0,779, o piso mais alto) — [RESULTADOS.md](RESULTADOS.md) §24 |
-| **Modelo treinado e comparado** | no ponto de operação do site: detecta **17 de 19 episódios** contra 15 das duas linhas de base, cobrando 11 alarmes falsos contra 6 |
+| **Duas linhas de base** | persistência (F1 0,695) e a **regra publicada da NOAA** (F1 0,739, o piso mais alto) — [RESULTADOS.md](RESULTADOS.md) §24 e §25 |
+| **Modelo treinado e comparado** | remedido sobre os oito recifes em 12/08/2026: detecta **44 de 50 episódios** contra 40 da persistência e 39 da regra da NOAA, cobrando **35 alarmes falsos contra 13 e 21** ([RESULTADOS.md](RESULTADOS.md) §25) |
 | **Importância das variáveis** | medida: DHW e SST respondem por >95% da capacidade preditiva |
 | **GCBD, passo 1** | branqueamento **observado** como alvo, sem ingerir nada: a régua da NOAA pega 10 dos 88 eventos brasileiros ([RESULTADOS.md](RESULTADOS.md) §11) |
 | **GCBD, passo 2** | 30.212 valores de salinidade e O₂ nos 90 dias antes de cada visita: **não acrescentam sinal** (§15–§19) |
 | **A pergunta científica respondida** | com os dados disponíveis, e com a ressalva de resolução declarada |
 | **Documentação em .docx** | artefato derivado, regerável com `manage.py exportar_docs` |
-| **Projeção do Neo4j** | 57.420 medições no grafo, com proveniência por valor, conferidas contra o Postgres |
+| **Projeção do Neo4j** | reconstruída do PostgreSQL e conferida item a item por `neo4j_projetar`. ⚠️ O número medido — 172.286 elementos sobre 57.420 medições, em 16 s — é de **27/07/2026** e não foi remedido depois de a série triplicar |
 | **Modelo persistido** | `manage.py treinar_final` grava `.joblib` + metadados legíveis; o carregamento recusa artefato de outra origem ou versão (§7.4) |
 | **Calibração medida e corrigida** | o modelo prometia **o dobro** do que acontecia; recalibração isotônica levou o ECE de 0,081 a **0,0039** ([RESULTADOS.md](RESULTADOS.md) §22) |
 | **API da série ambiental** | `/api/medicoes/`, com proveniência por valor, filtros combináveis e paginação com teto |
@@ -684,7 +703,8 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 | **Site consumindo o backend real** | painel e série saem da API; a camada legada do frontend caiu em 28/07 e o modelo `StatusPredicao` em 30/07 |
 | **Passo de deploy** | `manage.py preparar_deploy` reconstrói os três derivados em ordem e para no primeiro erro |
 | **CI** | verde desde 30/07/2026, backend e frontend |
-| **679 testes de backend + 117 de frontend** | rodam offline *(medido em 31/07/2026)* |
+| **Auditoria da cadeia** | `manage.py auditar` (13/08/2026) monta o retrato de fontes, cobertura, execuções e modelos **contando do dado, na hora**, declara as lacunas com a consequência de cada uma, e **sai com código 1** quando alguma impede citação. O artefato do modelo passou a carimbar de qual commit saiu |
+| **892 testes de backend + 168 de frontend** | rodam offline, os dois verdes. ⚠️ Medidos em **14/08/2026 sobre a árvore atual**, que tem trabalho não commitado — os últimos números sobre árvore limpa são **768 e 140**, de 12/08 |
 
 ### Falta
 
@@ -692,11 +712,11 @@ porque o DHW futuro não é conhecido hoje. Detalhe em
 |---|---|
 | **Publicar** | hospedagem, domínio e o `atualizar` num agendador. É o único item que bloqueia literalmente *"ter um site"* |
 | **Gravar o que foi previsto** | o alerta é calculado na requisição e evapora. Sem isso não há como responder *"o que o site dizia no dia 12/03?"*, nem medir desempenho em produção |
-| **Proveniência das espécies** | ⏳ **esquema pronto em 31/07, dados pendentes.** Os campos existem (`iucn_avaliado_em`, `iucn_versao`, `aphia_id`, `gbif_key`) e a tela deixou de afirmar categoria sem ano — mas os **anos ainda não foram coletados** nas 9 espécies, e a ocorrência espécie↔local continua sendo um vínculo sem quem viu, quando e por qual método ([FONTES.md](FONTES.md) §2.4) |
-| **Só três recifes com série e modelo** | catálogo cresceu para dez locais em 11/08/2026 ([FONTES.md](FONTES.md) §2.3.1) — cinco novos têm coordenada mas nenhuma medição ingerida ainda, dois ficaram sem coordenada (um é área, não ponto; o outro não tem fonte publicada). A **previsão** continua restrita aos três originais até um retreino medido |
+| **Proveniência de 3 espécies** | ⏳ esquema pronto em 31/07, dados preenchidos em 04/08. Restam **três sem procedência da IUCN** — `Condylactis gigantea`, `Muricea flamma` e `Phyllogorgia dilatata` (medido por `auditar` em 14/08/2026): a categoria delas não é exibida nem citável. E a ocorrência espécie↔local continua sendo um vínculo **sem quem viu, quando e por qual método** ([FONTES.md](FONTES.md) §2.4) |
+| **Dois locais sem série** | `apa-costa-dos-corais` e `recife-de-fora-ba` não entram no pipeline porque não têm coordenada — e não é lacuna a preencher: o primeiro é uma **área de 12 municípios e não um ponto**, o segundo não tinha coordenada publicada na fonte. Ficam cadastrados sem série, declarados como tal ([FONTES.md](FONTES.md) §2.3.1) |
 | **Contrato da API documentado** | sem OpenAPI, e sem URL própria por espécie — não dá para linkar nem indexar uma espécie, o que para um acervo é requisito |
-| **Investigar 2022** | único ano em que o modelo perde. Duas pistas agora: menor dependência do DHW, e a **regra da NOAA erra o mesmo ano** (§24.4) |
-| **Variáveis canônicas aprovadas** | item de go-live ainda aberto |
+| ✅ ~~**Investigar 2022**~~ | **Resolvido em 09/08/2026.** Continua sendo o único ano em que o modelo perde, mas a causa não é do modelo: nos nove dias do episódio o BAA gravado diz alerta com DHW **e** HotSpot abaixo de 1,0 — artefato da agregação (BAA por **máximo** de pixel, DHW/HotSpot por **média**), na sua forma mais extrema do dataset ([RESULTADOS.md](RESULTADOS.md) §6.1) |
+| ✅ ~~**Variáveis canônicas aprovadas**~~ | **Fechado em 28/07/2026** — item de go-live, auditado nos dois sentidos, com `thetao` removido de `sst` e três nomes sem dado agora com motivo declarado e travado por teste |
 | **Apagar os 9 CSVs ainda catalogados** | ⚠️ **Decisão pendente, não faxina.** Os 7 arquivos defeituosos (179,9 MB) foram apagados em 28/07/2026; sobram 80 MB que a página "Banco de Dados" inventaria. Apagá-los **esvazia a página** — ver [FONTES.md](FONTES.md) §6.21 |
 | **A referência não identificada do código legado** | ⛔ bloqueia submissão, não o site. Seis afirmações com marcadores `[cite: N]` apontando para um documento que ninguém localizou ([FONTES.md](FONTES.md) §7.3) |
 | **Dado *in situ* de salinidade e O₂** | resolveria a ressalva de §18, mas não existe para os sítios do GCBD |
@@ -707,6 +727,22 @@ quatro itens já entregues — o site consumir o `painel-risco`, o nome honesto 
 produto na interface, o passo de deploy e o CI. Uma lista de pendências que
 inclui trabalho feito é pior que nenhuma: ela é lida como o estado do projeto, e
 esconde o que de fato falta.
+
+🚨 **E aconteceu de novo, entre 12 e 14/08/2026.** Esta seção afirmava *"só três
+recifes com série e modelo"* e *"a previsão continua restrita aos três originais
+até um retreino medido"* — com o retreino **já feito e medido em 12/08**
+([RESULTADOS.md](RESULTADOS.md) §25). A §3 e a §7.4 diziam o mesmo. Junto vieram
+mais quatro afirmações vencidas: 57.420 medições (são 154.224), 679 testes (são
+768), 2022 em aberto (fechado em 09/08) e as variáveis canônicas como item de
+go-live pendente (fechado em 28/07).
+
+📌 **O que vale registrar é como isso foi descoberto:** não foi lendo o
+documento, e sim **montando um resumo do projeto fora do repositório** e
+esbarrando na contradição entre o que este arquivo dizia e o que
+`dados/modelos/entrega1_baa.json` declarava. O RESULTADOS.md foi atualizado no
+mesmo commit do retreino, como manda a diretriz §4.3 — o VISAO_GERAL, não. **A
+regra pega o documento onde a mudança acontece e erra os documentos que
+dependem dela**, e este é o que mais gente lê primeiro.
 
 ---
 
@@ -760,6 +796,7 @@ O catálogo completo, com medição de cada um, está em [FONTES.md](FONTES.md) 
 
 | Data | Alteração |
 |---|---|
+| 14/08/2026 | 🚨 **§3, §6, §7 e §10 corrigidas — o documento descrevia um modelo de três recifes que deixou de existir em 12/08.** O artefato servido (`entrega1_baa.json`) declara **oito locais e 19.056 amostras** desde o retreino medido de 12/08 ([RESULTADOS.md](RESULTADOS.md) §25), e este arquivo continuava afirmando que a previsão estava *"restrita aos três originais até um retreino medido"* — uma pendência que descrevia trabalho já feito, o mesmo defeito que a própria §10 registra ter cometido em 31/07. Corrigidas junto seis afirmações vencidas: **154.224 medições** (eram 57.420, conferido por `manage.py auditar` contra o banco real), o placar do modelo (**44/50 episódios** contra 40 e 39 das linhas de base, cobrando 35 alarmes falsos contra 13 e 21), os F1 das duas linhas de base, **768 testes de backend + 140 de frontend**, e dois itens da lista "Falta" que estavam fechados havia semanas — investigar 2022 (09/08) e variáveis canônicas aprovadas (28/07). Acrescentada a auditoria como item pronto. ⚠️ **A tabela do gradiente latitudinal em §3 foi deliberadamente NÃO estendida**: o argumento dos ~11 graus foi construído com os três originais, e acrescentar cinco linhas afirmaria uma comparação que ninguém remediu. Os cinco recifes novos entram numa tabela à parte, de cobertura. ⚠️ Registrado também que a contagem da projeção do Neo4j (172.286 elementos) é de 27/07 e **não foi remedida** depois de a série triplicar — em vez de atualizar o número por dedução. Corrigidas também as §6 e §7, que traziam a mesma afirmação em outra forma: a contagem do CRW (**115.584**, não 43.038, e até 2026-08-10), os três lugares onde o diagrama do caminho do dado dizia 57.420, o `backend/dados/` descrito como *"~260 MB de abril/2026, NÃO usados por nada"* (são **78 MB** desde a limpeza de 28/07, e a página "Banco de Dados" os inventaria — apagá-los esvazia a página), e `LocalRecife` como "os três recifes monitorados". Fora deste arquivo, dois números do mesmo evento: o JSON de exemplo do artefato em [arquitetura.md](arquitetura.md) e a contagem de degraus da calibração em [SISTEMA_SIMPLES.md](SISTEMA_SIMPLES.md) — este **datado em vez de atualizado**, porque o número de degraus depende do conjunto e não se deduz. ⚠️ **As contagens de teste também estavam vencidas, e foram remedidas em vez de copiadas:** 892 no backend (`OK (skipped=1)`) e 168 no frontend (17 suítes), contra os 768 e 140 registrados em 12/08 — a diferença é o trabalho ainda não commitado, e por isso os dois pares ficam declarados lado a lado. 📌 O erro foi descoberto **de fora do repositório**, ao montar um resumo do projeto no Notion e esbarrar na contradição entre este arquivo e o JSON do artefato. |
 | 11/08/2026 | **Catálogo de locais cresceu de três para dez** — sete novos em `LocalRecife` a partir de uma tabela de referência trazida na conversa, sem fonte primária citada; coordenadas convertidas de graus/minutos/segundos e marcadas pendentes de verificação (ICMBio). Dois ficaram sem coordenada de propósito: `apa-costa-dos-corais` é uma área de 12 municípios, não um ponto, e `recife-de-fora-ba` não tinha coordenada exata publicada na tabela de origem. §3 e §10 atualizadas para não confundir *locais cadastrados* com *locais monitorados* — o modelo treinado e a série de 57.420 medições continuam restritos aos três originais. Corrigido também um defeito na projeção do Neo4j: `descricao` e `ultima_atualizacao` nunca eram gravados no grafo, então todo local — os três originais inclusive — saía sem descrição na API. Ver [FONTES.md](FONTES.md) §2.3.1. |
 | 27/07/2026 | ✅ **§7 e §10 atualizadas — o caminho do dado chegou até a tela.** O diagrama ganhou os dois passos que faltavam: **artefato** (`dados/modelos/*.joblib`) e **predição** (`ml/predicao.py`), este último montando a janela de **hoje**, para a qual o alvo ainda não existe. Registrado por que os dois ramos — treinar e responder — não podem ser dois códigos: se divergirem, o modelo recebe colunas com o nome certo e o conteúdo errado e responde sem erro nenhum, então `predicao.py` traduz o nome da coluna de volta numa `dataset.Janela` e chama o mesmo `aplicar_janela`. Em §10 entram como prontos a **API da série ambiental** e a **predição servida**; entram como pendências o site consumir o painel — com a proibição nova de exibir "0%" ou "100%" (§22.8 de [RESULTADOS.md](RESULTADOS.md)) — e a **aprovação do limiar 0,20**, que hoje está no `settings` por ser o ponto equivalente ao antigo 0,50, e não por decisão de produto. |
 | 27/07/2026 | §10 atualizada: **projeção do Neo4j concluída** — o grafo deixou de mostrar dado legado e passou a ter as 57.420 medições com proveniência por valor. Também entram em "pronto" a **persistência do modelo** e a **calibração da probabilidade**. Restam como pendências o passo de deploy que reconstrua os três artefatos derivados, os endpoints, o nome honesto do produto na interface e o painel. |

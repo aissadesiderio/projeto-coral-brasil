@@ -1,10 +1,14 @@
 /**
  * Testes da ficha fisica do recife.
  *
- * 🚨 O motivo de existirem: `profundidade_media_m` e `area_km2` estavam no
- * modelo desde a migracao `0014` e nunca sairam do Django admin. Nenhuma
- * previsao usa os dois campos — e foi exatamente por isso que a ausencia deles
- * nao quebrou nada e ninguem reparou.
+ * 🚨 O motivo de existirem: `profundidade_media_m` e a area estavam no modelo
+ * desde a migracao `0014` e nunca sairam do Django admin. Nenhuma previsao usa
+ * esses campos — e foi exatamente por isso que a ausencia deles nao quebrou
+ * nada e ninguem reparou.
+ *
+ * ⚠️ O campo de area virou **dois** na migracao `0031` (`area_uc_km2` e
+ * `area_recifal_km2`): o original dizia "zona recifal" e so tinha fonte para a
+ * area da UC, que em Abrolhos e 110x maior que o recife medido.
  *
  * ⚠️ E a lacuna precisa continuar **escrita**. Esconder a linha vazia faria a
  * ficha ser lida como completa, e "10 m" e "ninguem mediu" sao afirmacoes
@@ -23,14 +27,55 @@ const COMPLETO = {
   longitude: -38.688,
   fonte_coordenadas: 'Seed original do projeto',
   profundidade_media_m: 10,
-  area_km2: 913,
+  area_uc_km2: 879.43,
+  fonte_area_uc: 'ICMBio - 87.943 ha, Dec. 88.218/1983',
+  area_recifal_km2: null,
+  fonte_area_recifal: '',
 };
 
 test('mostra profundidade e area, que nenhuma previsao usa', () => {
   render(<FichaDoLocal local={COMPLETO} />);
 
   expect(screen.getByText('10,0 m')).toBeInTheDocument();
-  expect(screen.getByText('913,0 km²')).toBeInTheDocument();
+  expect(screen.getByText('879,43 km²')).toBeInTheDocument();
+});
+
+/**
+ * 🚨 As duas areas sao duas perguntas, com 110x entre elas em Abrolhos: 879,43
+ * km² de parque contra ~8 km² de recife mapeado. Se este teste quebrar porque
+ * alguem juntou as linhas de volta num campo so, o site volta a poder exibir a
+ * area do parque sob o rotulo "recife" — o erro de categoria da §6.3 do FONTES.
+ */
+test('separa a area da UC da area recifal', () => {
+  render(
+    <FichaDoLocal
+      local={{ ...COMPLETO, area_recifal_km2: 8, fonte_area_recifal: 'WorldView-2' }}
+    />,
+  );
+
+  expect(screen.getByText('Area da unidade de conservacao')).toBeInTheDocument();
+  expect(screen.getByText('Area recifal mapeada')).toBeInTheDocument();
+  expect(screen.getByText('879,43 km²')).toBeInTheDocument();
+  expect(screen.getByText('8,00 km²')).toBeInTheDocument();
+});
+
+test('cada area aparece com a sua propria fonte', () => {
+  render(
+    <FichaDoLocal
+      local={{ ...COMPLETO, area_recifal_km2: 8, fonte_area_recifal: 'WorldView-2' }}
+    />,
+  );
+
+  expect(screen.getByText('ICMBio - 87.943 ha, Dec. 88.218/1983')).toBeInTheDocument();
+  expect(screen.getByText('WorldView-2')).toBeInTheDocument();
+});
+
+test('avisa que uma area nao se deduz da outra', () => {
+  // ⚠️ Sem esta frase, quem ve 879,43 km² em cima e "Nao registrado" embaixo
+  // conclui que o recife tem 879 km².
+  render(<FichaDoLocal local={COMPLETO} />);
+
+  expect(screen.getByText(/uma nao se deduz da outra/)).toBeInTheDocument();
 });
 
 test('a coordenada nunca aparece sem a origem', () => {
@@ -76,12 +121,13 @@ test('campo ausente e escrito, nao omitido', () => {
         latitude: null,
         longitude: null,
         profundidade_media_m: null,
-        area_km2: null,
+        area_uc_km2: null,
       }}
     />,
   );
 
-  expect(screen.getAllByText('Nao registrado')).toHaveLength(3);
+  // Coordenadas, profundidade, area da UC e area recifal.
+  expect(screen.getAllByText('Nao registrado')).toHaveLength(4);
 });
 
 test('profundidade zero nao vira "nao registrado"', () => {

@@ -13,24 +13,44 @@
  * defeito que o pipeline legado cometia no banco.
  */
 
-// 🚨 As duas variaveis do grafico, e o motivo de serem exatamente estas duas.
-//
-// `sst` e o que qualquer pessoa entende sem explicacao, e `dhw` e o que decide
-// o alerta — a permutacao mediu queda de PR-AUC de 0,30 a 0,84 ao embaralha-lo,
-// contra ~0,00 de salinidade e oxigenio (docs/RESULTADOS.md secao 7). Por o
-// resto no mesmo grafico daria peso visual igual a variaveis que nao pesam.
-export const VARIAVEIS_DA_SERIE = ['sst', 'dhw'];
+// 🚨 **Eram duas variaveis ate 16/08/2026, e a razao de serem duas nao era
+// falta de dado — era falta de espaco.** O argumento registrado aqui antes era
+// que `sst` e `dhw` decidem o alerta (queda de PR-AUC de 0,30 a 0,84 na
+// permutacao, contra ~0,00 de salinidade e oxigenio — docs/RESULTADOS.md §7) e
+// que por o resto no mesmo grafico daria "peso visual igual a variaveis que nao
+// pesam". O problema era o *mesmo grafico*: num eixo so, o oxigenio varia
+// +-5 mmol/m3 e a temperatura +-1 C, entao uma curva engole as outras. Com um
+// painel por variavel — que e como `ml/graficos.py::linha_do_tempo` sempre
+// desenhou as figuras do TCC — o argumento cai: cada uma tem seu proprio eixo,
+// na sua propria unidade, e nenhuma esconde nenhuma. As quatro sao as mesmas
+// que o modelo consome (`ml/dataset.py::VARIAVEIS_BASELINE`).
+export const VARIAVEIS_DA_SERIE = ['sst', 'dhw', 'salinidade', 'oxigenio'];
+
+// 🚨 O `baa` **nao vira painel** — vira as faixas rosa por tras dos quatro.
+// E o que aconteceu (a NOAA emitiu alerta), e nao uma medida ambiental que se
+// leia numa curva. Sem ele o grafico responderia "o que o satelite mediu" sem
+// nunca dizer "e ai, deu alerta?".
+export const VARIAVEL_DO_ALERTA = 'baa';
+
+// Nivel 1 da NOAA na escala Bleaching Alert Area (0-5). E o mesmo corte que
+// `ml/dataset.py` usa para montar o alvo do modelo.
+export const CORTE_ALERTA_BAA = 3;
+
+const VARIAVEIS_CONSULTADAS = [...VARIAVEIS_DA_SERIE, VARIAVEL_DO_ALERTA];
 
 export const DIAS_EXIBIDOS = 365;
 
-// O corte da NOAA para Alerta Nivel 1. Fica marcado no painel do DHW porque
-// sem ele a curva e um numero sem regua: "3,8" nao diz nada, "3,8 quase no 4"
-// diz tudo.
+// O corte da NOAA para Alerta Nivel 1 em DHW. Fica marcado no painel do DHW
+// porque sem ele a curva e um numero sem regua: "3,8" nao diz nada, "3,8 quase
+// no 4" diz tudo.
 export const CORTE_ALERTA_DHW = 4;
 
 export const ROTULOS = {
   sst: { nome: 'Temperatura da superficie', unidade: '°C', casas: 1 },
   dhw: { nome: 'Calor acumulado (DHW)', unidade: '°C·semana', casas: 1 },
+  salinidade: { nome: 'Salinidade', unidade: 'PSU', casas: 2 },
+  oxigenio: { nome: 'Oxigenio dissolvido', unidade: 'mmol/m³', casas: 1 },
+  baa: { nome: 'Alerta de branqueamento (NOAA)', unidade: '0-5', casas: 0 },
 };
 
 function dataDeCorte(dias, hoje = new Date()) {
@@ -39,13 +59,19 @@ function dataDeCorte(dias, hoje = new Date()) {
   return corte.toISOString().slice(0, 10);
 }
 
-export function montarConsulta(slug, { dias = DIAS_EXIBIDOS, hoje } = {}) {
+/**
+ * 🚨 **Uma variavel por requisicao, e isso nao e desperdicio.**
+ * `DRF_MAX_PAGE_SIZE` e 1000 (settings.py). Um ano das cinco variaveis sao
+ * ~1825 pontos: pedidas juntas, a resposta vem cortada e o grafico desenharia
+ * **parte** do periodo anunciando o periodo inteiro. Separadas, cada uma tem
+ * ~365 pontos e sobra folga; de quebra, um recife sem salinidade perde so o
+ * painel dela, em vez de contaminar a resposta das outras quatro.
+ */
+export function montarConsulta(slug, { variaveis = VARIAVEIS_CONSULTADAS, dias = DIAS_EXIBIDOS, hoje } = {}) {
   const parametros = new URLSearchParams();
   parametros.set('local', slug);
-  VARIAVEIS_DA_SERIE.forEach((v) => parametros.append('variavel', v));
+  variaveis.forEach((v) => parametros.append('variavel', v));
   parametros.set('de', dataDeCorte(dias, hoje));
-  // Um ano de duas variaveis sao ~730 pontos. O teto do servidor e 1000, e
-  // pedir o teto inteiro deixa a folga visivel em vez de implicita.
   parametros.set('page_size', '1000');
   return `/api/medicoes/?${parametros.toString()}`;
 }
@@ -72,7 +98,7 @@ export function organizarSerie(registros) {
   let fim = null;
 
   (Array.isArray(registros) ? registros : []).forEach((registro) => {
-    if (!registro || !VARIAVEIS_DA_SERIE.includes(registro.variavel)) {
+    if (!registro || !VARIAVEIS_CONSULTADAS.includes(registro.variavel)) {
       return;
     }
 
@@ -115,6 +141,46 @@ export function organizarSerie(registros) {
 }
 
 /**
+ * Os trechos em que a NOAA de fato manteve alerta, para virarem faixa no fundo.
+ *
+ * ⚠️ **Nao e o alvo do modelo, e a diferenca sao 7 dias.**
+ * `ml/graficos.py::linha_do_tempo` pinta `baa >= 3` **em t+7**, porque ali a
+ * faixa serve para julgar uma previsao com 7 dias de antecedencia. Aqui a
+ * secao e "a serie medida": a faixa marca os dias em que o alerta **estava
+ * valendo**, que e o que alguem lendo dado observado espera. Mesma fonte,
+ * pergunta diferente.
+ *
+ * Valor nulo interrompe a faixa em vez de estende-la: sem medida nao ha como
+ * afirmar que havia alerta.
+ */
+export function intervalosDeAlerta(pontos, corte = CORTE_ALERTA_BAA) {
+  const intervalos = [];
+  let abertura = null;
+  let anterior = null;
+
+  (Array.isArray(pontos) ? pontos : []).forEach((ponto) => {
+    const emAlerta = Number.isFinite(ponto?.valor) && ponto.valor >= corte;
+
+    if (emAlerta && abertura === null) {
+      abertura = ponto.data;
+    }
+    if (!emAlerta && abertura !== null) {
+      intervalos.push({ inicio: abertura, fim: anterior });
+      abertura = null;
+    }
+    if (emAlerta) {
+      anterior = ponto.data;
+    }
+  });
+
+  if (abertura !== null) {
+    intervalos.push({ inicio: abertura, fim: anterior });
+  }
+
+  return intervalos;
+}
+
+/**
  * Busca a serie de um recife.
  *
  * Mesmo contrato de `painelRisco.buscarPredicao`: devolve `{ estado, ... }` em
@@ -131,24 +197,41 @@ export async function buscarSerie(slug, opcoes = {}) {
   }
 
   try {
-    const resposta = await fetch(montarConsulta(slug, opcoes));
-    if (resposta.status === 503) {
+    const respostas = await Promise.all(
+      VARIAVEIS_CONSULTADAS.map((variavel) =>
+        fetch(montarConsulta(slug, { ...opcoes, variaveis: [variavel] })),
+      ),
+    );
+
+    if (respostas.some((r) => r.status === 503)) {
       return { estado: 'offline' };
     }
-    if (!resposta.ok) {
+    // 🚨 Uma variavel que falha nao invalida as outras — mas uma que falha
+    // **sem ninguem notar** viraria painel vazio indistinguivel de "este
+    // recife nao mede isso". So desiste se nenhuma das cinco respondeu.
+    const boas = respostas.filter((r) => r.ok);
+    if (!boas.length) {
       return { estado: 'indisponivel' };
     }
 
-    const corpo = await resposta.json();
-    const registros = Array.isArray(corpo?.results) ? corpo.results : [];
+    const corpos = await Promise.all(boas.map((r) => r.json()));
+    const registros = corpos.flatMap((corpo) =>
+      Array.isArray(corpo?.results) ? corpo.results : [],
+    );
     if (!registros.length) {
       return { estado: 'sem-serie' };
     }
 
+    const organizada = organizarSerie(registros);
+    const truncada = corpos.some(
+      (corpo) => Number(corpo?.count) > (corpo?.results?.length || 0),
+    );
+
     return {
       estado: 'ok',
-      ...organizarSerie(registros),
-      truncada: Number(corpo?.count) > registros.length,
+      ...organizada,
+      alertas: intervalosDeAlerta(organizada.series[VARIAVEL_DO_ALERTA] || []),
+      truncada,
     };
   } catch (erro) {
     return { estado: 'indisponivel' };

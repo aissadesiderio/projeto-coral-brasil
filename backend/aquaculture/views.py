@@ -708,8 +708,42 @@ class PainelRiscoBase(OfflineModeMixin, APIView):
 
         return niveis.como_payload(self.escala())
 
-    def avaliar(self, local, ajuste):
-        """Um item da resposta. Nunca levanta por falta de dado."""
+    def avaliar(self, local, ajuste, assinatura=None):
+        """Um item da resposta. Nunca levanta por falta de dado.
+
+        Com `assinatura` (o par `(ultima_data, quantas)` da serie do local), o
+        resultado e memorizado — ver `backend/memoria/`. Sem ela, calcula
+        sempre: e o que os testes e qualquer chamador antigo continuam fazendo.
+        """
+        if assinatura is None:
+            return self._avaliar_sem_memoria(local, ajuste)
+
+        import memoria
+        from ml import predicao
+
+        nome_da_chave = memoria.chave(
+            'painel',
+            local.slug,
+            assinatura,
+            # 🚨 A identidade do artefato. Sem isto, retreinar o modelo nao
+            # mudaria o painel ate a proxima ingestao - o cache serviria a
+            # probabilidade do modelo anterior com cara de atual.
+            predicao.marca_do_modelo(
+                getattr(settings, 'PAINEL_MODELO', 'entrega1_baa')
+            ),
+            self.limiar(),
+            self.escala_como_payload(),
+            # 🚨 `dias_de_atraso` e `hoje - data_base`. Sem a data na chave, a
+            # virada do dia congelaria o atraso, e o campo que existe para nao
+            # deixar dado velho parecer novo passaria a mentir por causa do
+            # cache.
+            timezone.localdate().isoformat(),
+        )
+        return memoria.lembrar(
+            nome_da_chave, lambda: self._avaliar_sem_memoria(local, ajuste)
+        )
+
+    def _avaliar_sem_memoria(self, local, ajuste):
         from ml import predicao
 
         base = {'local': local.slug, 'nome': local.nome}
@@ -780,10 +814,18 @@ class PainelRiscoList(PainelRiscoBase):
             for local in LocalRecife.objects.filter(slug__in=slugs)
         }
 
+        # Uma consulta agrupada para todos os locais, e nao uma por local: o
+        # ganho do cache seria comido de volta por N agregacoes. Ver
+        # `memoria.assinatura_das_series`.
+        import memoria
+
+        assinaturas = memoria.assinatura_das_series(slugs)
+
         # A ordem segue os metadados, e nao o banco: e a lista que o modelo
         # declara ter visto, e ela e o contrato.
         resultados = [
-            self.avaliar(locais[slug], ajuste) for slug in slugs if slug in locais
+            self.avaliar(locais[slug], ajuste, assinaturas.get(slug))
+            for slug in slugs if slug in locais
         ]
 
         return Response({
@@ -815,7 +857,11 @@ class PainelRiscoDetail(PainelRiscoBase):
             )
 
         local = get_object_or_404(LocalRecife, slug=slug)
+
+        import memoria
+
+        assinatura = memoria.assinatura_das_series([slug]).get(slug)
         return Response({
             'modelo': self.cabecalho(metadados),
-            **self.avaliar(local, ajuste),
+            **self.avaliar(local, ajuste, assinatura),
         })

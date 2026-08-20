@@ -113,7 +113,15 @@ def build_sync_payload() -> dict:
                 'longitude': local.longitude,
                 'fonte_coordenadas': local.fonte_coordenadas,
                 'profundidade_media_m': local.profundidade_media_m,
-                'area_km2': local.area_km2,
+                # ⚠️ As fontes vao junto das areas, e nao ficam so na API. Uma
+                # copia offline com "879,43 km²" e sem "ICMBio, 87.943 ha, Dec.
+                # 88.218/1983" seria um numero sem lastro dentro de um `.js` —
+                # a combinacao que a §2.1 do FONTES ja ensinou a evitar, porque
+                # sobrevive a limpeza do banco.
+                'area_uc_km2': local.area_uc_km2,
+                'fonte_area_uc': local.fonte_area_uc,
+                'area_recifal_km2': local.area_recifal_km2,
+                'fonte_area_recifal': local.fonte_area_recifal,
             }
         )
 

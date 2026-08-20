@@ -363,9 +363,25 @@ não conecta.
 OFFLINE_MODE=True
 ```
 
-Com ela em `True`, **o site abre mas todas as telas ficam vazias**, mostrando
-uma tarja amarela de "modo manutenção". Não é defeito: é uma trava deliberada,
+Com ela em `True`, o site abre, mostra uma tarja amarela de "modo manutenção" —
+e **some com a previsão de risco**. Não é defeito: é uma trava deliberada,
 porque o site público está fora do ar durante a reestruturação.
+
+⚠️ **O site não fica todo vazio, e é isso que engana.** Os recifes e as
+espécies continuam aparecendo, porque vêm de uma cópia local
+(`frontend/src/data/recifeData.js`) que não depende da API. O que some é o que
+precisa de conta na hora:
+
+| O que | O que aparece no lugar |
+|---|---|
+| **Painel de predição de risco** | 🚨 **nada** — o bloco simplesmente não é desenhado, sem mensagem nenhuma |
+| Gráficos da série ambiental | a frase "A serie nao e exibida em modo manutencao" |
+| Recifes e espécies | continuam normais, da cópia local |
+
+Ou seja: quem procura a previsão de estresse térmico e não a encontra **não
+recebe nenhuma explicação na tela** — só a tarja amarela no topo, que é fácil
+de ler como aviso genérico. Se a página do recife carregou com espécies e você
+não acha o painel de risco em lugar nenhum, é esta linha.
 
 Para ver o site com dados de verdade na sua máquina, troque para:
 
@@ -1167,6 +1183,8 @@ Quatro entre cinco problemas são um desses.
 | O terminal mostra `>>` e fica esperando | quebra de linha no meio do comando colado | `Ctrl+C` e cole em uma linha só — veja abaixo |
 | `SyntaxError: invalid syntax` apontando para `line 2` | a mesma coisa | idem |
 | O site abre com tarja amarela e telas vazias | `OFFLINE_MODE=True` | troque para `False` em `backend/.env` e reinicie o backend |
+| **O painel de risco não aparece — e não há erro nenhum no lugar dele**, mas recifes e espécies carregam normalmente | a mesma coisa: `OFFLINE_MODE=True`. O painel é o único bloco que some **sem escrever nada** (o gráfico ao menos avisa) | idem — e veja o Passo 7(c), que detalha o que some e o que fica |
+| O painel aparece dizendo **"O modelo ainda nao esta disponivel neste servidor"** logo depois de você desligar o `OFFLINE_MODE` | não é a correção que falhou: são dois problemas em fila, e o segundo só ficou visível agora | `python backend\manage.py treinar_final` (precisa do Postgres no ar **e com série ingerida**) |
 | Site abre, mas nenhum dado carrega | backend parado | ligue o `runserver` na porta 8000 |
 | `Something is already running on port 3000` | outra instância aberta | feche o outro terminal, ou responda `Y` para usar outra porta |
 | `Error: That port is already in use` (8000) | backend já rodando | use o que já está, ou `runserver 8001` |

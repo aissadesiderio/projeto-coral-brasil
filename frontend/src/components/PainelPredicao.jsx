@@ -1,14 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  CalendarClock,
-  CircleHelp,
-  Eye,
-  Info,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, CircleHelp, TrendingDown, TrendingUp } from 'lucide-react';
 
 import {
   buscarPredicao,
@@ -44,26 +35,36 @@ import {
  *
  * **4. 🚨 O degrau vem com a acao esperada, e nao so com a cor.** A escala tem
  * quatro degraus desde 30/07/2026, cada um com precisao medida e uma frase
- * dizendo o que fazer (docs/RESULTADOS.md secao 22.9.7). Ate 31/07 o painel
- * recebia esse campo e **descartava**: mostrava o rotulo, escolhia a cor e
- * jogava fora a instrucao. Um selo colorido sem instrucao devolve ao leitor a
- * decisao que o projeto tomou por ele — que e exatamente o que ter quatro
- * degraus em vez de um liga-desliga existe para evitar.
+ * dizendo o que fazer (docs/RESULTADOS.md secao 22.9.7). Um selo colorido sem
+ * instrucao devolve ao leitor a decisao que o projeto tomou por ele — que e
+ * exatamente o que ter quatro degraus em vez de um liga-desliga existe para
+ * evitar.
+ *
+ * ⚠️ **A metade colorida é a única superfície de cor cheia do site.** No
+ * desenho 3a tudo o mais é areia, chrome petróleo e um acento terra; o degrau
+ * ganha o painel inteiro porque é a única informação da página que muda de
+ * significado com a cor. Espalhar a mesma paleta por selos e cartões diluiria
+ * justamente o sinal que ela existe para carregar.
  */
 
-/**
- * O icone de cada degrau.
- *
- * ⚠️ Sai de `exige_acao`, e **nao** de `emAlerta`. Os dois discordam num caso
- * que importa: "Observacao" nao exige acao mas tambem nao e "sem aviso", e com
- * o binario antigo ela recebia o mesmo escudo verde de um recife tranquilo —
- * apagando na tela o degrau que o servidor tinha acabado de calcular.
- */
-function iconeDoNivel(alerta) {
-  if (alerta.exigeAcao) {
-    return AlertTriangle;
-  }
-  return alerta.slug === 'observacao' ? Eye : ShieldCheck;
+// Texto legível sobre cada cor cheia da escala. ⚠️ É só aparência — o slug, o
+// rótulo, o corte e a ação continuam vindo do servidor.
+const TEXTO_SOBRE_DEGRAU = {
+  'bg-amber-400': 'text-[#3f2d05]',
+};
+
+function Aviso({ icone: Icone, titulo, children }) {
+  return (
+    <div className="bloco-procedencia">
+      <p className="rotulo-mono flex items-center gap-2 text-terra-dark">
+        <Icone size={14} />
+        {titulo}
+      </p>
+      {children && (
+        <div className="mt-2.5 text-sm leading-relaxed text-ocean-deep/75">{children}</div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -85,35 +86,37 @@ function EscalaDeAviso({ escala, atual }) {
 
   return (
     <>
-      <h4 className="mb-2 mt-5 text-sm font-semibold text-ocean-dark">
-        A escala de aviso
-      </h4>
-      <ul className="space-y-1.5">
+      <h4 className="rotulo-mono mb-3 mt-7 text-ocean-deep/55">A escala de aviso</h4>
+      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {escala.map((nivel) => {
           const eOAtual = nivel.slug === atual;
           return (
             <li
               key={nivel.slug}
-              className={`flex flex-wrap items-baseline gap-x-2 rounded-xl border px-3 py-2 text-xs leading-relaxed ${
-                eOAtual
-                  ? 'border-ocean-dark/40 bg-ocean-light/10 text-slate-700'
-                  : 'border-sand-dark/20 bg-white text-slate-500'
+              className={`rounded-lg border p-3 ${
+                eOAtual ? 'border-ocean-deep/40 bg-sand-lightest' : 'border-ocean-deep/12 bg-white'
               }`}
             >
-              <span className={eOAtual ? 'font-bold text-ocean-dark' : 'font-semibold'}>
-                {nivel.rotulo}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`text-[13px] font-semibold ${
+                    eOAtual ? 'text-ocean-deep' : 'text-ocean-deep/70'
+                  }`}
+                >
+                  {nivel.rotulo}
+                </span>
+                {eOAtual && (
+                  <span className="rounded-full bg-terra px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-white">
+                    hoje
+                  </span>
+                )}
+              </div>
               {nivel.corte > 0 && (
-                <span className="text-2xs">
+                <p className="mt-1.5 font-mono text-2xs text-ocean-deep/50">
                   a partir de {formatarPercentual(nivel.corte)}
-                </span>
+                </p>
               )}
-              {eOAtual && (
-                <span className="rounded-full bg-ocean-dark px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-white">
-                  hoje
-                </span>
-              )}
-              <span className="w-full text-2xs">{nivel.acao}</span>
+              <p className="mt-1.5 text-2xs leading-relaxed text-ocean-deep/60">{nivel.acao}</p>
             </li>
           );
         })}
@@ -122,45 +125,43 @@ function EscalaDeAviso({ escala, atual }) {
   );
 }
 
-const Aviso = ({ icone: Icone, titulo, children, tom = 'ambar' }) => {
-  const cores = {
-    ambar: 'border-amber-300 bg-amber-50 text-amber-900',
-    cinza: 'border-sand-dark/30 bg-sand-light/40 text-slate-700',
-  };
+/**
+ * As entradas do modelo, em faixa de instrumento.
+ *
+ * ⚠️ São **variações**, e não níveis — por isso o período vem escrito debaixo
+ * de cada uma. "Temperatura: 0,09" sem o "variacao em 7 dias" se leria como
+ * 0,09 °C de água.
+ */
+function FaixaDeEntradas({ entradas }) {
+  if (entradas.length === 0) {
+    return null;
+  }
 
   return (
-    <div className={`rounded-2xl border p-4 text-sm ${cores[tom]}`}>
-      <p className="flex items-center gap-2 font-semibold">
-        <Icone size={16} />
-        {titulo}
-      </p>
-      {children && <div className="mt-2 leading-relaxed">{children}</div>}
-    </div>
+    <>
+      <h4 className="rotulo-mono mb-3 text-ocean-deep/55">O que o modelo olhou</h4>
+      <div className="grid gap-px border border-ocean-deep/12 bg-ocean-deep/12 sm:grid-cols-2 xl:grid-cols-4">
+        {entradas.map((entrada) => {
+          const Seta = entrada.subiu ? TrendingUp : TrendingDown;
+          return (
+            <div key={entrada.coluna} className="bg-white px-4 py-3">
+              <p className="rotulo-mono text-ocean-deep/45">{entrada.rotulo}</p>
+              <p className="mt-2 flex items-baseline gap-1.5 font-mono text-xl font-medium text-ocean-deep">
+                <Seta
+                  size={14}
+                  className={entrada.subiu ? 'text-terra' : 'text-ocean-dark'}
+                  aria-hidden="true"
+                />
+                {entrada.valor}
+              </p>
+              <p className="mt-1 text-[10.5px] text-ocean-deep/45">{entrada.periodo}</p>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
-};
-
-const CartaoEntrada = ({ entrada }) => {
-  const Seta = entrada.subiu ? TrendingUp : TrendingDown;
-
-  return (
-    <div className="flex min-w-0 flex-col rounded-2xl border border-sand-dark/10 bg-sand-light/30 p-3 sm:p-4">
-      <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500">
-        {entrada.rotulo}
-      </span>
-      <span className="mt-1 flex items-baseline gap-1.5">
-        <Seta
-          size={16}
-          className={entrada.subiu ? 'text-orange-500' : 'text-blue-500'}
-          aria-hidden="true"
-        />
-        <span className="text-lg font-bold text-ocean-dark">{entrada.valor}</span>
-      </span>
-      <span className="mt-1 text-3xs font-medium text-gray-400">
-        {entrada.periodo}
-      </span>
-    </div>
-  );
-};
+}
 
 export default function PainelPredicao({ slug, publicOffline = false }) {
   const [resultado, setResultado] = useState(null);
@@ -193,7 +194,9 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
 
   if (carregando) {
     return (
-      <Aviso icone={CircleHelp} titulo="Calculando o risco desta localizacao..." tom="cinza" />
+      <p className="font-mono text-2xs text-ocean-deep/50">
+        Calculando o risco desta localizacao...
+      </p>
     );
   }
 
@@ -208,8 +211,8 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
   if (resultado.estado === 'sem-modelo') {
     return (
       <Aviso icone={AlertTriangle} titulo="O modelo ainda nao esta disponivel neste servidor">
-        O arquivo do modelo e gerado por comando e nao acompanha o codigo. Sem
-        ele, nenhuma probabilidade e calculada — e nenhuma e inventada.
+        O arquivo do modelo e gerado por comando e nao acompanha o codigo. Sem ele, nenhuma
+        probabilidade e calculada — e nenhuma e inventada.
       </Aviso>
     );
   }
@@ -217,8 +220,8 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
   if (resultado.estado === 'fora-do-treino') {
     return (
       <Aviso icone={AlertTriangle} titulo="O modelo nao foi treinado nesta localizacao">
-        Responder aqui seria estender a previsao a um lugar que o modelo nunca
-        viu. Preferimos nao responder.
+        Responder aqui seria estender a previsao a um lugar que o modelo nunca viu. Preferimos
+        nao responder.
       </Aviso>
     );
   }
@@ -228,15 +231,14 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
 
   if (item.disponivel !== true) {
     return (
-      <Aviso icone={AlertTriangle} titulo="Dados insuficientes para calcular o risco">
+      <Aviso icone={CircleHelp} titulo="Dados insuficientes para calcular o risco">
         <p>
-          A previsao usa a variacao dos ultimos 7 dias, e a serie deste recife
-          esta incompleta. <strong>Nenhum valor foi estimado no lugar do que
-          falta.</strong>
+          A previsao usa a variacao dos ultimos 7 dias, e a serie deste recife esta incompleta.{' '}
+          <strong className="font-semibold text-ocean-deep">
+            Nenhum valor foi estimado no lugar do que falta.
+          </strong>
         </p>
-        {item.motivo && (
-          <p className="mt-2 text-xs opacity-90">{item.motivo}</p>
-        )}
+        {item.motivo && <p className="mt-2 text-2xs opacity-90">{item.motivo}</p>}
       </Aviso>
     );
   }
@@ -247,110 +249,101 @@ export default function PainelPredicao({ slug, publicOffline = false }) {
   const entradas = Object.entries(item.entradas || {}).map(([coluna, valor]) =>
     descreverEntrada(coluna, valor),
   );
+  const textoSobreDegrau = TEXTO_SOBRE_DEGRAU[alerta.cor] || 'text-white';
 
   return (
-    <div className="w-full">
-      <div className="flex flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl lg:flex-row">
-        <div
-          className={`${alerta.cor} flex flex-col justify-center p-6 text-center text-white sm:p-8 lg:w-[34%]`}
-        >
-          <div className="mx-auto mb-4 w-fit rounded-full bg-white/20 p-4">
-            {React.createElement(iconeDoNivel(alerta), { size: 42 })}
-          </div>
-
-          <h2 className="text-xl font-bold leading-tight sm:text-2xl">
+    <div className="grid overflow-hidden rounded-2xl bg-white shadow-superficie lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className={`flex flex-col justify-between p-8 ${alerta.cor} ${textoSobreDegrau}`}>
+        <div>
+          <p className="rotulo-mono opacity-70">Degrau de hoje</p>
+          <h2 className="mt-2.5 font-serif text-[34px] font-normal leading-[1.05]">
             {alerta.rotulo}
           </h2>
 
-          <p className="mt-4 text-sm font-medium text-white/90">
-            Risco de estresse termico em 7 dias:
-            {probabilidade?.tipo === 'numero' ? (
-              <span className="mt-1 block text-3xl font-bold">{probabilidade.texto}</span>
-            ) : (
-              <span className="mt-1 block text-lg font-bold">{probabilidade?.texto}</span>
-            )}
+          <p
+            className={`mt-5 font-mono font-medium leading-none tracking-[-0.03em] ${
+              probabilidade?.tipo === 'numero' ? 'text-[50px]' : 'text-[22px] leading-tight'
+            }`}
+          >
+            {probabilidade?.texto}
+          </p>
+          <p className="mt-2 text-2xs leading-relaxed opacity-75">
+            probabilidade de estresse termico em 7 dias
+            {/* ⚠️ Dois textos porque ha dois contratos. Com `nivel`, o corte que
+                interessa e o **deste degrau**; sem ele — resposta de uma versao
+                anterior da API — resta o limiar unico. */}
+            {alerta.slug
+              ? alerta.corteTexto
+                && alerta.slug !== 'sem_aviso'
+                && ` · este degrau comeca em ${alerta.corteTexto}`
+              : alerta.limiarTexto && ` · Aviso emitido a partir de ${alerta.limiarTexto}`}
           </p>
 
           {probabilidade?.explicacao && (
-            <p className="mt-3 rounded-xl bg-black/20 p-2.5 text-left text-2xs leading-relaxed text-white/85">
+            <p className="mt-4 rounded-lg bg-black/15 p-3 text-2xs leading-relaxed opacity-90">
               {probabilidade.explicacao}
             </p>
           )}
-
-          {/* 🚨 A instrucao, e nao so a cor. E o que faz quatro degraus
-              valerem mais que um liga-desliga: "Observacao" e "Alerta alto"
-              pedem coisas diferentes de quem le, e a diferenca esta escrita
-              aqui em vez de ficar por conta da intuicao sobre a cor. */}
-          {alerta.acao && (
-            <div className="mt-5 rounded-xl bg-black/20 p-3 text-left">
-              <p className="text-3xs font-semibold uppercase tracking-[0.12em] text-white/70">
-                O que fazer
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-white/95">
-                {alerta.acao}
-              </p>
-            </div>
-          )}
-
-          {/* ⚠️ Dois textos porque ha dois contratos. Com `nivel`, o corte que
-              interessa e o **deste degrau**; sem ele — resposta de uma versao
-              anterior da API — resta o limiar unico. Trocar um pelo outro sem
-              reserva apagaria a frase inteira contra um servidor antigo. */}
-          {alerta.slug
-            ? alerta.corteTexto && alerta.slug !== 'sem_aviso' && (
-                <p className="mt-3 text-2xs text-white/80">
-                  Este degrau comeca em {alerta.corteTexto}
-                </p>
-              )
-            : alerta.limiarTexto && (
-                <p className="mt-4 text-2xs text-white/80">
-                  Aviso emitido a partir de {alerta.limiarTexto}
-                </p>
-              )}
         </div>
 
-        <div className="min-w-0 p-5 sm:p-8 lg:w-[66%]">
-          <h3 className="flex flex-wrap items-center gap-2 font-bold text-ocean-dark">
-            <CalendarClock size={20} className="text-terra" />
-            Calculado sobre dados ate {formatarDataBr(item.data_base)}
-            {atraso && (
-              <span className="rounded-full bg-sand-light px-2.5 py-0.5 text-2xs font-semibold text-ocean-dark">
-                {atraso}
-              </span>
-            )}
+        {/* 🚨 A instrucao, e nao so a cor. E o que faz quatro degraus valerem
+            mais que um liga-desliga: "Observacao" e "Alerta alto" pedem coisas
+            diferentes de quem le, e a diferenca esta escrita aqui em vez de
+            ficar por conta da intuicao sobre a cor. */}
+        {alerta.acao && (
+          <div className="mt-7">
+            {/* O filete acompanha a cor do degrau em vez de ser branco ou
+                preto fixo: sobre o âmbar um filete branco some, sobre o
+                vermelho um filete preto vira sujeira. */}
+            <span aria-hidden="true" className="mb-4 block h-px bg-current opacity-25" />
+            <p className="rotulo-mono opacity-70">O que fazer</p>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed">{alerta.acao}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="p-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-ocean-deep/10 pb-3.5">
+          <h3 className="font-serif text-2xl font-normal text-ocean-deep">
+            Como esse numero foi feito
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
-            A previsao fala sobre {formatarDataBr(item.data_alvo)}.
-          </p>
-
-          <h4 className="mb-3 mt-5 text-sm font-semibold text-ocean-dark">
-            O que o modelo olhou
-          </h4>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {entradas.map((entrada) => (
-              <CartaoEntrada key={entrada.coluna} entrada={entrada} />
-            ))}
-          </div>
-
-          <EscalaDeAviso escala={modelo.escala} atual={alerta.slug} />
-
-          <div className="mt-5 flex gap-2 rounded-2xl border border-sand-dark/20 bg-sand-light/30 p-3 text-xs leading-relaxed text-slate-600">
-            <Info size={16} className="mt-0.5 shrink-0 text-ocean-dark" />
-            <p>
-              O modelo preve <strong>estresse termico</strong> — o mesmo alerta
-              que a NOAA calcula a partir de calor acumulado. Nao e o mesmo que
-              branqueamento observado: nem todo branqueamento vem acompanhado de
-              anomalia termica registrada.
-              {modelo.calibracao && (
-                <>
-                  {' '}A probabilidade e <strong>calibrada</strong>, o que
-                  significa que ela foi conferida contra a frequencia real dos
-                  eventos.
-                </>
-              )}
-            </p>
-          </div>
+          <span className="font-mono text-2xs text-ocean-deep/55">
+            dados ate {formatarDataBr(item.data_base)}
+            {/* ⚠️ O separador fica **fora** do span do atraso. Dentro, o texto
+                do elemento passaria a ser "· dado de 3 dias atras", e a frase
+                deixaria de casar sozinha — o teste que a fixa existe porque um
+                risco calculado sobre dado de tres semanas se apresenta igual a
+                um calculado sobre ontem quando ninguem diz a idade. */}
+            {atraso && (
+              <>
+                {' · '}
+                <span>{atraso}</span>
+              </>
+            )}
+          </span>
         </div>
+        <p className="mb-6 mt-2.5 text-sm text-ocean-deep/60">
+          A previsao fala sobre {formatarDataBr(item.data_alvo)}.
+        </p>
+
+        <FaixaDeEntradas entradas={entradas} />
+
+        <EscalaDeAviso escala={modelo.escala} atual={alerta.slug} />
+
+        <p className="mt-7 border-t border-ocean-deep/10 pt-4 text-[13px] leading-relaxed text-ocean-deep/65">
+          O modelo preve <strong className="font-semibold text-ocean-deep">estresse termico</strong>{' '}
+          — o mesmo alerta que a NOAA calcula a partir de calor acumulado. Nao e o mesmo que
+          branqueamento observado: nem todo branqueamento vem acompanhado de anomalia termica
+          registrada.
+          {modelo.calibracao && (
+            <>
+              {' '}A probabilidade e <strong className="font-semibold text-ocean-deep">
+                calibrada
+              </strong>, o que significa que ela foi conferida contra a frequencia real dos
+              eventos.
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

@@ -23,33 +23,37 @@ import { MapPinOff } from 'lucide-react';
  * uma segunda redacao para divergir da primeira — e o `detalhe` e especifico de
  * cada local, entao nem daria para acertar com texto fixo.
  */
-export default function AvisoSemSerie({ motivo, compact = false }) {
+export default function AvisoSemSerie({ motivo, compact = false, escuro = false }) {
   if (!motivo) {
     return null;
   }
 
   if (compact) {
     return (
-      <p className="inline-flex items-start gap-2 text-sm leading-6 text-slate-600">
-        <MapPinOff size={16} className="mt-0.5 shrink-0 text-slate-500" />
+      <p
+        className={`inline-flex items-start gap-2 text-2xs leading-5 ${
+          escuro ? 'text-white/60' : 'text-ocean-deep/55'
+        }`}
+      >
+        <MapPinOff size={14} className="mt-0.5 shrink-0" />
         <span>Sem serie de satelite: local cadastrado sem coordenadas.</span>
       </p>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-      <p className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <MapPinOff size={16} />
+    <div className="rounded-xl border border-ocean-deep/12 bg-white p-5 shadow-superficie">
+      <p className="rotulo-mono inline-flex items-center gap-2 text-ocean-deep/55">
+        <MapPinOff size={14} />
         Este local nao tem serie de satelite
       </p>
-      <p className="mt-2 text-sm leading-relaxed text-slate-700">{motivo.resumo}</p>
+      <p className="mt-3 text-[15px] leading-relaxed text-ocean-deep/80">{motivo.resumo}</p>
       {motivo.detalhe && (
         // A razao especifica deste local, gravada junto com o cadastro. E o
         // que separa "decidimos nao inventar a coordenada" de "esquecemos de
         // preencher" — duas coisas que o resumo acima sozinho nao distingue.
-        <p className="mt-3 border-l-2 border-slate-300 pl-3 text-sm leading-relaxed text-slate-600">
-          <strong className="font-semibold">Por que:</strong> {motivo.detalhe}
+        <p className="mt-4 border-l-2 border-terra pl-3 text-sm leading-relaxed text-ocean-deep/65">
+          <strong className="font-semibold text-ocean-deep">Por que:</strong> {motivo.detalhe}
         </p>
       )}
     </div>

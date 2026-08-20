@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { LogIn } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
-import SectionTitle from '../components/SectionTitle';
 import { ROTAS_APP } from '../utils/navigation';
 
-const CAMPO_CLASSNAME =
-  'w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light';
-
+/**
+ * Entrar e criar conta na mesma tela — o painel escuro à direita não é
+ * decoração.
+ *
+ * ⚠️ Ele existe para dizer, **antes** de o visitante tentar entrar, que o
+ * cadastro é aberto mas a permissão não: baixar dado ou contribuir espécie
+ * depende de um master aprovar depois. Sem essa frase visível ao lado do
+ * formulário, quem cria a conta descobre a aprovação só ao esbarrar num 401.
+ */
 export default function LoginPage({ onLogin, usuario }) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -36,58 +40,66 @@ export default function LoginPage({ onLogin, usuario }) {
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-10 sm:px-6">
-      <SectionTitle titulo="Entrar" descricao="Para contribuir espécie ou baixar dados." />
-
-      <form
-        onSubmit={enviar}
-        className="flex flex-col gap-4 rounded-3xl border border-sand-dark/20 bg-white p-6 shadow-sm"
-      >
-        {erro && (
-          <div className="rounded-2xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-            {erro}
-          </div>
-        )}
-
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-ocean-dark">Usuario</span>
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            className={CAMPO_CLASSNAME}
-            autoComplete="username"
-            required
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-ocean-dark">Senha</span>
-          <input
-            type="password"
-            value={senha}
-            onChange={(event) => setSenha(event.target.value)}
-            className={CAMPO_CLASSNAME}
-            autoComplete="current-password"
-            required
-          />
-        </label>
-
-        <button
-          type="submit"
-          disabled={enviando}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-ocean-dark px-4 py-3 font-semibold text-white transition hover:bg-ocean-light disabled:opacity-60"
-        >
-          <LogIn size={18} />
-          {enviando ? 'Entrando...' : 'Entrar'}
-        </button>
-
-        <p className="text-center text-sm text-gray-600">
-          Ainda nao tem conta?{' '}
-          <Link to={ROTAS_APP.cadastro} className="font-semibold text-ocean-dark underline">
-            Cadastre-se
-          </Link>
+    <section className="faixa grid gap-7 py-14 lg:grid-cols-2">
+      <div className="superficie p-8 sm:p-9">
+        <h1 className="font-serif text-[32px] font-normal tracking-[-0.02em] text-ocean-deep sm:text-[36px]">
+          Entrar
+        </h1>
+        <p className="mt-2.5 max-w-[44ch] text-[15px] leading-relaxed text-ocean-deep/65">
+          Para contribuir com especie ou baixar dados.
         </p>
-      </form>
+
+        <form onSubmit={enviar} className="mt-7 flex max-w-[400px] flex-col gap-6">
+          {erro && (
+            <p className="rounded-lg border-l-[3px] border-red-500 bg-red-50 p-3.5 text-sm text-red-800">
+              {erro}
+            </p>
+          )}
+
+          <label className="block">
+            <span className="rotulo-mono mb-1.5 block text-ocean-deep/50">Usuario</span>
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              className="campo-sublinhado"
+              autoComplete="username"
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="rotulo-mono mb-1.5 block text-ocean-deep/50">Senha</span>
+            <input
+              type="password"
+              value={senha}
+              onChange={(event) => setSenha(event.target.value)}
+              className="campo-sublinhado"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+
+          <button type="submit" disabled={enviando} className="botao-primario">
+            {enviando ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+      </div>
+
+      <div className="rounded-xl bg-ocean-deep p-8 text-white sm:p-9">
+        <h2 className="font-serif text-[32px] font-normal tracking-[-0.02em] sm:text-[36px]">
+          Ainda nao tem conta?
+        </h2>
+        <p className="mt-2.5 max-w-[46ch] text-[15px] leading-relaxed text-white/70">
+          Cadastro aberto a qualquer visitante. Para contribuir com especie ou baixar dados, um
+          master aprova a conta depois.
+        </p>
+        <Link
+          to={ROTAS_APP.cadastro}
+          className="mt-7 inline-flex w-fit items-center gap-2 rounded-lg bg-terra px-6 py-3 text-[15px] font-semibold text-white transition hover:brightness-110"
+        >
+          Cadastre-se →
+        </Link>
+      </div>
     </section>
   );
 }

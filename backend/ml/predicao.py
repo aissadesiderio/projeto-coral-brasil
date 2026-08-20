@@ -377,6 +377,28 @@ def carregar_modelo(nome, pasta=None):
     return ajuste, metadados
 
 
+def marca_do_modelo(nome, pasta=None):
+    """A identidade do artefato no disco: `mtime` em nanossegundos, ou `None`.
+
+    🚨 Existe para entrar em chave de cache de quem depende do modelo. Sem ela,
+    retreinar nao mudaria o painel ate a proxima ingestao — o cache serviria a
+    probabilidade do modelo anterior com cara de atual, e essa e a forma mais
+    silenciosa possivel de estar errado: o numero muda de significado sem mudar
+    de aparencia.
+
+    ⚠️ Devolve `None` quando o arquivo nao existe. Quem monta chave com `None`
+    passa a nao reaproveitar nada — que e o comportamento certo, porque sem
+    artefato o painel responde 503 e nao ha resultado para guardar.
+    """
+    from . import persistencia
+
+    caminho_modelo, _ = persistencia._caminhos(nome, pasta)
+    try:
+        return caminho_modelo.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
 def esquecer_modelos():
     """Descarta o cache. Existe para teste e para o retreino em processo vivo."""
     with _TRAVA:

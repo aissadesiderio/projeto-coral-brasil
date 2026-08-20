@@ -57,14 +57,19 @@ function Linha({ rotulo, valor, detalhe }) {
   const vazio = valor === NAO_REGISTRADO;
 
   return (
-    <div className="border-t border-sand-dark/10 py-3 first:border-t-0 first:pt-0">
-      <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean-light">
-        {rotulo}
-      </dt>
-      <dd className={`mt-1 text-sm ${vazio ? 'italic text-slate-400' : 'text-slate-700'}`}>
+    <div className="border-t border-ocean-deep/10 py-3.5 first:border-t-0 first:pt-0">
+      <dt className="rotulo-mono text-ocean-deep/45">{rotulo}</dt>
+      {/* O valor sai em mono porque é medida: coordenada, metro, km². Quando
+          falta, sai em itálico na fonte de texto — a diferença tipográfica é o
+          que separa "este é o número" de "ninguém mediu". */}
+      <dd
+        className={`mt-1.5 ${
+          vazio ? 'text-sm italic text-ocean-deep/40' : 'font-mono text-[15px] text-ocean-deep'
+        }`}
+      >
         {valor}
       </dd>
-      {detalhe && <p className="mt-1 text-xs text-slate-500">{detalhe}</p>}
+      {detalhe && <p className="mt-1.5 text-2xs leading-relaxed text-ocean-deep/55">{detalhe}</p>}
     </div>
   );
 }
@@ -73,14 +78,14 @@ export default function FichaDoLocal({ local }) {
   const coordenadas = formatarCoordenadas(local);
 
   return (
-    <div className="rounded-2xl border border-sand-dark/20 bg-white p-5 shadow-sm">
-      <p className="mb-4 flex items-center gap-2 text-sm text-slate-600">
-        <MapPin size={16} className="text-ocean-dark" />
+    <div className="superficie p-6 sm:p-7">
+      <p className="mb-5 flex items-center gap-2 text-sm text-ocean-deep/65">
+        <MapPin size={16} className="text-terra" />
         Dados cadastrados sobre o lugar. Nenhum deles entra na previsao — estao
         aqui porque sao o que o projeto sabe deste recife.
       </p>
 
-      <dl className="grid gap-x-8 sm:grid-cols-2">
+      <dl className="grid gap-x-10 sm:grid-cols-2">
         <Linha
           rotulo="Estado e cidade"
           valor={[local.estado, local.cidade].filter(Boolean).join(' - ') || NAO_REGISTRADO}
@@ -106,11 +111,39 @@ export default function FichaDoLocal({ local }) {
           rotulo="Profundidade media"
           valor={formatarNumero(local.profundidade_media_m, 'm')}
         />
+
+        {/* 🚨 **Duas linhas, e nao uma.** Ate 13/08/2026 havia um campo so,
+            rotulado "area da zona recifal", nulo em todos os locais. As fontes
+            existiam — o que nao existia era uma resposta unica: Abrolhos tem
+            879,43 km² de **parque** e ~8 km² de **recife mapeado**, 110 vezes
+            menos. Mostrar um dos dois sob o rotulo do outro seria o erro de
+            categoria da §6.3 do FONTES (alcalinidade exibida como pH).
+
+            ⚠️ Cada uma vem com a **sua** fonte embaixo. Area de UC sem o
+            decreto e area recifal sem o mapeamento sao numeros que ninguem
+            consegue conferir — e o campo existe justamente para ser citavel. */}
         <Linha
-          rotulo="Area da zona recifal"
-          valor={formatarNumero(local.area_km2, 'km²')}
+          rotulo="Area da unidade de conservacao"
+          valor={formatarNumero(local.area_uc_km2, 'km²', 2)}
+          detalhe={local.fonte_area_uc || undefined}
+        />
+        <Linha
+          rotulo="Area recifal mapeada"
+          valor={formatarNumero(local.area_recifal_km2, 'km²', 2)}
+          detalhe={local.fonte_area_recifal || undefined}
         />
       </dl>
+
+      {/* ⚠️ Sem esta frase, um visitante que veja 879,43 km² na linha de cima e
+          "Nao registrado" na de baixo conclui que o recife tem 879 km². A
+          distincao entre as duas linhas e o dado; deixa-la implicita seria
+          confiar em que o leitor conheca a diferenca entre uma UC e um recife. */}
+      <p className="mt-5 border-t border-ocean-deep/10 pt-4 text-2xs leading-relaxed text-ocean-deep/55">
+        As duas areas respondem perguntas diferentes: a primeira e o poligono
+        legal da unidade de conservacao, a segunda e quanto de recife foi
+        mapeado dentro dele. Podem diferir por ordens de grandeza, e uma nao se
+        deduz da outra.
+      </p>
     </div>
   );
 }

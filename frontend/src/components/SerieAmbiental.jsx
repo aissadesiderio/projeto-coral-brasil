@@ -1,14 +1,10 @@
 import { Download, Lock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import GraficoSerie from './GraficoSerie';
 import { ROTAS_APP } from '../utils/navigation';
 import {
-  CORTE_ALERTA_DHW,
   DIAS_EXIBIDOS,
-  ROTULOS,
-  VARIAVEIS_DA_SERIE,
   buscarSerie,
   urlDeDownload,
 } from '../utils/serie';
@@ -27,9 +23,25 @@ import {
  * escrita na tela, e nao so aqui no comentario, porque foi ela que as figuras
  * do TCC precisaram tornar explicita para o publico.
  */
-// ocean-dark e terra do tailwind.config.js — SVG não lê classes Tailwind,
-// então os hex ficam literais aqui, mantidos em sync com o config.
-const CORES = { sst: '#2b6978', dhw: '#D47046' };
+// 🚨 **O Plotly entra por `lazy`, e nao no bundle principal.** Ele custa
+// ~354 kB gzip — mais que triplicava o `main.js` do site inteiro — e so e
+// usado aqui, na pagina de um recife. Importado no topo, a home e a lista de
+// especies pagariam por um grafico que nao desenham.
+const GraficoSerieInterativo = lazy(() => import('./GraficoSerieInterativo'));
+
+function Estado({ children, tom = 'neutro' }) {
+  if (tom === 'aviso') {
+    return (
+      <div className="bloco-procedencia text-sm leading-relaxed text-ocean-deep/80">
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <p className="superficie px-6 py-8 text-center text-sm text-ocean-deep/55">{children}</p>
+  );
+}
 
 export default function SerieAmbiental({ slug, publicOffline = false, usuario }) {
   const [resultado, setResultado] = useState({ estado: 'carregando' });
@@ -55,70 +67,62 @@ export default function SerieAmbiental({ slug, publicOffline = false, usuario })
   }, [slug, publicOffline]);
 
   if (resultado.estado === 'carregando') {
-    return (
-      <div className="rounded-2xl border border-sand-dark/20 bg-white p-6 text-sm text-gray-600">
-        Carregando a serie medida deste recife...
-      </div>
-    );
+    return <Estado>Carregando a serie medida deste recife...</Estado>;
   }
 
   if (resultado.estado === 'offline') {
-    return (
-      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-        A serie nao e exibida em modo manutencao.
-      </div>
-    );
+    return <Estado tom="aviso">A serie nao e exibida em modo manutencao.</Estado>;
   }
 
   if (resultado.estado === 'sem-serie') {
-    return (
-      <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-6 text-center text-sm text-gray-500">
-        Ainda nao ha medicoes ingeridas para este recife no periodo exibido.
-      </div>
-    );
+    return <Estado>Ainda nao ha medicoes ingeridas para este recife no periodo exibido.</Estado>;
   }
 
   if (resultado.estado !== 'ok') {
-    return (
-      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-        Nao foi possivel carregar a serie agora.
-      </div>
-    );
+    return <Estado tom="aviso">Nao foi possivel carregar a serie agora.</Estado>;
   }
 
-  const { series, periodo, fontes, total, reprovadas, truncada } = resultado;
+  const { series, periodo, fontes, total, reprovadas, truncada, alertas = [] } = resultado;
 
   return (
-    <div className="space-y-3">
-      <p className="rounded-xl border border-ocean-light/30 bg-ocean-light/5 p-3 text-sm text-ocean-dark">
-        <strong>Isto e medicao, nao previsao.</strong> Sao os valores que o
-        satelite registrou neste recife nos ultimos {DIAS_EXIBIDOS} dias. A
-        probabilidade de alerta que aparece acima e o que o modelo{' '}
-        <em>calcula</em> a partir deles.
+    <div className="space-y-5">
+      <p className="max-w-[82ch] text-[15px] leading-relaxed text-ocean-deep/70">
+        <strong className="font-semibold text-ocean-deep">Isto e medicao, nao previsao.</strong>{' '}
+        Sao os valores que o satelite registrou neste recife nos ultimos {DIAS_EXIBIDOS} dias. A
+        probabilidade de alerta que aparece acima e o que o modelo <em>calcula</em> a partir
+        deles.
       </p>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        {VARIAVEIS_DA_SERIE.map((variavel) => {
-          const rotulo = ROTULOS[variavel];
-          return (
-            <GraficoSerie
-              key={variavel}
-              pontos={series[variavel] || []}
-              rotulo={rotulo.nome}
-              unidade={rotulo.unidade}
-              casas={rotulo.casas}
-              cor={CORES[variavel]}
-              linhaDeCorte={variavel === 'dhw' ? CORTE_ALERTA_DHW : null}
-              rotuloDoCorte={
-                variavel === 'dhw' ? 'Alerta Nivel 1 da NOAA (DHW 4)' : null
-              }
-            />
-          );
-        })}
-      </div>
+      <p className="max-w-[82ch] font-mono text-2xs leading-relaxed text-ocean-deep/60">
+        Passe o cursor para ler as quatro variaveis na mesma data; arraste para dar zoom, e
+        clique duas vezes para voltar. Falha na linha e medida reprovada pela validacao
+        fisica — nao e zero.
+      </p>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sand-dark/20 bg-white p-3 text-xs text-gray-600">
-        <span>
+      <Suspense fallback={<Estado>Carregando o grafico...</Estado>}>
+        <GraficoSerieInterativo series={series} alertas={alertas} />
+      </Suspense>
+
+      {/* A faixa rosa so ganha legenda quando existe faixa: explicar uma cor
+          que nao esta na tela e ruido, e some junto com ela. */}
+      {alertas.length > 0 && (
+        <p className="flex items-start gap-2 font-mono text-2xs leading-relaxed text-ocean-deep/70">
+          <span
+            aria-hidden="true"
+            className="mt-0.5 inline-block h-3 w-6 shrink-0 rounded-sm"
+            style={{ backgroundColor: 'rgba(212,112,70,0.18)' }}
+          />
+          <span>
+            As faixas marcam os dias em que a NOAA manteve alerta termico neste recife
+            (<span className="whitespace-nowrap">BAA ≥ 3</span>) — o que{' '}
+            <strong className="font-semibold">aconteceu</strong>, medido, e nao o que o modelo
+            previu.
+          </span>
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-ocean-deep/12 pt-4">
+        <span className="font-mono text-2xs leading-relaxed text-ocean-deep/60">
           {total.toLocaleString('pt-BR')} medicoes
           {periodo && ` de ${periodo.inicio} a ${periodo.fim}`}
           {fontes.length > 0 && ` — fonte: ${fontes.join(', ')}`}
@@ -135,7 +139,7 @@ export default function SerieAmbiental({ slug, publicOffline = false, usuario })
         {usuario?.aprovado || usuario?.master ? (
           <a
             href={urlDeDownload(slug)}
-            className="inline-flex items-center gap-2 rounded-full bg-ocean-dark px-3 py-1.5 font-semibold text-white transition hover:bg-ocean-light"
+            className="inline-flex items-center gap-2 border-b-2 border-terra pb-0.5 text-[13px] font-semibold text-ocean-deep transition hover:text-ocean-dark"
             download
           >
             <Download size={14} />
@@ -144,7 +148,7 @@ export default function SerieAmbiental({ slug, publicOffline = false, usuario })
         ) : (
           <Link
             to={ROTAS_APP.login}
-            className="inline-flex items-center gap-2 rounded-full border border-ocean-dark/30 px-3 py-1.5 font-semibold text-ocean-dark transition hover:bg-ocean-dark hover:text-white"
+            className="inline-flex items-center gap-2 border-b-2 border-ocean-deep/20 pb-0.5 text-[13px] font-semibold text-ocean-deep transition hover:border-terra"
           >
             <Lock size={14} />
             Faca login e aguarde aprovacao para baixar
@@ -155,9 +159,9 @@ export default function SerieAmbiental({ slug, publicOffline = false, usuario })
       {truncada && (
         // 🚨 Sem este aviso o grafico desenharia PARTE do recorte pedido
         // anunciando o recorte inteiro, e a curva nao denunciaria nada.
-        <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-          O periodo pedido tem mais pontos do que uma pagina da API devolve. O
-          grafico mostra os mais recentes; o CSV traz tudo.
+        <p className="bloco-procedencia text-2xs leading-relaxed text-ocean-deep/75">
+          O periodo pedido tem mais pontos do que uma pagina da API devolve. O grafico mostra os
+          mais recentes; o CSV traz tudo.
         </p>
       )}
     </div>

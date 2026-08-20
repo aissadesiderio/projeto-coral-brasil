@@ -35,11 +35,67 @@ class LocalRecife(models.Model):
         validators=[MinValueValidator(0.0)],
         help_text='Profundidade media do recife em metros',
     )
-    area_km2 = models.FloatField(
+    # --- as duas areas, que sao duas perguntas -------------------------------
+    #
+    # 🚨 **Ate 13/08/2026 havia um campo so, `area_km2`, rotulado "area
+    # aproximada da zona recifal".** Ele ficou nulo nos 10 locais desde a
+    # migracao 0014 — deliberadamente, "para nao inventar numero sem fonte"
+    # (docs/FONTES.md §2.3). Ao procurar as fontes, o motivo real da lacuna
+    # apareceu, e nao era falta de dado: era que **a pergunta tinha duas
+    # respostas certas, com tres ordens de grandeza entre elas.**
+    #
+    # Abrolhos, todos com fonte publicada:
+    #
+    # | Numero | O que e |
+    # |---|---|
+    # | ~8 km² | os recifes mapeados dentro do parque |
+    # | 879,43 km² | o **parque** (87.943 ha, ICMBio) |
+    # | 45.000 km² | o **Banco dos Abrolhos**, extensao da plataforma |
+    #
+    # Um campo unico obrigaria a escolher, e a escolha ficaria invisivel: quem
+    # lesse "879,43 km²" sob o rotulo "zona recifal" leria um recife 110 vezes
+    # maior que o medido. E o mesmo erro que docs/FONTES.md §6.3 ja registra —
+    # alcalinidade gravada como pH: numero certo, pergunta errada.
+    #
+    # ⚠️ Cada area anda com **a sua** fonte, e nao com uma fonte comum. Sao
+    # medidas de coisas diferentes, publicadas por instituicoes diferentes
+    # (ICMBio decreta a UC; a area recifal sai de mapeamento por satelite), e
+    # uma fonte compartilhada teria de descrever as duas — ou seja, nao
+    # descreveria nenhuma. Mesmo motivo de `MedicaoAmbiental` guardar `fonte`
+    # por valor e nao por linha.
+    area_uc_km2 = models.FloatField(
         null=True,
         blank=True,
         validators=[MinValueValidator(0.0)],
-        help_text='Area aproximada da zona recifal em km2',
+        verbose_name='Area da unidade de conservacao (km²)',
+        help_text=(
+            'Area oficial da UC, quando este local E uma unidade de '
+            'conservacao. Deixe vazio quando o local for so uma feicao '
+            'recifal dentro de uma UC maior — a area da APA nao e a area do '
+            'recife que ela contem.'
+        ),
+    )
+    fonte_area_uc = models.CharField(
+        max_length=300,
+        blank=True,
+        verbose_name='Fonte da area da UC',
+        help_text='Orgao, decreto e o numero como publicado. Ex: ICMBio, 87.943 ha, Dec 88.218/1983',
+    )
+    area_recifal_km2 = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0)],
+        verbose_name='Area recifal mapeada (km²)',
+        help_text=(
+            'So com mapeamento publicado e conferido. Nao derive da area da '
+            'UC nem estime por proporcao.'
+        ),
+    )
+    fonte_area_recifal = models.CharField(
+        max_length=300,
+        blank=True,
+        verbose_name='Fonte da area recifal',
+        help_text='Publicacao, sensor e ano do mapeamento.',
     )
     fonte_coordenadas = models.CharField(
         max_length=300,

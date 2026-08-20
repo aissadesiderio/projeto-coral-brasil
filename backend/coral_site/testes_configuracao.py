@@ -364,6 +364,96 @@ class DocumentacaoNaoMandaRodarComandoInexistenteTests(SimpleTestCase):
         self.assertEqual(list(self.comandos_em_blocos(texto)), [])
 
 
+class ArquivoDeInstrucaoNaoMandaRodarComandoInexistenteTests(SimpleTestCase):
+    """🚨 O guarda de cima varria so os `.md`, e a instrucao nao mora so la.
+
+    O `requirements.txt` terminava com um bloco de comandos comentado que
+    mandava rodar `manage.py neo4j_seed` — removido em 28/07/2026 — e ficou
+    assim ate 14/08. **O guarda dos documentos existia desde 31/07 e nao pegou**,
+    porque procura por cerca de crase, e um `.txt` nao tem cerca: o arquivo
+    inteiro e comentario, e um comentario que comeca com `python ` e tao
+    instrucao quanto um bloco de codigo.
+
+    ⚠️ **A licao nao e "faltou um arquivo na lista", e sim que a defesa foi
+    escrita em cima da FORMA do documento** (a cerca) e nao do que ela protege
+    (uma linha que alguem vai copiar e colar no terminal). Por isso aqui o
+    criterio e outro: **uma invocacao e uma linha que chama o interpretador**.
+
+    A distincao prosa/instrucao continua valendo, so muda o sinal: `python
+    manage.py x` e instrucao; `o manage.py x foi removido` e memoria, e memoria
+    e o oposto do defeito — este proprio arquivo depende disso.
+    """
+
+    # Caminhos relativos a RAIZ. Sao os arquivos que uma pessoa le procurando
+    # "o que eu rodo agora": nao ha glob aqui de proposito, porque varrer todo
+    # .txt e .yml do repositorio arrastaria fixture, saida de comando e log —
+    # e um guarda que grita sobre arquivo gerado ensina a ignorar o guarda.
+    ARQUIVOS = (
+        'requirements.txt',
+        '.env.example',
+        'backend/.env.example',
+        'docker-compose.yml',
+    )
+
+    INVOCACAO = re.compile(r'(?:python|py|python3)\s+\S*manage\.py\s+([a-z_][a-z0-9_]*)')
+
+    def invocacoes(self, texto):
+        return self.INVOCACAO.findall(texto)
+
+    def test_todo_comando_invocado_num_arquivo_de_instrucao_existe(self):
+        from django.core.management import get_commands
+
+        disponiveis = set(get_commands())
+        self.assertIn('migrate', disponiveis, 'sanidade: o registro carregou')
+
+        lidos = []
+        inexistentes = []
+        for relativo in self.ARQUIVOS:
+            caminho = RAIZ / relativo
+            if not caminho.exists():
+                continue
+            lidos.append(relativo)
+            for nome in self.invocacoes(caminho.read_text(encoding='utf-8')):
+                if nome not in disponiveis:
+                    inexistentes.append(f'{relativo}: manage.py {nome}')
+
+        # Sem isto, renomear o requirements.txt transformaria este teste num
+        # que passa sem ler nada — a mesma falha silenciosa do NO TESTS RAN.
+        self.assertIn(
+            'requirements.txt', lidos,
+            'O requirements.txt nao foi encontrado: o teste passaria sem '
+            'conferir nada. Atualize ARQUIVOS se ele mudou de lugar.',
+        )
+
+        self.assertEqual(
+            inexistentes, [],
+            'Arquivo de instrucao manda rodar comando que nao existe. Quem '
+            'segue recebe "Unknown command" e nao sabe se digitou errado, se '
+            'esqueceu o venv, ou se o projeto esta quebrado:\n  '
+            + '\n  '.join(inexistentes),
+        )
+
+    def test_o_proprio_guarda_pegaria_o_comando_que_escapou(self):
+        """Sem isto, um erro no regex viraria um teste que nunca falha."""
+        from django.core.management import get_commands
+
+        texto = '#   python backend/manage.py neo4j_seed\n'
+
+        self.assertEqual(self.invocacoes(texto), ['neo4j_seed'])
+        self.assertNotIn('neo4j_seed', get_commands())
+
+    def test_mencao_historica_nao_e_flagrada(self):
+        """Registrar que um comando saiu e o oposto de mandar roda-lo.
+
+        O proprio `requirements.txt` explica hoje por que o `neo4j_seed` foi
+        removido. Se o guarda flagrasse isso, a saida mais barata seria apagar
+        a explicacao — trocando um defeito por um pior.
+        """
+        texto = 'o manage.py neo4j_seed foi removido em 28/07/2026'
+
+        self.assertEqual(self.invocacoes(texto), [])
+
+
 def _pasta_temporaria():
     import tempfile
 

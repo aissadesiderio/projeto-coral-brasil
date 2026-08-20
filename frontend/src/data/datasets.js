@@ -162,27 +162,41 @@ export const DADOS_GERAIS = [
 
 export const HOME_HERO_IMAGE = homeHeroCoral;
 
+// ⚠️ O `olho` numerado entrou com o desenho 3a: as tres entradas sao um
+// percurso (onde estao os recifes -> o que ha de dado -> como o numero e feito),
+// e nao tres atalhos equivalentes. Sem a numeracao elas se leem como um menu.
+//
+// 🚨 A descricao do "Painel de Risco" prometia PAR e clorofila, duas variaveis
+// que o projeto **nao coleta** — o portao legado do painel chegou a exigi-las e
+// por isso nunca liberava com dado real (ver LocalRecifePage). Ficaram de fora
+// da redacao nova, junto com o resto da camada legada.
 export const HOME_DESTAQUES = [
   {
     id: 'recifes',
     pagina: 'recifes',
     imagem: homeCardRecifes,
-    titulo: 'Recifes Monitorados',
-    descricao: 'Veja dados ambientais, risco atual e especies associadas por localizacao.',
-  },
-  {
-    id: 'painel',
-    pagina: 'recifes',
-    imagem: homeCardPainel,
-    titulo: 'Painel de Risco',
-    descricao: 'Acompanhe temperatura, DHW, PAR, salinidade, oxigenio e clorofila.',
+    olho: '01 · Localizacoes',
+    titulo: 'Pagina por localizacao',
+    descricao:
+      'Degrau de hoje, entradas do modelo, serie medida e especies associadas em uma tela.',
   },
   {
     id: 'banco',
     pagina: 'banco',
     imagem: homeCardBanco,
-    titulo: 'Banco de Dados',
-    descricao: 'Consulte datasets climaticos, biologicos, geneticos, imagens e relatorios.',
+    olho: '02 · Dados',
+    titulo: 'Catalogo com cobertura declarada',
+    descricao:
+      'O que a API serve, o que e referencia externa e o que nao foi verificado — separado, nao misturado.',
+  },
+  {
+    id: 'painel',
+    pagina: 'recifes',
+    imagem: homeCardPainel,
+    olho: '03 · Metodo',
+    titulo: 'Escala, calibracao e limites',
+    descricao:
+      'Por que quatro degraus, por que estresse termico e o que a regua da NOAA nao capta — no painel de cada recife.',
   },
 ];
 

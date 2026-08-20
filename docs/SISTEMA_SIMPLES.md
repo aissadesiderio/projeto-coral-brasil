@@ -604,6 +604,13 @@ Os três recifes tinham valores originais diferentes (0,083 e 0,066, por
 exemplo), mas caíam no mesmo degrau. Então saem iguais. Sobre os 7.095 dias
 usados no treino, existem só **313 valores possíveis** de probabilidade.
 
+📌 **Estes números são da medição de 27/07/2026, sobre o conjunto de três
+recifes.** O modelo servido hoje treina sobre **oito** (19.056 dias, desde
+12/08/2026), e a contagem de degraus **não foi remedida** — o efeito descrito
+aqui é o mesmo, a aritmética exata não. Fica datado em vez de atualizado por
+dedução, porque o número de degraus depende do conjunto e não se calcula de
+cabeça.
+
 ### E o degrau mais baixo vale exatamente zero
 
 Essa é a parte que **muda o que a tela pode mostrar**.

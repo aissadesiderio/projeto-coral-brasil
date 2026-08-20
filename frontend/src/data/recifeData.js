@@ -22,7 +22,10 @@ export const FALLBACK_RECIFES = [
     "longitude": null,
     "fonte_coordenadas": "Sem coordenada: e uma area, nao um ponto. Um lat/lon unico para 12 municipios seria inventado.",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": 4950.84,
+    "fonte_area_uc": "Dec. 12.490 de 05/06/2025 (ampliacao, +89.441,64 ha) - 495.084 ha no total. Criada por decreto de 23/10/1997. Maior UC marinha costeira federal do pais.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "fernando-de-noronha-pe",
@@ -42,7 +45,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -32.4208,
     "fonte_coordenadas": "Convertida de 3o51'08\" S, 32o25'15\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": 109.2947,
+    "fonte_area_uc": "ICMBio (PARNA Marinho de Fernando de Noronha) - 10.929,47 ha. Criado pelo Dec. 96.693 de 14/09/1988.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "atol-das-rocas-rn",
@@ -62,7 +68,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -33.8061,
     "fonte_coordenadas": "Convertida de 3o51'47\" S, 33o48'22\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. Municipio (Natal) e coordenadas PENDENTES de verificacao em fonte oficial (ICMBio).",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": 351.8641,
+    "fonte_area_uc": "ICMBio (REBIO do Atol das Rocas) - 35.186,41 ha. Criada pelo Dec. 83.549 de 05/06/1979, primeira UC marinha do Brasil.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "parcel-manuel-luis-ma",
@@ -82,7 +91,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -44.3194,
     "fonte_coordenadas": "Convertida de 0o54'48\" S, 44o19'10\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": 459.379,
+    "fonte_area_uc": "SEMA-MA, Plano de Manejo de Especies e Habitats do PEM do Parcel de Manuel Luis, p.10 - 45.937,9 ha. Criado pelo Dec. Estadual 11.902 de 11/06/1991, primeiro parque marinho estadual do pais.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "areia-vermelha-pb",
@@ -102,7 +114,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -34.8125,
     "fonte_coordenadas": "Convertida de 7o00'17\" S, 34o48'45\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": 2.31,
+    "fonte_area_uc": "Dec. estadual PB 21.263 de 28/08/2000 - 231,00 ha. O Plano de Manejo (SUDEMA/PB, p.38) remede 230,915 ha; mantido aqui o valor legal.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "recife-de-fora-ba",
@@ -126,7 +141,10 @@ export const FALLBACK_RECIFES = [
     "longitude": null,
     "fonte_coordenadas": "Sem coordenadas exatas publicadas na tabela de referencia trazida pelo usuario - nao estimadas para nao fabricar posicao. Localizacao aproximada: ~5 milhas nauticas da costa de Porto Seguro/BA.",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": 17.5,
+    "fonte_area_uc": "Parque Natural Municipal Marinho do Recife de Fora (Porto Seguro/BA) - 1.750 ha, Lei municipal 260/97 de 16/12/1997. Conferido na Rede de Gestores de UCs Costeiras e Marinhas; texto da lei nao lido.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "abrolhos-ba",
@@ -146,7 +164,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -38.688,
     "fonte_coordenadas": "Seed original do projeto (backend/db/setup_graph.py) - Arquipelago dos Abrolhos. Conferir contra ICMBio.",
     "profundidade_media_m": 10.0,
-    "area_km2": null
+    "area_uc_km2": 879.43,
+    "fonte_area_uc": "ICMBio (PARNA Marinho dos Abrolhos) - 87.943 ha, em dois poligonos (Recife de Timbebas e Arquipelago dos Abrolhos). Criado pelo Dec. 88.218 de 06/04/1983.",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "parrachos-de-maracajau-rn",
@@ -166,7 +187,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -35.2969,
     "fonte_coordenadas": "Convertida de 5o24'09\" S, 35o17'49\" W, de tabela de referencia trazida pelo usuario sem fonte primaria citada. PENDENTE de verificacao em fonte oficial (ICMBio).",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": null,
+    "fonte_area_uc": "",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "porto-de-galinhas-pe",
@@ -186,7 +210,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -34.998,
     "fonte_coordenadas": "Aproximada - piscinas naturais a ~500 m da praia, Ipojuca/PE. PENDENTE de verificacao em fonte oficial.",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": null,
+    "fonte_area_uc": "",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   },
   {
     "slug": "picaozinho-pb",
@@ -206,7 +233,10 @@ export const FALLBACK_RECIFES = [
     "longitude": -34.81,
     "fonte_coordenadas": "Aproximada - zona recifal a ~1,5 km da praia de Tambau, Joao Pessoa/PB. PENDENTE de verificacao em fonte oficial.",
     "profundidade_media_m": null,
-    "area_km2": null
+    "area_uc_km2": null,
+    "fonte_area_uc": "",
+    "area_recifal_km2": null,
+    "fonte_area_recifal": ""
   }
 ];
 

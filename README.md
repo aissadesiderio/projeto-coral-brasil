@@ -15,6 +15,7 @@ encaixam, sem pressupor oceanografia nem aprendizado de máquina.
 
 | Documento | Conteúdo |
 |---|---|
+| [docs/DIRETRIZES.md](docs/DIRETRIZES.md) | **Leia antes de mexer no código.** As regras que norteiam o projeto, com o incidente que originou cada uma |
 | [docs/MANUAL.md](docs/MANUAL.md) | **Como rodar.** Do zero até o site aberto, passo a passo, com o que deve aparecer em cada etapa e o que fazer quando não aparece |
 | [docs/VISAO_GERAL.md](docs/VISAO_GERAL.md) | **Porta de entrada.** O projeto explicado do início: branqueamento, DHW, BAA, o caminho do dado e o que falta |
 | [docs/FONTES.md](docs/FONTES.md) | Toda fonte de dados: origem, licença, citação e problemas de proveniência conhecidos |
@@ -91,6 +92,25 @@ python -c "from django.core.management.utils import get_random_secret_key as k; 
 
 ⚠️ Não deixe `DJANGO_SECRET_KEY=` vazio no `.env`. Uma variável definida como
 string vazia sobrescreve o valor padrão — ou comente a linha, ou preencha.
+
+🚨 **O `.env.example` vem com `OFFLINE_MODE=True`, e isso apaga meia página do
+site.** É proposital — mantém o site público indisponível durante a
+reestruturação —, mas quem acabou de copiar o arquivo e abriu o site não tem
+como adivinhar: com essa linha ligada, `/api/status/` declara modo manutenção e
+o React **deixa de renderizar o painel de predição — sem escrever nada no lugar
+dele**. Os recifes e as espécies continuam na tela (vêm da cópia local
+`frontend/src/data/recifeData.js`) e o gráfico da série ao menos avisa que está
+em manutenção; o painel de risco é o único que some calado. O sinal para
+reconhecer isso é a tarja **"Modo manutencao"** no topo da página. Para ver o
+site completo em desenvolvimento:
+
+```
+OFFLINE_MODE=False
+```
+
+Isso vale para o site. Os endpoints também respondem `503` com essa linha
+ligada, então `curl` numa API pública devolvendo `503` tem a mesma causa. Ver
+[Por que o painel de risco não aparece](#por-que-o-painel-de-risco-não-aparece).
 
 ### 3. Banco
 
@@ -705,6 +725,24 @@ curl http://localhost:8000/api/painel-risco/
 | janela incompleta | `200`, item com `disponivel: false` e **qual dia faltou** |
 | local que o modelo não treinou | `404` com a lista dos disponíveis |
 | artefato ausente | `503` pedindo `treinar_final` |
+| `OFFLINE_MODE=True` | `503` de manutenção, **antes** de qualquer conta |
+
+#### Por que o painel de risco não aparece
+
+Cada causa tem um sintoma diferente na tela, e é por ele que se distingue —
+duas delas não escrevem erro nenhum:
+
+| O que você vê na página do recife | Causa | O que fazer |
+|---|---|---|
+| **Nada** onde deveria estar o painel — sem mensagem nenhuma —, tarja "Modo manutencao" no topo, mas recifes e espécies carregam | `OFFLINE_MODE=True` no `backend/.env` — o padrão do `.env.example` | Troque para `OFFLINE_MODE=False` e reinicie o Django |
+| "O modelo ainda nao esta disponivel neste servidor" | `backend/dados/modelos/` não existe. O `.joblib` **não é versionado**: um clone novo nunca o tem | `python backend\manage.py treinar_final` (exige o Postgres no ar **e com série ingerida** — sem dados ele falha, e está certo) |
+| "Nao foi possivel calcular o risco agora" | O Django não respondeu: processo parado, ou de pé sem o PostgreSQL atrás | `docker compose up -d`, depois `python backend\manage.py runserver` |
+| "O modelo nao foi treinado nesta localizacao" | Local fora dos três com série (Abrolhos, Picãozinho, Porto de Galinhas) | Esperado — ver [docs/VISAO_GERAL.md](docs/VISAO_GERAL.md) §3 |
+
+⚠️ **As duas primeiras causas se acumulam e a ordem engana.** Desligar o
+`OFFLINE_MODE` faz o painel aparecer — dizendo que não há modelo. Não é uma
+correção que falhou: são dois problemas em fila, e o segundo só fica visível
+depois de resolver o primeiro.
 
 ⚠️ **O limiar vem de `settings.PAINEL_LIMIAR`** (padrão `0.20`) e vai no
 payload. Subir o número troca alarme falso por evento perdido — é decisão de
@@ -1000,6 +1038,46 @@ chave some inteira para os demais, nunca vira `null`. É a mesma distinção que
 `iucn_categoria` já precisou fazer entre "sem dado" e "escondido de você".
 
 ---
+
+## Desenho da interface
+
+O frontend segue o desenho **"3a — costa medida"**, adotado em 13/08/2026. A
+ideia que ele executa: **editorial por fora, instrumento por dentro.** O texto
+mora na areia clara e em serifa; todo número mora em faixa escura ou em tabela,
+sempre em mono. O leitor sabe pelo tipo se está lendo uma frase ou uma medida.
+
+**Tokens** (`frontend/tailwind.config.js`):
+
+| Token | Hex | Papel |
+|---|---|---|
+| `ocean-deep` | `#17414c` | chrome — cabeçalho, faixas escuras, rodapé, botão primário |
+| `ocean-dark` | `#2b6978` | link em fundo claro e a curva de SST (o mesmo hex nos dois) |
+| `ocean-light` | `#9FBDBC` | filete da marca, botão claro sobre o chrome |
+| `sand-lightest` | `#ffefeb` | fundo da página |
+| `sand-tabela` | `#f8e7e0` | cabeçalho de coluna |
+| `sand-nota` | `#fffaf7` | nota de proveniência no pé de uma tabela |
+| `sand-aviso` | `#fff6f1` | bloco de procedência (com filete `terra` à esquerda) |
+| `terra` | `#D47046` | acento — "olho", item ativo da navegação, curva de DHW |
+| `terra-dark` | `#8A4A22` | o mesmo acento onde precisa passar em contraste como texto |
+
+**Tipografia:** Newsreader nos títulos, Inter no texto, IBM Plex Mono em tudo
+que é medida — rótulo de coluna, data, percentual, coordenada, unidade.
+
+**Vocabulário de classe** (`frontend/src/index.css`): `.faixa` (a largura de
+1160 px que chrome e conteúdo compartilham), `.rotulo-mono`, `.olho-terra`,
+`.superficie`, `.campo-sublinhado`, `.cabecalho-tabela`, `.nota-tabela`,
+`.bloco-procedencia`.
+
+Três coisas aqui são **requisito, não estilo**, e estão comentadas no código:
+
+1. **A cor cheia é exclusiva do degrau de risco.** `PainelPredicao` é a única
+   superfície de cor saturada do site. Espalhar a paleta da escala por selos e
+   cartões diluiria o único sinal que muda de significado com a cor.
+2. **Crédito de imagem viaja sobre a foto**, não em rodapé — um rodapé se
+   separa da imagem no primeiro print. Ver `CardEspecie` e [FONTES §2.1](docs/FONTES.md#21-inaturalist--conferido-e-corrigido-em-11082026-migração-0026).
+3. **Ausência não vira valor.** Cinza na régua e na tabela é falta de dado, não
+   risco baixo; local sem coordenada sai da régua e é contado por extenso. Ver
+   [FONTES §2.3.1.2](docs/FONTES.md), onde essa regra já falhou uma vez.
 
 ## Estrutura
 

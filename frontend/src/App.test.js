@@ -100,33 +100,45 @@ afterEach(() => {
   jest.resetAllMocks();
 });
 
-test('renderiza a pagina inicial com destaque para explorar recifes', async () => {
+test('renderiza a pagina inicial com o monitor da costa', async () => {
   renderizarApp('/');
 
   expect(screen.getAllByText(/Projeto Coral Brasil/i).length).toBeGreaterThan(0);
   expect(
-    screen.getByRole('heading', { name: /Mergulhe na biodiversidade coralina brasileira/i }),
+    screen.getByRole('heading', { name: /Os recifes brasileiros, medidos dia a dia/i }),
   ).toBeInTheDocument();
-  expect(screen.getByText(/Recifes Monitorados/i)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Estado da costa hoje/i })).toBeInTheDocument();
+  expect(screen.getByText(/Pagina por localizacao/i)).toBeInTheDocument();
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/grafo/localizacoes/'));
 });
 
-test('altera a navegacao do topo conforme a rota atual', async () => {
+/**
+ * 🚨 A barra do topo e **fixa**, e a pagina atual vem marcada.
+ *
+ * Ate 13/08/2026 cada rota escondia o proprio link da navegacao, e o teste que
+ * ficava no lugar deste conferia justamente a ausencia. Numa barra de tres
+ * itens, "o que falta e onde voce esta" e uma pista que ninguem le — e a barra
+ * mudava de largura a cada clique. Ver `utils/navigation.obterItensNavegacao`.
+ */
+test('a navegacao do topo e fixa e marca a pagina atual', async () => {
   const { unmount } = renderizarApp('/localizacoes');
 
   expect((await screen.findAllByText(/Parque Nacional Marinho de Abrolhos/i)).length).toBeGreaterThan(0);
 
-  expect(screen.getAllByRole('link', { name: /Pagina inicial/i }).length).toBeGreaterThan(0);
-  expect(screen.getAllByRole('link', { name: /Banco de dados/i }).length).toBeGreaterThan(0);
-  expect(screen.queryByRole('link', { name: /Explorar recifes/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Costa' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Dados' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Localizacoes' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Costa' })).not.toHaveAttribute('aria-current');
 
   unmount();
   renderizarApp('/banco-de-dados');
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/grafo/localizacoes/'));
 
-  expect(screen.getAllByRole('link', { name: /Pagina inicial/i }).length).toBeGreaterThan(0);
-  expect(screen.getAllByRole('link', { name: /Explorar recifes/i }).length).toBeGreaterThan(0);
-  expect(screen.queryByRole('link', { name: /Banco de dados/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Dados' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('link', { name: 'Localizacoes' })).not.toHaveAttribute('aria-current');
 });
 
 test('abre o detalhe diretamente pela rota e usa o slug da URL', async () => {

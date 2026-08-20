@@ -39,6 +39,8 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from auditoria import codigo
+
 logger = logging.getLogger(__name__)
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -81,6 +83,18 @@ def salvar(ajuste, nome, pasta=None, extras=None):
         'nome': nome,
         'gerado_em': date.today().isoformat(),
         'sklearn': _versao_sklearn(),
+        # 🚨 De qual codigo este artefato saiu. Era o elo que faltava para a
+        # cadeia fechar: colunas, horizonte e `n_treino` descrevem **como** o
+        # modelo foi ajustado, e nada dizia **por qual versao** do
+        # `dataset.montar`. Sem isso, "reproduzir o resultado" nao tem
+        # procedimento - o mesmo comando um mes depois pode rodar sobre outra
+        # regra de montagem, e o numero novo fica tao defensavel quanto o
+        # antigo, com nada apontando a diferenca.
+        #
+        # ⚠️ Carrega `sujo` junto. Commit com arvore alterada descreve um
+        # estado que nao foi o que rodou; declarar a lacuna vale mais que
+        # afirmar um hash que nao reconstroi.
+        'codigo': codigo.versao(),
         **ajuste.metadados(),
     }
     if extras:

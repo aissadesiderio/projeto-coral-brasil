@@ -257,6 +257,31 @@ SECURE_HSTS_PRELOAD = env.bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
 if env.bool('DJANGO_BEHIND_PROXY', default=False):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# --- Cache ------------------------------------------------------------------
+# ⚠️ **Por processo (`LocMemCache`) por padrao, e nao Redis.** O projeto roda
+# hoje num processo so; exigir Redis para o painel funcionar trocaria uma
+# otimizacao por uma dependencia de infraestrutura nova, e a diretriz e a
+# oposta (docs/DIRETRIZES.md secao 2.2). `CACHE_URL` promove para Redis quando
+# houver mais de um processo — sem isso, cada worker manteria a sua copia, o
+# que continua **correto** (a chave inclui a assinatura do dado) e so aproveita
+# menos.
+#
+# 🚨 O que este cache NAO faz: expirar por tempo. A invalidacao e pela chave,
+# que carrega a assinatura da serie. Ver `backend/memoria/__init__.py`.
+_CACHE_URL = env('CACHE_URL', default='')
+if _CACHE_URL:
+    CACHES = {'default': env.cache_url('CACHE_URL')}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'coral-painel',
+            # Teto de itens. Sao ~10 locais x 1 entrada por dia; 500 e folga
+            # larga e impede que uma chave mal montada encha a memoria.
+            'OPTIONS': {'MAX_ENTRIES': 500},
+        }
+    }
+
 # --- Observabilidade --------------------------------------------------------
 # 🚨 Ate 12/08/2026 este bloco nao existia, e o efeito nao era "log feio": era
 # log **invisivel**. As chamadas de `logger.warning` em `ingestao/`, `ml/` e

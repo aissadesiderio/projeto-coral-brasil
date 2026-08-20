@@ -154,8 +154,8 @@ se quer evitar antes de saber o que e. Entao ao lado vai um JSON legivel:
   "colunas": ["sst_variacao_7d", "dhw_variacao_7d",
               "salinidade_variacao_7d", "oxigenio_variacao_7d"],
   "alvo": "baa >= 3.0 em t+7",
-  "n_treino": 7095,
-  "positivos_treino": 596,
+  "n_treino": 19056,
+  "positivos_treino": 1643,
   "sklearn": "1.8.0"
 }
 ```
@@ -612,6 +612,31 @@ Tres defesas, cada uma com teste travando:
 📌 **`TENTATIVAS_ATE_DESISTIR = 5`** e o "tratar somente estas excecoes" do pedido: depois de cinco tentativas contra a mesma parede, a unidade sai da fila e vira caso para olhar, listada por `manage.py checkpoints`. O `LIMITE_FALHAS_SEGUIDAS` da ingestao esquece a cada execucao; este lembra entre execucoes.
 
 O **manifesto** (`--json`) e saida, sempre — gerado a partir dos checkpoints, nunca lido de volta pelo sistema. Se fosse lido, seria mais um estado para divergir do banco, e o projeto ja tem essa licao gravada em FONTES.md §2.1. Ele lista tambem o que **falhou**: um manifesto so com sucessos descreve um pipeline que nunca falhou, e nenhum pipeline e assim.
+
+## ✅ Auditoria — a cadeia da aquisicao ao resultado, construida em 13/08/2026
+
+Pacote `backend/auditoria/`, comando `manage.py auditar`.
+
+🚨 **O elo que faltava era o codigo.** O artefato do modelo ja gravava colunas, horizonte, `n_treino`, calibracao e a versao do scikit-learn — tudo que descreve *como* ele foi ajustado. Nao gravava **de qual codigo saiu**. Sem isso, "reproduzir o resultado do TCC" e uma frase sem procedimento: o mesmo comando, no mesmo banco, um mes depois, roda sobre um `dataset.montar` que pode ter mudado de regra, e o numero novo fica tao defensavel quanto o antigo, com nada apontando a diferenca. `ml.persistencia.salvar` agora carimba `codigo` em todo artefato.
+
+⚠️ **`sujo` importa tanto quanto o hash.** Um commit identifica o codigo versionado; com alteracao nao commitada na arvore, o hash sozinho descreve um estado que **nao foi o que rodou**. Registrar a lacuna nao conserta a reprodutibilidade — impede que alguem confie num numero que nao da para reconstruir. Mesma regra da categoria da IUCN sem ano.
+
+🚨 **Todo numero sai de um `COUNT` sobre a tabela real, na hora — nunca de agregado gravado.** O projeto ja perdeu uma decisao para o defeito oposto: a cobertura dos datasets estava gravada num campo, envelheceu em silencio, e a tabela do RESULTADOS.md montada a partir dela trocou dois episodios de lugar — o que decidiu o limiar de alerta (30/07). Auditoria que le agregado audita o agregado, nao o dado.
+
+⚠️ **A secao `lacunas` nao e apendice — e o que impede o relatorio de virar propaganda.** Um retrato que lista so o que esta completo descreve um projeto sem lacuna, e nenhum projeto e assim. Cada lacuna declara a **consequencia**: o que deixa de poder ser afirmado. Ha teste exigindo que toda lacuna tenha esse campo — sem ele, o relatorio vira lista de numeros que ninguem sabe interpretar, e a reacao natural e ignorar.
+
+**Duas classes de lacuna, e so uma bloqueia:**
+
+| Classe | Exemplos | Efeito |
+|---|---|---|
+| ressalva | local sem coordenada, especie sem ano IUCN, medicao degradada | aparece no relatorio, nao muda o codigo de saida |
+| bloqueia | checkpoint esgotado, ingestao falhada, codigo nao reproduzivel | `exit 1` |
+
+O `exit 1` existe para o agendador, pela mesma razao que `manage.py atualizar` fica calado em dia normal e que `neo4j_projetar` virou `CommandError`: um relatorio que sempre sai com 0 e um relatorio que nunca e lido.
+
+📌 **Artefatos anteriores a 13/08/2026 nao tem o carimbo de codigo.** O comando os lista dizendo `nao registrado - nao reproduzivel`, em vez de omitir a linha. Preencher retroativamente seria inventar procedencia.
+
+Estado medido na primeira execucao contra o banco real (13/08/2026): 154.224 medicoes de 5 pares (fonte, dataset), 8 de 10 locais com serie, 5 lacunas — das quais 2 bloqueiam.
 
 ## Regras operacionais
 

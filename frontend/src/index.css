@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,7 +15,7 @@ html {
 body {
   margin: 0;
   background: theme('colors.sand.lightest');
-  color: #1f2937;
+  color: theme('colors.ocean.deep');
   font-family: 'Inter', 'Segoe UI', sans-serif;
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
@@ -34,4 +34,71 @@ body {
 .main-content {
   flex: 1;
   min-width: 0;
+}
+
+@layer components {
+  /* A largura de leitura do 3a. Todas as telas partem dela, inclusive as
+     faixas escuras — é o alinhamento entre chrome e conteúdo que faz a
+     página parecer um instrumento e não uma pilha de blocos. */
+  .faixa {
+    @apply mx-auto w-full max-w-[1160px] px-5 sm:px-8 lg:px-10;
+  }
+
+  /* Rótulo de medida: coluna de tabela, eixo, data, unidade. Sempre mono,
+     sempre caixa alta, sempre menor que o valor que rotula. */
+  .rotulo-mono {
+    @apply font-mono text-3xs uppercase tracking-[0.12em];
+  }
+
+  .olho-terra {
+    @apply font-mono text-2xs uppercase tracking-[0.18em] text-terra;
+  }
+
+  .superficie {
+    @apply rounded-xl bg-white shadow-superficie;
+  }
+
+  /* Campo sublinhado, não caixa. É o que distingue o formulário do 3a de um
+     formulário genérico: a linha do campo continua a linha da tabela. */
+  .campo-sublinhado {
+    @apply w-full border-0 border-b border-ocean-deep/40 bg-transparent px-0 py-2 text-[15px]
+           text-ocean-deep outline-none transition
+           focus:border-terra focus:ring-0;
+  }
+
+  .campo-sublinhado-claro {
+    @apply w-full border-0 border-b border-white/40 bg-transparent px-0 py-2 text-[15px]
+           text-white outline-none transition placeholder:text-white/40
+           focus:border-ocean-light focus:ring-0;
+  }
+
+  .botao-primario {
+    @apply inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-ocean-deep px-6 py-3
+           text-[15px] font-semibold text-white transition hover:bg-ocean-dark
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-deep
+           focus-visible:ring-offset-2 focus-visible:ring-offset-sand-lightest
+           disabled:opacity-60;
+  }
+
+  .botao-secundario {
+    @apply inline-flex w-fit items-center justify-center gap-2 rounded-lg border border-ocean-deep/25
+           px-6 py-3 text-[15px] font-semibold text-ocean-deep transition hover:bg-ocean-deep/5
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ocean-deep
+           focus-visible:ring-offset-2 focus-visible:ring-offset-sand-lightest;
+  }
+
+  /* O cabeçalho de coluna e o rodapé de proveniência das tabelas do 3a. */
+  .cabecalho-tabela {
+    @apply border-b border-ocean-deep/10 bg-sand-tabela px-5 py-3 text-ocean-deep/50 sm:px-6;
+  }
+
+  .nota-tabela {
+    @apply bg-sand-nota px-5 py-4 text-[12.5px] leading-relaxed text-ocean-deep/60 sm:px-6;
+  }
+
+  /* Bloco de procedência: sempre com o filete terra à esquerda, para que a
+     origem de uma imagem ou de um número nunca se leia como texto de apoio. */
+  .bloco-procedencia {
+    @apply rounded-lg border-l-[3px] border-terra bg-sand-aviso p-4 sm:p-5;
+  }
 }

@@ -334,6 +334,8 @@ Nenhuma das três veio de uma fonte oficial citável. Antes do go-live devem ser
 
 `profundidade_media_m` foi preenchida apenas para Abrolhos (10,0 m, também do seed original). `area_km2` ficou nula em todos — deliberadamente, para não inventar número sem fonte.
 
+> ✅ **Atualização de 13/08/2026:** as áreas foram levantadas e preenchidas — em **dois campos**, não num só, porque a pergunta tinha duas respostas certas separadas por até três ordens de grandeza. `area_km2` foi removido. Ver **§2.5**. `profundidade_media_m` continua só em Abrolhos.
+
 #### 2.3.1 Sete locais adicionados em 11/08/2026 — sem fonte primária, sem série ambiental
 
 Migration `0025_seed_novos_locais_recife.py`. Vieram de uma tabela (nome, estado, coordenadas em graus/minutos/segundos, observação) trazida pelo usuário na conversa, **sem citação de fonte primária** — inclusive a própria tabela já marcava dois casos como sem coordenada confiável em vez de estimar. As coordenadas abaixo são só a conversão aritmética de GMS para decimal do que a tabela trazia; nenhuma foi conferida contra ICMBio ou Marinha do Brasil.
@@ -361,6 +363,22 @@ Ingestão rodada para os cinco: **2020-01-01 a 2026-08-11, 19.278 medições por
 🚨 **As coordenadas continuam pendentes de verificação, e agora há dado extraído em cima delas.** A tabela acima não muda: nenhuma das cinco veio de fonte primária citável. A consequência que muda é o tamanho — antes era um cadastro sem lastro, agora são **96.390 medições** posicionadas por uma conversão de graus/minutos/segundos sem fonte declarada. Enquanto assim, a série desses cinco **não é citável academicamente**, pela mesma regra já aplicada a Picãozinho e Porto de Galinhas na §2.3. Conferir contra ICMBio continua sendo a pendência, e ela ficou mais cara de adiar: mudar uma coordenada depois implica reingerir o local inteiro, porque a `bbox` muda.
 
 ⚠️ **`abrolhos-ba` continua com a divergência de ~1,5 km registrada e não resolvida**, e a decisão de não mexer ficou mais fácil de justificar: as 19.278 medições dele foram extraídas na `bbox` da coordenada gravada. Trocar a coordenada sem reingerir deixaria a série descrevendo um ponto e o cadastro declarando outro.
+
+#### 2.3.1.2 🚨 A ausência de coordenada virou uma coordenada na tela — corrigido em 13/08/2026
+
+Achado ao construir a régua de latitude do desenho novo do frontend (ver [README](../README.md#desenho-da-interface)). Os dois locais cadastrados **sem** lat/lon — `apa-costa-dos-corais` e `recife-de-fora-ba` — apareciam plotados **no equador**, no topo da régua e no topo da lista ordenada de norte a sul.
+
+A causa é uma linha só, e ela passa em qualquer revisão:
+
+```js
+Number.isFinite(Number(local.latitude))   // true para latitude nula
+```
+
+`Number(null)` é `0`, e `Number('')` também. O teste de "isto é um número?" respondia **sim** para a ausência, e `0` é uma latitude perfeitamente válida — a do equador. Nada quebrava, nada logava, e a tela afirmava com confiança a posição que a §2.3.1 tinha decidido não inventar.
+
+⚠️ **O dado nunca esteve errado.** O banco continua com `latitude = NULL` nos dois, `LocalRecife.tem_coordenadas` continua devolvendo `False`, e nenhuma medição foi extraída para eles. O que estava errado era a leitura: a camada de exibição converteu uma ausência registrada em afirmação, que é exatamente a classe de defeito que `motivo_sem_serie` e `iucn_tem_procedencia` existem para impedir — só que desta vez pelo lado do frontend.
+
+Corrigido com `utils/formatters.numeroOuNulo`, que devolve `null` para `null`, `undefined` e `''` antes de chamar `Number`. A régua passou a plotar **8 pontos** e a declarar, embaixo: *"2 localizações ficam fora da régua: estão cadastradas sem latitude/longitude, e um paralelo inventado seria pior que a ausência."*
 
 ### 2.4 Status de conservação — ✅ esquema corrigido em 31/07/2026, dados preenchidos em 04/08/2026
 
@@ -500,6 +518,70 @@ Isso muda a natureza do problema: não era só *falta de lastro*, era **dado err
 
 ✅ **Confirmado direto na ficha da IUCN em 04/08/2026** (não mais Wikidata) — ver a tabela completa em §2.4. As quatro linhas acima batem: `Mussismilia braziliensis` é CR de fato, e `Sparisoma axillare` é **DD**, resolvendo o "❓ a confirmar".
 
+### 2.5 Áreas dos locais — ✅ preenchidas em 13/08/2026 (migração `0031`), em **dois** campos
+
+🚨 **A lacuna não era falta de dado; era a pergunta ter duas respostas certas.** `area_km2` ficou nula nos 10 locais desde a migração `0014`, com a justificativa registrada em §2.3: *"para não inventar número sem fonte"*. Ao procurar as fontes, apareceu que elas existiam — o que não existia era um número só. Para Abrolhos, todos publicados:
+
+| Número | O que é | Onde aparece |
+|---|---|---|
+| **~8 km²** | os recifes **mapeados dentro do parque** (~3,4% da área de estudo, imagem WorldView-2) | Zoffoli et al. (2022) — ver abaixo |
+| **879,43 km²** | o **parque** (87.943 ha, dois polígonos: Recife de Timbebas e Arquipélago) | ICMBio |
+| **6.000 km²** | o ecossistema recifal do Banco norte | literatura |
+| **45.000 km²** | o **Banco dos Abrolhos**, extensão da plataforma continental | literatura |
+
+O campo antigo dizia *"área aproximada da zona recifal"*. Gravar 879,43 ali faria a tela anunciar um recife **110 vezes maior** que o medido — o mesmo erro de categoria que §6.3 já registra (alcalinidade gravada como pH): número certo, pergunta errada. Por isso `area_km2` foi **removido** (era nulo em toda parte, nada se perdeu) e substituído por dois pares campo+fonte: `area_uc_km2`/`fonte_area_uc` e `area_recifal_km2`/`fonte_area_recifal`.
+
+⚠️ **Cada área anda com a _sua_ fonte, não com uma fonte comum.** São medidas de coisas diferentes, publicadas por instituições diferentes — o ICMBio decreta a UC, a área recifal sai de mapeamento por satélite. Uma fonte compartilhada teria de descrever as duas, ou seja, não descreveria nenhuma. Mesmo princípio de `MedicaoAmbiental` guardar `fonte` por valor e não por linha.
+
+#### O que foi gravado
+
+| Local | `area_uc_km2` | Fonte | Situação |
+|---|---|---|---|
+| `apa-costa-dos-corais` | 4.950,84 | Dec. **12.490 de 05/06/2025** (ampliação, +89.441,64 ha) — 495.084 ha. Criada em 23/10/1997 | ✅ decreto |
+| `abrolhos-ba` | 879,43 | **ICMBio** — 87.943 ha, dois polígonos. Dec. 88.218 de 06/04/1983 | ✅ órgão gestor |
+| `parcel-manuel-luis-ma` | 459,379 | **SEMA-MA**, Plano de Manejo de Espécies e Habitats, p.10 — 45.937,9 ha. Dec. estadual 11.902 de 11/06/1991 | ✅ órgão gestor |
+| `atol-das-rocas-rn` | 351,8641 | **ICMBio** — 35.186,41 ha. Dec. 83.549 de 05/06/1979, primeira UC marinha do país | ✅ órgão gestor |
+| `fernando-de-noronha-pe` | 109,2947 | **ICMBio** — 10.929,47 ha. Dec. 96.693 de 14/09/1988 | ✅ órgão gestor |
+| `recife-de-fora-ba` | 17,50 | Parque Natural Municipal Marinho (Porto Seguro/BA) — 1.750 ha, **Lei municipal 260/97 de 16/12/1997** | ⚠️ texto da lei não lido |
+| `areia-vermelha-pb` | 2,31 | **Dec. estadual PB 21.263 de 28/08/2000** — 231,00 ha | ✅ decreto |
+| `parrachos-de-maracajau-rn` | *(nulo)* | — | 🚨 **não é UC** |
+| `porto-de-galinhas-pe` | *(nulo)* | — | 🚨 **não é UC** |
+| `picaozinho-pb` | *(nulo)* | — | 🚨 **não é UC** |
+
+🚨 **Os três nulos são decisão, não pendência — e a "correção" óbvia é o erro.** Nenhum dos três é unidade de conservação: `parrachos-de-maracajau-rn` fica dentro da **APA dos Recifes de Corais/RN** (~136.000 ha, Dec. estadual 15.746/2001), `porto-de-galinhas-pe` dentro da **APA Costa dos Corais**, e `picaozinho-pb` não tem proteção legal própria (há proposta de APA Naufrágio Queimado, ainda não vigente — hoje a única UC do litoral paraibano é o Parque de Areia Vermelha). Preencher o parracho com os 1.360 km² da APA que o contém seria **atribuir a área do continente à ilha**. Travado por teste (`AreasSemeadasTests.test_feicao_recifal_dentro_de_uc_maior_nao_herda_a_area_da_uc`).
+
+⚠️ **O órgão gestor foi adotado como autoridade porque as fontes secundárias divergem entre si em todos os casos conferidos**, e não por pouco:
+
+| Local | Números encontrados | Adotado |
+|---|---|---|
+| Abrolhos | 879 km² · 87.943 ha · 91.300 ha | 87.943 ha (ICMBio) |
+| Fernando de Noronha | 11.270 ha · 10.927,64 ha · **10.929,47 ha** | 10.929,47 ha (ICMBio) |
+| Atol das Rocas | **35.186,41 ha** · ~36.000 ha · 37.820 ha | 35.186,41 ha (ICMBio) |
+| Parcel de Manuel Luís | 45.237,9 ha · **45.937,9 ha** | 45.937,9 ha (plano de manejo SEMA-MA) |
+| APA Costa dos Corais | 413.000 ha (antes) · **495.084 ha** (após 2025) | 495.084 ha (decreto vigente) |
+
+🚨 **O caso do Parcel de Manuel Luís mostra por que a conferência valeu.** Uma das fontes secundárias dá **45.237,9 ha** — um dígito de diferença, plausível o bastante para passar despercebido, e 7 km² errados no resultado. O plano de manejo da própria SEMA-MA (p.10) fecha a questão: *"criado por Decreto Estadual nº 11.902 de 11 de junho 1991 (…) abrangendo uma área de 45.937,9 hectares"*.
+
+⚠️ **Areia Vermelha tem duas medidas, e a diferença é real, não erro.** O decreto declara **231,00 ha**; o plano de manejo da SUDEMA/PB (p.38) remede o polígono e chega a **230,915 ha**. O banco guarda o valor **legal** (231,00 ha → 2,31 km²), porque é o que define a UC; a remedição fica registrada no campo de fonte, para quem precisar da diferença saber que ela existe e de onde vem.
+
+#### `area_recifal_km2` — nula nos 10, e isso é o resultado
+
+🚨 **Nenhum local recebeu área recifal, de propósito** — e a razão mudou de natureza em 13/08/2026, o que vale registrar porque é a diferença entre duas pendências parecidas.
+
+A **referência foi identificada** e não é mais "um número circulando":
+
+> Zoffoli, M.L.; Frouin, R.; Moura, R.L.; Medeiros, T.A.G.; Bastos, A.C.; Kampel, M. (2022). *Spatial distribution patterns of coral reefs in the Abrolhos region (Brazil, South Atlantic ocean)*. **Continental Shelf Research** 246: 104808. DOI [10.1016/j.csr.2022.104808](https://doi.org/10.1016/j.csr.2022.104808)
+
+Confirmada no **Crossref** (metadados abertos) e pela [notícia do próprio INPE](http://www.obt.inpe.br/OBT/noticias-obt-inpe/artigo-no-continental-shelf-research-mapeia-os-padroes-de-distribuicao-dos-recifes-em-abrolhos), instituição dos autores, que descreve o trabalho: *"foi gerado um mapa dos recifes de coral dentro do Parque Nacional Marinho dos Abrolhos (…) usando uma imagem de altíssima resolução espacial WorldView-2 e observações submarinas"*.
+
+⚠️ **O que continua faltando não é a citação — é o número.** Os ~8 km² (~3,4% da área de estudo) só apareceram em **resumos de terceiros**; o artigo está atrás de paywall, o `openAccessPdf` do Semantic Scholar aponta para o manuscrito aceito na ScienceDirect (403 a acesso automatizado), e nem Crossref nem OpenAlex trazem o abstract. A notícia do INPE confirma o estudo e o método, **mas não repete o número**.
+
+🚨 **Isso é suficiente para citar o artigo e insuficiente para gravar o valor, e o projeto já decidiu esse caso antes.** Em §2.4, categorias da IUCN conferidas apenas no Wikidata **não foram gravadas** — *"é forte mas é cópia, e nada foi gravado no banco com essa procedência"*. Mesmo critério aqui: `area_recifal_km2` fica nula, e a ficha do site escreve "Não registrado".
+
+📌 **Pendência aberta, agora com endereço exato:** abrir o DOI acima, ler a área na seção de resultados e preencher `area_recifal_km2` + `fonte_area_recifal` para `abrolhos-ba`. Uma via institucional (UFF/CAPES) resolve. Para os outros nove, a fonte homogênea seria o **Allen Coral Atlas**, que publica polígonos recifais de 5 m e cobre o Brasil — e resolveria de uma vez a mesma pendência que §2.3 registra para as coordenadas.
+
+⚠️ **Na tela, as duas linhas vêm com um aviso escrito.** Um visitante que veja "879,43 km²" em cima e "Não registrado" embaixo conclui que o recife tem 879 km². `FichaDoLocal` diz, por extenso, que as duas áreas respondem perguntas diferentes e que uma não se deduz da outra — a distinção é o dado, e deixá-la implícita seria confiar em que o leitor conheça a diferença entre uma UC e um recife.
+
 ---
 
 ## 3. Referências científicas
@@ -610,7 +692,59 @@ Mais a frase exigida pela licença: *"Contains modified Copernicus Climate Chang
 
 ---
 
-### 4.2 Demais candidatas
+### 4.3 IBAT — 10 relatórios de proximidade ⏳ concedidos, não usados
+
+Concedidos em **12/08/2026** por Mark Leckie (IBAT Alliance), junto com a
+confirmação de uso não comercial (§7.4). Um *proximity report* recebe um
+**site** e devolve as espécies dali com **categoria, ano da avaliação e versão
+da Lista Vermelha** — os três campos que este projeto guarda.
+
+**Para quê:** é a resposta ao problema de escala. A conferência ficha a ficha
+(migração `0024`) serviu para 9 espécies e não serve para 300; um relatório
+cobre um recife inteiro de uma vez.
+
+⚠️ **Não usados ainda, e de propósito.** As 9 espécies já estão conferidas, e
+**10 relatórios são orçamento, não assinatura**. Com os locais novos, dez não
+cobrem uma passada por recife com folga para reconferir — o que **aumenta** a
+importância de `iucn_conferencia_vencida`, porque reconferir passou a ter custo
+contável. Gastá-los agora resolveria um problema que já está resolvido.
+
+#### 🚨 A armadilha: proximidade **não** é ocorrência
+
+Um relatório de proximidade devolve espécies cuja **área de distribuição
+modelada** cobre o ponto. Não devolve espécies que alguém viu ali.
+
+| Fonte | O que ela afirma |
+|---|---|
+| **IBAT (proximidade)** | *"esta espécie **poderia** estar aqui"* — sobreposição de distribuição |
+| **OBIS / GBIF (ocorrência)** | *"esta espécie **foi registrada** aqui, nesta data, por este método"* |
+
+A saída de um relatório de proximidade **parece** uma lista de ocorrências, e é
+exatamente por isso que ela é perigosa: alimentar o vínculo espécie↔local com
+ela faria o banco afirmar presença observada com base em modelo de
+distribuição, com a mesma aparência de um registro do OBIS que tem data,
+coletor e método.
+
+> É o mesmo formato dos defeitos que este documento já registra três vezes:
+> **dado certo, afirmação errada** — porque a fonte responde uma pergunta e o
+> campo declara outra.
+
+**Regra que fica:** relatório de proximidade pode preencher **conservação**
+(§2.4), nunca **ocorrência**. A ocorrência continua dependendo de OBIS/GBIF.
+
+#### E a citação é do IBAT, não do Red List
+
+O IBAT é produto de parceria — **BirdLife International, Conservation
+International, IUCN e UNEP-WCMC** — que empacota dados da Lista Vermelha e tem
+**citação própria**. Um valor vindo dali não é `ficha` nem `api`: exigiria um
+`iucn_origem='ibat'`, que **não foi acrescentado** porque opção que ninguém usa
+é especulação. Acrescentar junto com o primeiro relatório de fato usado.
+
+⏳ **Pendente antes de usar o primeiro:** perguntar ao Mark a forma exata da
+citação do IBAT. Barato de perguntar enquanto o canal está aberto, e caro de
+descobrir depois de gastar relatório.
+
+### 4.4 Demais candidatas
 
 Levantadas no planejamento, com justificativa de por que interessam ao projeto.
 
@@ -1398,7 +1532,56 @@ ganhou `--somente-series`, que atualiza só a metade derivada do banco.
 
 **No mesmo movimento, a ficha física do local.** `profundidade_media_m` e `area_km2` estavam em `LocalRecife` desde a migração `0014` e **nunca saíram do Django admin** — não estavam em nenhum serializer, em nenhuma tela, em nenhuma cópia versionada. O motivo de ninguém ter reparado é exatamente o que torna o caso instrutivo: **nenhuma previsão usa esses campos**, então a ausência não quebrava teste, gráfico nem número. Agora saem na API (lista e detalhe), na cópia versionada e no bloco *"Ficha do local"* (`FichaDoLocal.jsx`), junto de coordenadas e `fonte_coordenadas`. 📌 **Pendência aberta:** dos 10 locais, só `abrolhos-ba` tem profundidade (10 m) e **nenhum** tem área. A ficha escreve *"Não registrado"* em vez de esconder a linha — pelo mesmo princípio de `iucn_categoria` sem ano (§2.4): a lacuna se declara. Quem preencher precisa registrar a fonte junto, aqui.
 
+> ✅ **Resolvido em 13/08/2026, e a solução não foi preencher o campo — foi descobrir que ele misturava duas perguntas.** `area_km2` deixou de existir; entraram `area_uc_km2` e `area_recifal_km2`, cada um com sua fonte. Ver **§2.5**. A profundidade continua só em Abrolhos.
+
 Travado por 22 testes de backend (`testes_acervo_local.py`) e 11 de frontend (`AcervoDoLocal.test.jsx`, `FichaDoLocal.test.jsx`).
+
+### 6.26 ✅ RESOLVIDO em 13/08/2026 — a ausência de coordenada virava o equador na tela
+
+O defeito inteiro está em **§2.3.1.2**, junto da decisão que ele violava. Fica registrado aqui porque é o primeiro desta lista que **não é do dado nem do pipeline**: o banco estava certo, a API estava certa, e a camada de exibição converteu `latitude = NULL` em `0` — uma latitude válida — ao perguntar `Number.isFinite(Number(latitude))`. É a mesma classe de erro de §6.3 (alcalinidade lida como pH) com o sentido invertido: lá um valor virou outro valor, aqui uma **ausência** virou valor.
+
+### 6.24 Decisão de 16/08/2026 — a série medida virou gráfico interativo, e o painel da probabilidade **não** foi junto
+
+A seção "a série medida" da página de cada recife passou a usar Plotly, com
+quatro painéis empilhados (`sst`, `dhw`, `salinidade`, `oxigênio`) e as faixas
+do `baa` por trás — o mesmo desenho das figuras geradas por
+`ml/graficos.py::linha_do_tempo`. As figuras têm **cinco** painéis; o site tem
+quatro, e a diferença é deliberada.
+
+🚨 **O painel que falta é o da probabilidade prevista ao longo do tempo, e
+portá-lo do jeito óbvio produziria um número desonesto.** Na figura, aquela
+curva é **fora da dobra** (*leave-year-out*): cada ponto vem de um modelo que
+**não viu** o ano que está prevendo — é o que a própria docstring de
+`linha_do_tempo` registra, e é o que faz a curva significar *previsão* e não
+*memória*. O modelo que o site serve é o de `treinar_final`, treinado sobre
+**todos** os anos. Rodá-lo para trás sobre a mesma série produziria uma curva
+em que o modelo prevê dados que ele já viu no treino: ela acertaria mais do que
+o modelo acerta de verdade, e não haveria nada na tela denunciando isso.
+
+⚠️ **Não é limitação de biblioteca nem de API — é falta do dado.** Nenhum
+endpoint hoje serve probabilidade histórica: `/api/painel-risco/` calcula a
+predição **de hoje** na requisição e a descarta (a pendência "gravar o que foi
+previsto" já está registrada em [VISAO_GERAL.md](VISAO_GERAL.md) §10). Os dois
+caminhos honestos para o painel existir no site são:
+
+1. **Persistir a predição diária** a partir de agora — o site passa a ter
+   histórico real de *o que ele disse*, que é justamente o que hoje evapora.
+   Não recupera 2020-2026: começa vazio e enche com o tempo.
+2. **Servir a curva fora da dobra** como artefato da avaliação, gerada pelo
+   mesmo caminho das figuras e marcada como tal — histórico completo, mas é
+   uma **medição de desempenho**, não o que o site previu no dia.
+
+As duas respondem perguntas diferentes ("o que o site avisou?" contra "quão bom
+o modelo é?") e nenhuma substitui a outra. Enquanto nenhuma existir, o site
+mostra os quatro painéis do que foi **medido**, e a predição continua onde já
+estava: no painel de risco acima, falando de hoje.
+
+📌 A distinção medição/previsão que já estava escrita na tela ("Isto e medicao,
+nao previsao") passa a valer também para as faixas rosa: elas marcam os dias em
+que a NOAA **manteve** o alerta (`baa >= 3` naquele dia). A figura do TCC pinta
+`baa >= 3` **em t+7**, porque lá a faixa serve para julgar uma previsão com 7
+dias de antecedência. Mesma fonte, pergunta diferente — e por isso as faixas do
+site e as da figura não coincidem dia a dia.
 
 ---
 
@@ -1521,11 +1704,34 @@ precisa ser encontrada primeiro.
 | Dados NOAA CRW | domínio público (obra do governo dos EUA) |
 | Dados Copernicus | livre e aberta, **com atribuição obrigatória** |
 | GCBD | **CC-BY 4.0** |
+| **IUCN Red List** | uso **não comercial confirmado por escrito** — ver abaixo |
 | Fotografias iNaturalist | varia por observação — verificar uma a uma |
 
 ⚠️ A licença MIT **cobre apenas o código**. Dados e imagens seguem a licença
 da fonte original, e algumas exigem atribuição na própria página que os exibe,
 não só numa seção de créditos.
+
+#### O uso da Lista Vermelha foi confirmado — 12/08/2026
+
+✅ **Mark Leckie (IBAT Alliance) confirmou por e-mail**, em resposta à
+contestação da recusa de API:
+
+> *"Your work fits within our definition of non-commercial."*
+
+📌 **Isto era a pergunta que mais importava**, e não o token. O site **exibe**
+categorias da Lista Vermelha numa página pública, e até aqui isso se apoiava
+numa suposição de que era permitido. Agora há confirmação nominal e datada, do
+lado deles, guardada aqui — que é onde alguém vai procurar quando a pergunta
+aparecer na banca.
+
+⚠️ **A confirmação é sobre o uso, não dispensa a atribuição.** Cada categoria
+exibida continua precisando da citação da avaliação, com ano e versão (§7.2), e
+é para isso que os campos `iucn_avaliado_em` e `iucn_versao` existem.
+
+🚨 **E ela corrige uma suposição minha registrada antes:** eu havia escrito que
+o token da API automatizaria a consulta por espécie. **Não existe consulta por
+espécie** — o próprio Mark diz isso. A conferência ficha a ficha da migração
+`0024` não era o plano B; era o único caminho disponível.
 
 ### 7.5 Como citar a série **deste** projeto — ✅ desde 31/07/2026
 
@@ -1597,8 +1803,12 @@ conforme a regra de governança daquele documento.
 
 | Data | Alteração |
 |---|---|
+| 13/08/2026 | ✅ **§7.4 — o uso não comercial da Lista Vermelha foi confirmado por escrito**, por Mark Leckie (IBAT Alliance) em 12/08/2026, respondendo à contestação da recusa de API. Era a pergunta que mais importava: o site **exibe** categorias numa página pública, e isso se apoiava numa suposição de que era permitido. 🚨 A resposta também corrige uma suposição registrada aqui — eu havia escrito que o token automatizaria a consulta por espécie, e **não existe consulta por espécie**; a conferência ficha a ficha da `0024` era o único caminho. **§4.3 criada**: 10 relatórios de proximidade do IBAT, concedidos e **deliberadamente não usados** — as 9 espécies já estão conferidas, e 10 é orçamento e não assinatura, o que torna `iucn_conferencia_vencida` mais importante e não menos. ⚠️ Registrada a armadilha antes que alguém gaste um: **proximidade não é ocorrência**. O relatório devolve espécies cuja distribuição *modelada* cobre o ponto, e a saída parece uma lista de ocorrências — alimentar espécie↔local com ela faria o banco afirmar presença observada a partir de modelo, com a mesma cara de um registro do OBIS que tem data e método. Relatório de proximidade pode preencher **conservação**, nunca **ocorrência**. E a citação é do IBAT (BirdLife, CI, IUCN, UNEP-WCMC), não do Red List. 📌 Corrigida de passagem uma numeração duplicada: havia **duas seções 4.2**. |
+| 13/08/2026 | ✅ **§2.5 — conferência das fontes secundárias: duas subiram para o órgão gestor, uma quase entrou errada.** As três áreas marcadas ⚠️ na entrada anterior foram atrás da fonte primária. **Parcel de Manuel Luís:** uma fonte secundária dava **45.237,9 ha** contra os 45.937,9 ha gravados — um dígito, 7 km² de erro, plausível o bastante para passar. O plano de manejo da própria **SEMA-MA** (p.10) confirmou 45.937,9 ha e o Dec. estadual 11.902 de 11/06/1991. **Areia Vermelha:** confirmado o Dec. PB 21.263 de 28/08/2000 com **231,00 ha**; o plano de manejo da SUDEMA/PB (p.38) **remede 230,915 ha** — mantido o valor legal no banco, com a remedição registrada na fonte, porque a diferença é real e não erro. **Recife de Fora:** identificada a **Lei municipal 260/97 de 16/12/1997** e os 1.750 ha confirmados na Rede de Gestores de UCs Costeiras e Marinhas; o texto da lei não foi lido, então continua ⚠️. 🚨 **A área recifal mudou de estado, mas não de resultado:** a referência do número de Abrolhos foi **identificada** (Zoffoli et al., 2022, *Continental Shelf Research* 246:104808, DOI 10.1016/j.csr.2022.104808), confirmada no Crossref e pela notícia do próprio INPE — deixou de ser "referência não identificada" (§3.1). Mas o artigo é pago, Crossref e OpenAlex não trazem abstract, e os ~8 km² só existem em resumos de terceiros. Pelo mesmo critério de §2.4 (categorias da IUCN vistas só no Wikidata não foram gravadas), **`area_recifal_km2` continua nula nos 10**. A pendência agora tem endereço exato: abrir o DOI e ler a área. |
+| 13/08/2026 | ✅ **§2.5 — as áreas dos locais foram levantadas e preenchidas, em _dois_ campos.** `area_km2` estava nula nos 10 locais desde a migração `0014`, com a justificativa "não inventar número sem fonte" (§2.3). As fontes existiam; o que não existia era **um número só**: Abrolhos tem ~8 km² de recife mapeado, **879,43 km² de parque**, 6.000 km² de ecossistema recifal do banco norte e 45.000 km² de Banco — todos publicados, três ordens de grandeza entre os extremos. O campo dizia "área da zona recifal", então gravar 879,43 ali anunciaria um recife **110× maior** que o medido: o erro de categoria de §6.3 (alcalinidade como pH). Migração `0031` remove `area_km2` (nulo em toda parte, nada perdido) e cria `area_uc_km2`/`fonte_area_uc` e `area_recifal_km2`/`fonte_area_recifal` — **cada área com a sua fonte**, porque são medidas de coisas diferentes por instituições diferentes. Preenchidos **7 locais** com área de UC: 3 direto do ICMBio (Abrolhos 87.943 ha, Noronha 10.929,47 ha, Atol das Rocas 35.186,41 ha), 1 de decreto vigente (APA Costa dos Corais, 495.084 ha após a ampliação de 05/06/2025) e 3 marcados ⚠️ **fonte secundária**. O ICMBio virou autoridade porque as fontes secundárias **divergem entre si em todos os casos** (Noronha aparece como 11.270, 10.927,64 e 10.929,47 ha). 🚨 **3 ficam nulos por decisão, não por lacuna:** Parrachos de Maracajaú, Porto de Galinhas e Picãozinho **não são UC** — são feições dentro de UCs maiores, e preenchê-los com a área da APA que os contém seria atribuir a área do continente à ilha (travado por teste). 🚨 **`area_recifal_km2` ficou nula nos 10:** o número de Abrolhos (~8 km², WorldView-2) está atrás de paywall e autores/ano/DOI não puderam ser conferidos — gravá-lo repetiria §3.1, referência não identificada usada como dado. 6 testes de backend novos (4 em `AreasSemeadasTests`, 2 nos existentes), 3 de frontend — 168 no total. |
 | 12/08/2026 | 🚨 **§6.25 — a política de §6.23 valia na API e não aparecia em lugar nenhum do site; §2.2 — a foto do local não tinha onde registrar autoria.** Dois defeitos da mesma família: *o projeto guardava e não mostrava*. **(1)** Abrolhos tem **8 variáveis** e **19.278 medições** no banco; a página desenhava duas (`sst`, `dhw`) e não dizia, em número nenhum, que as outras seis existiam — quem visitasse concluiria, corretamente pelo que via, que o projeto só tem SST e DHW. O recorte do gráfico continua (docs/RESULTADOS.md §7), porque *escolher o que desenhar* e *esconder o que se tem* são coisas diferentes; o que entrou foi `acervo.py` + a tabela "Tudo o que o projeto mede aqui", uma linha por variável com contagem, período, fonte e o link que devolve exatamente aquele número — **e o papel de cada uma no modelo**, para `baa` (o **alvo**, não uma entrada) não passar por feature. **(2)** `profundidade_media_m` e `area_km2` estavam em `LocalRecife` desde a migração `0014` e **nunca saíram do Django admin**: nenhuma previsão os usa, e por isso a ausência não quebrava teste, gráfico nem número. Agora saem na API, na cópia versionada e no bloco "Ficha do local", que escreve *"Não registrado"* em vez de esconder a linha — 📌 só Abrolhos tem profundidade, nenhum local tem área. **(3)** A correção de 11/08 (§2.1) alcançou as fotos de *espécie* e parou ali: `LocalRecife.imagem` — topo da página e cartão da lista — não tinha campo de crédito, e **o que não tem campo não aparece numa auditoria de campo errado**. Migração `0030` abre `credito_imagem`, `fonte_imagem_url` e `local_captura_foto` (os dois últimos opcionais), com a mesma regra: sem crédito, nada entra na cópia versionada e a tela escreve "Foto sem crédito informado". 22 testes de backend novos, 16 de frontend (162, era 140). |
 | 12/08/2026 | ✅ **§2.3.1.1 e §6.24 — os cinco locais novos com coordenada passaram a ter série, previsão e dataset baixável.** Ingestão completa (2020-01-01 a 2026-08-11, **19.278 medições por local**, duas fontes), modelo remedido e regravado sobre **8 recifes** ([RESULTADOS.md](RESULTADOS.md) §25 — 19.056 amostras contra 7.095, 44/50 episódios contra 40 da persistência). ⚠️ **Ingerir não retreina:** o artefato continuava declarando três locais, e o painel respondia 404 com motivo para os cinco — corretamente, porque o modelo nunca os viu. **§6.24 fecha a pendência declarada em §6.23:** o catálogo descrevia *arquivos*, todos extraídos em Abrolhos, e por isso a página de um recife com 19.278 medições dizia "ainda não há datasets relacionados". `inventario_datasets.py` ganhou uma segunda metade derivada de `MedicaoAmbiental` — 16 registros (8 locais × 2 fontes), com período e tamanho **nulos** (a cobertura sai derivada, nunca gravada) e `url_download` apontando para `/api/medicoes/?...&formato=csv`, o primeiro do catálogo a apontar para este projeto e não para o provedor. Par sem medição **não vira registro**, nem desativado — é a regra da §6.20 aplicada ao banco. Campo novo `DatasetCatalogo.download_exige_conta` (migração `0029`) porque esse endpoint exige conta aprovada e um `<a>` simples devolveria um JSON de 401 ao visitante deslogado. Na tela, `motivo_sem_serie` faz os dois locais **sem coordenada** explicarem a própria ausência, em vez de exibirem "Não calculado" — a mesma frase que um pipeline quebrado mostraria. 12 testes de backend novos, 7 de frontend (147, era 140). |
+| 16/08/2026 | **§6.24 — a série medida virou gráfico interativo (Plotly), com quatro variáveis em vez de duas e as faixas do `baa` por trás.** Registrado por que o **quinto** painel das figuras do TCC — a probabilidade prevista ao longo do tempo — ficou de fora: aquela curva é **fora da dobra** (cada ponto vem de um modelo que não viu o ano que prevê), e o modelo que o site serve foi treinado sobre todos os anos. Rodá-lo para trás daria uma curva que acerta mais do que o modelo acerta de verdade, sem nada na tela denunciando. Não é limitação de biblioteca: **nenhum endpoint serve probabilidade histórica** — `/api/painel-risco/` calcula a de hoje e descarta. Os dois caminhos honestos ficam registrados (persistir a predição diária, ou servir a curva fora da dobra marcada como medição de desempenho). Registrada também a diferença de 7 dias entre as faixas do site (`baa >= 3` no dia) e as da figura (`baa >= 3` em t+7). |
 | 12/08/2026 | 🚨 **§2.1 — a migração `0026` tinha corrigido só o banco; o crédito falso continuava sendo _gerado por código_.** Três funções fabricavam procedência a partir da mera existência de um arquivo de foto: `code_sync.py::_credito_imagem` gravava `"Acervo local do projeto"` na cópia versionada, `code_sync.py::_fonte_imagem_url` gravava a URL do próprio arquivo local no campo "fonte da imagem", e `formatters.js::resolverCreditoImagem` exibia o mesmo crédito falso na tela — esta última no **caminho ao vivo**, sobre dados da API, não só no fallback. Consequência concreta: `recifeData.js` ainda trazia as nove espécies com o crédito falso e com `foto_url` apontando para `/media/especies/Dendrogyra_cylindrus.jpeg`, então **com a API fora do ar o site continuava servindo a foto sem licença**. As três deixaram de inventar, e o exportador passou a aplicar à imagem o mesmo critério da categoria IUCN: sem `credito_imagem`, nada entra na cópia versionada — nem foto, nem fonte, nem local. Os dois arquivos gerados (`recifeData.js`, `generated_admin_sync.py`) foram regerados, estavam parados em 04/08 e listavam três locais em vez de dez. 768 testes de backend (era 762), 140 de frontend (era 139). |
 | 11/08/2026 | **§6.23 — declarado: o banco de dados para download sempre serve o máximo disponível, mesmo sem uso no modelo.** Política pedida pelo usuário, confirmada como já verdadeira em `/api/medicoes/` (nunca filtrou por variável do modelo — `hotspot`, `baa` e `sst_anomalia` já provam isso ao vivo) e travada por teste novo. Registrada a exceção que a política não cobre: `/api/datasets/` (`DatasetCatalogo`) é um catálogo curado de nove produtos, todos fixados em Abrolhos — consultar por Picãozinho, Porto de Galinhas ou os sete locais novos (§2.3.1) devolve lista vazia, mesmo os dois primeiros tendo série real completa. Não bloqueia download (que passa por `/api/medicoes/`, não pelo catálogo); fica pendência declarada, consistente com o catálogo estar amarrado a `backend/dados/`, que o roadmap já manda apagar (fase 3.2). |
 | 11/08/2026 | 🚨 **§2.1 corrigida — o defeito era nas nove espécies, não em duas.** Conferindo o banco direto (e não só o que este documento já sabia), as nove tinham o mesmo `credito_imagem="Acervo local do projeto"` e nenhuma tinha `fonte_imagem_url`. Conferidas as quatro com URL de observação documentada, pela API pública do iNaturalist (a página HTML recusa acesso automatizado com 403, a API não): três têm licença aberta (CC BY/CC BY-NC) e local da observação recuperado; **uma — `Dendrogyra cylindrus` — não tem licença nenhuma concedida** (`license_code` nulo = todos os direitos reservados), e o projeto vinha servindo uma cópia local do arquivo sem permissão. Migração `0026`: as quatro passam a ter crédito e fonte corretos; a cópia local de `Dendrogyra cylindrus` para de ser servida (campo `foto` limpo, arquivo mantido em disco); as outras três também param de servir cópia local, mas por preferir linkar a fonte a redistribuir (licença permite as duas, a fonte é a que não diverge com o tempo); as cinco sem URL documentada (`Holacanthus ciliaris`, `Sparisoma axillare`, `Ocyurus chrysurus`, `Phyllogorgia dilatata`, `Condylactis gigantea`) ficam sem crédito, sem foto e sem local — mesmo princípio de "não afirmar o que não se consegue verificar" já usado para `iucn_categoria` sem ano (§2.4). Campo novo `local_captura_foto` acrescentado ao modelo, ao formulário de contribuição do site e à modal — pendência aberta para quem souber a origem real das cinco preencher. |

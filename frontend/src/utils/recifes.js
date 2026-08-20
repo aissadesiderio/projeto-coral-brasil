@@ -17,6 +17,7 @@
  */
 
 import { FALLBACK_DETALHES, FALLBACK_RECIFES } from '../data/recifeData';
+import { numeroOuNulo } from './formatters';
 
 function normalizarEspecie(especie, index) {
   if (!especie || typeof especie !== 'object') {
@@ -94,6 +95,61 @@ export function combinarDetalhe(recifeBase, detalheApi) {
     possui_painel_risco:
       detalheApi?.possui_painel_risco === true || recifeBase.possui_painel_risco === true,
   };
+}
+
+/**
+ * A ordem do catálogo, usada pela home e pela listagem.
+ *
+ * 🚨 **Latitude é o padrão, e mora aqui e não em cada página.** A régua da
+ * costa (`RailLatitude`) desenha os pontos de norte a sul; se a tabela ao lado
+ * seguisse outra ordem, o leitor teria duas listas dos mesmos recifes em
+ * sequências diferentes na mesma tela, e a régua deixaria de servir de índice.
+ *
+ * ⚠️ Ordenar por risco no topo faria a lista mudar de ordem a cada rodada do
+ * modelo — quem abre a página duas vezes no mesmo dia encontraria uma costa
+ * diferente. É uma ordem que o visitante pede, não uma que a página impõe.
+ */
+export function ordenarLocais(locais, ordem = 'latitude', predicoes = {}) {
+  const copia = [...locais];
+
+  if (ordem === 'risco') {
+    return copia.sort((a, b) => {
+      // Sem previsão vai para o fim, e não para o começo com risco zero: a
+      // ausência de número não pode se ordenar como o menor dos números.
+      const pa =
+        predicoes[a.slug]?.disponivel === true ? Number(predicoes[a.slug].probabilidade) : -1;
+      const pb =
+        predicoes[b.slug]?.disponivel === true ? Number(predicoes[b.slug].probabilidade) : -1;
+      return pb - pa;
+    });
+  }
+
+  if (ordem === 'especies') {
+    return copia.sort(
+      (a, b) =>
+        (b.quantidade_especies || b.informacoes_disponiveis || 0)
+        - (a.quantidade_especies || a.informacoes_disponiveis || 0),
+    );
+  }
+
+  // Norte para sul. Quem não tem latitude fica no fim, junto do motivo.
+  //
+  // ⚠️ Duas armadilhas neste `sort`, e as duas já morderam:
+  //
+  // 1. **`Number(null)` é `0`.** Sem `numeroOuNulo`, os dois locais sem
+  //    coordenada se ordenavam como se estivessem no equador — ou seja, no
+  //    topo de uma lista de recifes brasileiros. Ver `formatters.numeroOuNulo`.
+  // 2. **O sentinela precisa ser finito.** Com `-Infinity`, comparar dois
+  //    locais sem coordenada dá `NaN`, e um comparador que devolve `NaN` deixa
+  //    a ordem indefinida: os dois trocariam de lugar entre renderizações sem
+  //    nada tê-los mudado.
+  const SEM_LATITUDE = -1000;
+
+  return copia.sort((a, b) => {
+    const la = numeroOuNulo(a.latitude) ?? SEM_LATITUDE;
+    const lb = numeroOuNulo(b.latitude) ?? SEM_LATITUDE;
+    return lb - la;
+  });
 }
 
 export function obterQuantidadeEspeciesLocal(local) {

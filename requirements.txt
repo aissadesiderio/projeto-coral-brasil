@@ -88,5 +88,12 @@ python-docx==1.2.0
 #
 #   python backend/manage.py check
 #   Test-NetConnection 127.0.0.1 -Port 7687   # confere se o Neo4j responde
-#   python backend/manage.py neo4j_init
-#   python backend/manage.py neo4j_seed
+#   python backend/manage.py neo4j_init       # cria constraints (idempotente)
+#   python backend/manage.py neo4j_projetar   # reconstroi o grafo do Postgres
+#
+# ATENCAO: ate 14/08/2026 a ultima linha acima mandava rodar `neo4j_seed`,
+# comando REMOVIDO em 28/07/2026 - ele derivava do StatusPredicao legado e era
+# o mais perigoso dos tres removidos por funcionar: sobrescreveria a projecao
+# com dado de demonstracao. O guarda que pega isso (testes_configuracao.py)
+# varria so os .md, e este arquivo passou 17 dias instruindo a rodar um
+# comando que nao existe mais. O guarda agora cobre este arquivo tambem.

@@ -1,18 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  CalendarRange,
-  Database,
-  Download,
-  Filter,
-  MapPin,
-  Search,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 import CampoFiltro from '../components/CampoFiltro';
-import DatasetCard from '../components/DatasetCard';
+import DatasetCard, { COLUNAS_DATASET } from '../components/DatasetCard';
 import { DADOS_GERAIS } from '../data/datasets';
 import { buscarCatalogoDatasets } from '../utils/api';
 import { criarOpcoesFiltro, normalizarDatasetCatalogo } from '../utils/datasets';
+
+const COLUNAS = ['conjunto', 'tipo', 'formato', 'periodo', 'tamanho', 'disponibilidade'];
+
+const NOTA_CATALOGO =
+  'Baixar exige conta aprovada por um master. Onde a API nao confirma o arquivo, a linha diz '
+  + 'que o download esta indisponivel em vez de oferecer um botao que falha.';
 
 export default function BancoDadosPage({ usuario = null }) {
   const [datasets, setDatasets] = useState([]);
@@ -104,48 +102,47 @@ export default function BancoDadosPage({ usuario = null }) {
   ]);
 
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div className="rounded-3xl border border-sand-dark/20 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-3">
-            <Database className="mt-1 text-ocean-dark" />
-            <div>
-              <h2 className="text-2xl font-bold text-ocean-dark">Banco de dados geral</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600 sm:text-base">
-                Catalogo amplo de datasets climaticos, oceanograficos, biologicos,
-                geneticos, imagens, relatorios e modelos preditivos associados ao projeto.
-              </p>
-            </div>
-          </div>
-
-          <span className="rounded-full bg-sand-light px-4 py-2 text-sm font-semibold text-ocean-dark">
-            {catalogoCarregado ? `${resultados.length} dataset(s)` : 'Carregando...'}
-          </span>
+    <section className="faixa py-12">
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+        <div>
+          <span className="olho-terra">Dados abertos</span>
+          <h1 className="mt-3.5 font-serif text-[36px] font-normal leading-[1.05] tracking-[-0.025em] text-ocean-deep sm:text-[44px]">
+            Catalogo de dados
+          </h1>
+          <p className="mt-3 max-w-[66ch] text-base leading-relaxed text-ocean-deep/70">
+            Dados climaticos, oceanograficos, biologicos, geneticos, imagens, relatorios e
+            saidas de modelo. A coluna de disponibilidade diz o que a API confirma neste
+            ambiente — o resto fica marcado como nao verificado.
+          </p>
         </div>
+
+        <span className="shrink-0 font-mono text-2xs text-ocean-deep/55">
+          {catalogoCarregado ? `${resultados.length} dataset(s)` : 'Carregando...'}
+        </span>
       </div>
 
       {usandoFallback && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="bloco-procedencia mt-7 text-sm leading-relaxed text-ocean-deep/80">
           Nao foi possivel carregar o catalogo pela API agora. Exibindo o catalogo local
           de referencia como fallback temporario.
         </div>
       )}
 
-      <div className="grid gap-4 rounded-3xl border border-sand-dark/20 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-4">
-        <CampoFiltro label="Buscar" icon={Search}>
+      <div className="superficie mt-7 grid gap-x-7 gap-y-5 p-6 sm:grid-cols-2 lg:grid-cols-4">
+        <CampoFiltro label="Buscar">
           <input
             value={termoBusca}
             onChange={(event) => setTermoBusca(event.target.value)}
             placeholder="Titulo, resumo, cidade ou estado"
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           />
         </CampoFiltro>
 
-        <CampoFiltro label="Fonte" icon={Filter}>
+        <CampoFiltro label="Fonte">
           <select
             value={fonteSelecionada}
             onChange={(event) => setFonteSelecionada(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           >
             {fontes.map((fonte) => (
               <option key={fonte} value={fonte}>
@@ -155,11 +152,11 @@ export default function BancoDadosPage({ usuario = null }) {
           </select>
         </CampoFiltro>
 
-        <CampoFiltro label="Tipo de dado" icon={Database}>
+        <CampoFiltro label="Tipo de dado">
           <select
             value={tipoDadoSelecionado}
             onChange={(event) => setTipoDadoSelecionado(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           >
             {tiposDado.map((tipo) => (
               <option key={tipo} value={tipo}>
@@ -169,11 +166,11 @@ export default function BancoDadosPage({ usuario = null }) {
           </select>
         </CampoFiltro>
 
-        <CampoFiltro label="Localizacao" icon={MapPin}>
+        <CampoFiltro label="Localizacao">
           <select
             value={localizacaoSelecionada}
             onChange={(event) => setLocalizacaoSelecionada(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           >
             {localizacoes.map((localizacao) => (
               <option key={localizacao} value={localizacao}>
@@ -183,11 +180,11 @@ export default function BancoDadosPage({ usuario = null }) {
           </select>
         </CampoFiltro>
 
-        <CampoFiltro label="Formato" icon={Download}>
+        <CampoFiltro label="Formato">
           <select
             value={formatoSelecionado}
             onChange={(event) => setFormatoSelecionado(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           >
             {formatos.map((formato) => (
               <option key={formato} value={formato}>
@@ -197,11 +194,11 @@ export default function BancoDadosPage({ usuario = null }) {
           </select>
         </CampoFiltro>
 
-        <CampoFiltro label="Estado" icon={MapPin}>
+        <CampoFiltro label="Estado">
           <select
             value={estadoSelecionado}
             onChange={(event) => setEstadoSelecionado(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           >
             {estados.map((estado) => (
               <option key={estado} value={estado}>
@@ -211,11 +208,11 @@ export default function BancoDadosPage({ usuario = null }) {
           </select>
         </CampoFiltro>
 
-        <CampoFiltro label="Periodo" icon={CalendarRange}>
+        <CampoFiltro label="Periodo">
           <select
             value={periodoSelecionado}
             onChange={(event) => setPeriodoSelecionado(event.target.value)}
-            className="w-full rounded-xl border border-sand-dark/30 px-4 py-3 text-sm outline-none transition focus:border-ocean-light"
+            className="campo-sublinhado"
           >
             {periodos.map((periodo) => (
               <option key={periodo} value={periodo}>
@@ -226,23 +223,33 @@ export default function BancoDadosPage({ usuario = null }) {
         </CampoFiltro>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="superficie mt-6 overflow-hidden">
+        <div className={`hidden gap-x-4 px-5 sm:px-6 md:grid ${COLUNAS_DATASET} rotulo-mono cabecalho-tabela`}>
+          {COLUNAS.map((coluna) => (
+            <span key={coluna}>{coluna}</span>
+          ))}
+        </div>
+
         {!catalogoCarregado && (
-          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500 lg:col-span-2">
+          <p className="px-6 py-10 text-center text-sm text-ocean-deep/55">
             Carregando o catalogo geral de datasets...
-          </div>
+          </p>
         )}
 
         {catalogoCarregado && resultados.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-sand-dark/40 bg-white p-8 text-center text-gray-500 lg:col-span-2">
+          <p className="px-6 py-10 text-center text-sm text-ocean-deep/55">
             Nenhum conjunto de dados corresponde aos filtros atuais.
-          </div>
+          </p>
         )}
 
         {catalogoCarregado &&
           resultados.map((item) => (
             <DatasetCard key={item.id} item={item} usuario={usuario} />
           ))}
+
+        {catalogoCarregado && resultados.length > 0 && (
+          <p className="nota-tabela m-0">{NOTA_CATALOGO}</p>
+        )}
       </div>
     </section>
   );
